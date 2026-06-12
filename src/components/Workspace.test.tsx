@@ -439,6 +439,36 @@ describe("Workspace storyboard controls", () => {
     expect(screen.queryByRole("button", { name: "送入下一步" })).not.toBeInTheDocument();
   });
 
+  it("supports document import and clearing for novel-to-script source text", () => {
+    const project = createProject("小说改剧本导入测试");
+    project.currentStep = "novel-to-script";
+    project.steps["novel-to-script"].inputs.sourceScene = "旧文本";
+
+    function StatefulWorkspace() {
+      const [currentProject, setCurrentProject] = useState(project);
+      return (
+        <Workspace
+          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+          project={currentProject}
+          onAiSettingsChange={() => undefined}
+          onProjectChange={setCurrentProject}
+          onSaveVersion={() => undefined}
+        />
+      );
+    }
+
+    render(<StatefulWorkspace />);
+
+    expect(screen.getByText("把小说原文改成竖屏短剧脚本。")).toBeInTheDocument();
+    expect(screen.getByText("小说原文")).toBeInTheDocument();
+    expect(screen.queryByText("小说原文或场景")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("导入文档")).toHaveAttribute("type", "file");
+
+    fireEvent.click(screen.getByRole("button", { name: "清除" }));
+
+    expect(screen.queryByDisplayValue("旧文本")).not.toBeInTheDocument();
+  });
+
   it("uses the language model to convert GPT-image2 storyboard source into an image prompt", async () => {
     callAiMock.mockResolvedValue("GPT-image-2出图提示词：一张四宫格故事板图。");
     const project = createProject("故事板提示词转换测试");

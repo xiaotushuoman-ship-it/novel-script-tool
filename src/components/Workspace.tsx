@@ -1675,6 +1675,7 @@ export function Workspace({
 
     const canImportText =
       (project.currentStep === "outline-expansion" && field.key === "outline") ||
+      (project.currentStep === "novel-to-script" && field.key === "sourceScene") ||
       (project.currentStep === "storyboard-15s" && field.key === "scriptText") ||
       (project.currentStep === "gpt-image2-storyboard" && field.key === "sourceText") ||
       (project.currentStep === "asset-extraction" && field.key === "sourceText");
@@ -1704,6 +1705,10 @@ export function Workspace({
                 }}
               />
             </label>
+            <button className="secondary-button" type="button" onClick={() => updateInput(field.key, "")}>
+              <Trash2 size={16} />
+              清除
+            </button>
             <span>支持 TXT / MD / CSV / JSON / SRT 等文本文件，也可以拖拽到这里。</span>
           </div>
         </div>

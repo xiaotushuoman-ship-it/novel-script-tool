@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { buildPrompt, getTemplate, PLATFORM_REVIEW_RULES, TEMPLATES } from "./templates";
 
 describe("template catalog", () => {
@@ -123,7 +123,42 @@ describe("buildPrompt", () => {
 
   it("throws when a required field is empty", () => {
     const template = getTemplate("novel-to-script");
-    expect(() => buildPrompt(template, { sourceScene: "" })).toThrow("请填写：小说原文或场景");
+    expect(() => buildPrompt(template, { sourceScene: "" })).toThrow("请填写：小说原文");
+  });
+
+  it("uses novel-only wording for the novel-to-script source field", () => {
+    const template = getTemplate("novel-to-script");
+    expect(template.description).toBe("把小说原文改成竖屏短剧脚本。");
+    expect(template.fields[0]).toMatchObject({
+      key: "sourceScene",
+      label: "小说原文",
+      multiline: true,
+      required: true,
+    });
+  });
+
+  it("builds a production-grade novel-to-script conversion prompt", () => {
+    const prompt = buildPrompt(getTemplate("novel-to-script"), {
+      sourceScene: "许明舟被二叔逼签断亲书，只带走父母留下的红木菜箱。",
+    });
+
+    expect(prompt).toContain("只允许改编用户提供的小说原文");
+    expect(prompt).toContain("不得新增原文不存在的人物、场景、事件、关系");
+    expect(prompt).toContain("原文事实锁定");
+    expect(prompt).toContain("前三秒钩子");
+    expect(prompt).toContain("冲突升级");
+    expect(prompt).toContain("结尾钩子");
+    expect(prompt).toContain("集数/段落");
+    expect(prompt).toContain("场次");
+    expect(prompt).toContain("画面");
+    expect(prompt).toContain("台词");
+    expect(prompt).toContain("音效/剪辑");
+    expect(prompt).toContain("短剧钩子评分");
+    expect(prompt).toContain("人物动机评分");
+    expect(prompt).toContain("可拍摄评分");
+    expect(prompt).toContain("合规评分");
+    expect(prompt).toContain("不要输出<think>");
+    expect(prompt).toContain("许明舟被二叔逼签断亲书");
   });
 
   it("builds a 15-second storyboard prompt from the Douyin viral short-drama template", () => {
