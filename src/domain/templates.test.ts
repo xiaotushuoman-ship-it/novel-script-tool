@@ -153,11 +153,15 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("画面");
     expect(prompt).toContain("台词");
     expect(prompt).toContain("音效/剪辑");
-    expect(prompt).toContain("短剧钩子评分");
-    expect(prompt).toContain("人物动机评分");
-    expect(prompt).toContain("可拍摄评分");
-    expect(prompt).toContain("合规评分");
     expect(prompt).toContain("不要输出<think>");
+    expect(prompt).toContain("内部自检");
+    expect(prompt).not.toContain("短剧钩子评分");
+    expect(prompt).not.toContain("人物动机评分");
+    expect(prompt).not.toContain("可拍摄评分");
+    expect(prompt).not.toContain("合规评分");
+    expect(prompt).not.toContain("短剧钩子评分");
+    expect(prompt).not.toContain("人物动机评分");
+    expect(prompt).not.toContain("本段质量自检");
     expect(prompt).toContain("许明舟被二叔逼签断亲书");
   });
 
