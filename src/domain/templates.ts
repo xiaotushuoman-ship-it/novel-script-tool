@@ -86,7 +86,7 @@ export const STORYBOARD_RATIO_OPTIONS = ["竖屏9:16", "横屏16:9", "电影宽�
 
 export const IMAGE_RATIO_OPTIONS = ["1:1", "16:9", "9:16", "21:9", "4:3", "3:4"];
 
-export const IMAGE_RESOLUTION_OPTIONS = ["1K", "2K"];
+export const IMAGE_RESOLUTION_OPTIONS = ["1K", "2K", "4K"];
 
 export const STORYBOARD_STYLE_OPTIONS = [
   "3D国漫风格",

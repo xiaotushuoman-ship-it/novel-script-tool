@@ -831,7 +831,7 @@ export function Workspace({
     try {
       const imageModel = image.model || step.inputs.imageModel || "gpt-image-2";
       const imageRatio = image.ratio || step.inputs.imageRatio || "16:9";
-      const imageCall = resolveImageCallSettings(imageModel);
+      const imageCall = resolveImageCallSettings(imageModel, targetResolution);
       const upscalePrompt = [
         `请基于以下原图生成一张${targetResolution}高清放大版本，保持角色/场景/物品主体、构图、风格、服装、材质和光影一致。`,
         "提升细节清晰度、边缘锐度、纹理层次和整体画面完成度，不要改变身份、脸型、服装、道具、场景结构，不要添加文字、水印、logo。",
@@ -891,8 +891,8 @@ export function Workspace({
     });
   }
 
-  function resolveImageCallSettings(imageModel: string) {
-    const selectedImageModel = imageModel.trim();
+  function resolveImageCallSettings(imageModel: string, imageResolution = "1K") {
+    const selectedImageModel = resolveImageModelForResolution(imageModel, imageResolution);
     if (!selectedImageModel.startsWith("gemini-")) {
       return { settings: aiSettings, model: selectedImageModel || imageModel };
     }
@@ -909,6 +909,16 @@ export function Workspace({
       },
       model: resolvedGeminiModel,
     };
+  }
+
+  function resolveStoryboardImageModel(imageModel: string, imageResolution: string) {
+    return resolveImageModelForResolution(imageModel, imageResolution);
+  }
+
+  function resolveImageModelForResolution(imageModel: string, imageResolution: string) {
+    const normalizedResolution = imageResolution.trim().toUpperCase();
+    if (normalizedResolution === "2K" || normalizedResolution === "4K") return "gemini-3.1-flash-preview";
+    return imageModel.trim();
   }
 
   function isRateLimitError(error: unknown) {
@@ -1192,7 +1202,7 @@ export function Workspace({
       const imageRatio = step.inputs.imageRatio ?? "16:9";
       const imageResolution = step.inputs.imageResolution ?? "1K";
       const imagePrompt = buildImageGenerationPrompt(step.inputs, generationAsset);
-      const imageCall = resolveImageCallSettings(imageModel);
+      const imageCall = resolveImageCallSettings(imageModel, imageResolution);
       setProgress({ label: "发送生图请求", percent: 18 });
       setProgress({ label: "模型生图中", percent: 28 });
       startImageProgressTimer();
@@ -1257,7 +1267,7 @@ export function Workspace({
       const imageModel = step.inputs.imageModel ?? "gpt-image-2";
       const imageRatio = step.inputs.imageRatio ?? "16:9";
       const imageResolution = step.inputs.imageResolution ?? "1K";
-      const imageCall = resolveImageCallSettings(imageModel);
+      const imageCall = resolveImageCallSettings(imageModel, imageResolution);
       setProgress({ label: "排队发送生图请求", percent: 18 });
       setProgress({ label: "模型生图中", percent: 28 });
       startImageProgressTimer();
@@ -1353,7 +1363,7 @@ export function Workspace({
       const imageModel = step.inputs.imageModel ?? "gpt-image-2";
       const imageRatio = step.inputs.imageRatio ?? "16:9";
       const imageResolution = step.inputs.imageResolution ?? "1K";
-      const imageCall = resolveImageCallSettings(imageModel);
+      const imageCall = resolveImageCallSettings(imageModel, imageResolution);
       setProgress({ label: "排队发送生图请求", percent: 18 });
       setProgress({ label: "模型生图中", percent: 28 });
       startImageProgressTimer();
@@ -1428,10 +1438,10 @@ export function Workspace({
     setStoryboardImageProgress({ label: "准备故事板出图参数", percent: 8 });
 
     try {
-      const imageModel = step.inputs.imageModel ?? "gpt-image-2";
       const imageRatio = step.inputs.imageRatio ?? "16:9";
       const imageResolution = step.inputs.imageResolution ?? "1K";
-      const imageCall = resolveImageCallSettings(imageModel);
+      const imageModel = resolveStoryboardImageModel(step.inputs.imageModel ?? "gpt-image-2", imageResolution);
+      const imageCall = resolveImageCallSettings(imageModel, imageResolution);
       setStoryboardImageProgress({ label: "发送故事板生图请求", percent: 18 });
       setStoryboardImageProgress({ label: "模型生图中", percent: 28 });
       startStoryboardImageProgressTimer();

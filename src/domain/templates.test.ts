@@ -282,7 +282,7 @@ describe("buildPrompt", () => {
     expect(fields.imageModel.options).toContain("gpt-image-2-all");
     expect(fields.imageModel.options).toContain("gemini-3.1-flash-preview");
     expect(fields.imageResolution.control).toBe("select");
-    expect(fields.imageResolution.options).toEqual(["1K", "2K"]);
+    expect(fields.imageResolution.options).toEqual(["1K", "2K", "4K"]);
     expect(fieldKeys).not.toContain("seedanceDuration");
     expect(fieldKeys).not.toContain("motionStrength");
     expect(fieldKeys).not.toContain("continuityMode");
@@ -311,7 +311,7 @@ describe("buildPrompt", () => {
     expect(fields.imageRatio.options).toContain("21:9");
     expect(fields.imageResolution.control).toBe("select");
     expect(fields.imageResolution.defaultValue).toBe("1K");
-    expect(fields.imageResolution.options).toEqual(["1K", "2K"]);
+    expect(fields.imageResolution.options).toEqual(["1K", "2K", "4K"]);
     expect(template.body).not.toContain("补全说明");
     expect(template.body).toContain("性别、年龄感");
     expect(template.body).toContain("服装");

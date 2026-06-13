@@ -625,6 +625,78 @@ describe("Workspace storyboard controls", () => {
     );
   });
 
+  it("uses gemini flash image model for 2K storyboard image generation", async () => {
+    callImageGenerationMock.mockResolvedValue("https://example.com/storyboard-2k.png");
+    const project = createProject("故事板2K自动模型测试");
+    project.currentStep = "gpt-image2-storyboard";
+    project.steps["gpt-image2-storyboard"].inputs.imageModel = "gpt-image-2";
+    project.steps["gpt-image2-storyboard"].inputs.imageResolution = "2K";
+    project.steps["gpt-image2-storyboard"].draft = "GPT-image-2出图提示词：一张四宫格故事板图。";
+
+    render(
+      <Workspace
+        aiSettings={{
+          endpoint: "https://timeai.chat/v1",
+          apiKey: "sk-test",
+          model: "gpt-5.5",
+          geminiImageEndpoint: "https://timeai.chat/v1",
+          geminiImageApiKey: "sk-gemini",
+          geminiImageModel: "gemini-3.1-flash-preview",
+        }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成故事板图片" }));
+
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
+    expect(callImageGenerationMock.mock.calls[0][0]).toMatchObject({
+      endpoint: "https://timeai.chat/v1",
+      apiKey: "sk-gemini",
+      model: "gemini-3.1-flash-preview",
+    });
+    expect(callImageGenerationMock.mock.calls[0][2]).toBe("gemini-3.1-flash-preview");
+    expect(callImageGenerationMock.mock.calls[0][4]).toBe("2K");
+  });
+
+  it("offers 4K storyboard image generation and routes it through gemini flash", async () => {
+    callImageGenerationMock.mockResolvedValue("https://example.com/storyboard-4k.png");
+    const project = createProject("故事板4K自动模型测试");
+    project.currentStep = "gpt-image2-storyboard";
+    project.steps["gpt-image2-storyboard"].inputs.imageModel = "gpt-image-2";
+    project.steps["gpt-image2-storyboard"].inputs.imageResolution = "4K";
+    project.steps["gpt-image2-storyboard"].draft = "GPT-image-2出图提示词：一张四宫格故事板图。";
+
+    render(
+      <Workspace
+        aiSettings={{
+          endpoint: "https://timeai.chat/v1",
+          apiKey: "sk-test",
+          model: "gpt-5.5",
+          geminiImageEndpoint: "https://timeai.chat/v1",
+          geminiImageApiKey: "sk-gemini",
+          geminiImageModel: "gemini-3.1-flash-preview",
+        }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    const storyboardImagePanel = screen.getByLabelText("故事板出图区");
+    expect(within(storyboardImagePanel).getByRole("option", { name: "4K" })).toBeInTheDocument();
+
+    fireEvent.click(within(storyboardImagePanel).getByRole("button", { name: "生成故事板图片" }));
+
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
+    expect(callImageGenerationMock.mock.calls[0][2]).toBe("gemini-3.1-flash-preview");
+    expect(callImageGenerationMock.mock.calls[0][4]).toBe("4K");
+  });
+
   it("previews signed asset image urls that do not include a file extension", async () => {
     callImageGenerationMock.mockResolvedValue("https://oaidalleapiprodscus.blob.core.windows.net/private/generated?id=abc");
     const project = createProject("无后缀图片链接预览");
@@ -2313,7 +2385,7 @@ describe("Workspace asset extraction image generation", () => {
     expect(screen.getByRole("button", { name: "下载图片 1" })).toBeInTheDocument();
   });
 
-  it("uses the selected Gemini Pro image model through the Gemini fallback channel", async () => {
+  it("routes 2K asset image generation through the Gemini flash image model", async () => {
     callImageGenerationMock.mockResolvedValue("https://img.example.com/pro-asset.png");
     const project = createProject("Gemini Pro 生图测试");
     project.currentStep = "asset-extraction";
@@ -2351,10 +2423,10 @@ describe("Workspace asset extraction image generation", () => {
       expect.objectContaining({
         endpoint: "https://gemini.example/v1",
         apiKey: "sk-gemini",
-        model: "gemini-3-pro-image-preview",
+        model: "gemini-3.1-flash-preview",
       }),
     );
-    expect(callImageGenerationMock.mock.calls[0][2]).toBe("gemini-3-pro-image-preview");
+    expect(callImageGenerationMock.mock.calls[0][2]).toBe("gemini-3.1-flash-preview");
   });
 
   it("lets the user edit extracted character info before image generation", async () => {
@@ -2442,6 +2514,7 @@ describe("Workspace asset extraction image generation", () => {
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(2));
     expect(callImageGenerationMock.mock.calls[1][1]).toContain("4K高清放大版本");
     expect(callImageGenerationMock.mock.calls[1][1]).toContain("原图参考：https://img.example.com/preview.png");
+    expect(callImageGenerationMock.mock.calls[1][2]).toBe("gemini-3.1-flash-preview");
     expect(callImageGenerationMock.mock.calls[1][4]).toBe("4K");
     expect(await screen.findByRole("img", { name: "林晚-4K高清 生图结果 1" })).toHaveAttribute(
       "src",
