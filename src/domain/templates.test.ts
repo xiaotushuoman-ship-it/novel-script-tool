@@ -228,7 +228,7 @@ describe("buildPrompt", () => {
     expect(fieldKeys).not.toContain("propAssets");
   });
 
-  it("builds a GPT-image2 four-panel storyboard prompt for one image", () => {
+  it("builds a GPT-image2 director storyboard prompt with image and video sections", () => {
     const template = getTemplate("gpt-image2-storyboard");
     const prompt = buildPrompt(template, {
       sourceText: "夜市摊前，许明舟端出第一碗葱油面，万金宝盯着陶罐。",
@@ -243,31 +243,33 @@ describe("buildPrompt", () => {
     const fieldKeys = template.fields.map((field) => field.key);
 
     expect(template.name).toBe("GPT-image2 四宫格故事板");
-    expect(template.description).toContain("一张图");
+    expect(template.description).toContain("图片提示词");
     expect(prompt).toContain("GPT-image-2");
-    expect(prompt).toContain("一张图");
-    expect(prompt).toContain("四个画面");
+    expect(prompt).toContain("_::~OUTPUT_START::~_");
+    expect(prompt).toContain("_::~FIELD::~_");
+    expect(prompt).toContain("_::~RECORD::~_");
+    expect(prompt).toContain("_::~OUTPUT_END::~_");
+    expect(prompt).toContain("【图片提示词区｜对白已明确标注】");
+    expect(prompt).toContain("【视频提示词区】");
+    expect(prompt).toContain("短剧导演分镜工作板");
+    expect(prompt).toContain("【对白标注】");
+    expect(prompt).toContain("参考当前导演分镜图依次帮我生成视频");
+    expect(prompt).toContain("6 Cut");
     expect(prompt).toContain("15S");
     expect(prompt).toContain("生成数量：3");
     expect(prompt).toContain("输出3组");
     expect(prompt).toContain("四宫格2x2");
-    expect(prompt).toContain("标杆视频分析");
-    expect(prompt).toContain("至少准备三类素材");
-    expect(prompt).toContain("服装类素材");
-    expect(prompt).toContain("GPT-image2四宫格单图提示词");
-    expect(prompt).toContain("画面1");
-    expect(prompt).toContain("画面2");
-    expect(prompt).toContain("画面3");
-    expect(prompt).toContain("画面4");
-    expect(prompt).toContain("GPT-image-2出图提示词");
+    expect(prompt).toContain("画面比例统一写：按当前项目设定");
+    expect(prompt).toContain("图片提示词区不得出现音色参数");
+    expect(prompt).toContain("有台词Cut必须使用双引号和@音色参数");
     expect(prompt).not.toContain("即梦Seedance2.0图生视频提示词");
     expect(prompt).not.toContain("Seedance2.0交付包");
     expect(prompt).not.toContain("单镜视频时长");
     expect(prompt).not.toContain("运动强度");
     expect(prompt).not.toContain("连续性锁定");
-    expect(prompt).toContain("不要字幕、水印、logo");
+    expect(prompt).toContain("无水印");
     expect(prompt).toContain("平台审核硬规则");
-    expect(prompt).toContain("21:9");
+    expect(prompt).not.toContain("21:9");
     expect(prompt).toContain("影视写实现代");
     expect(fields.boardCount.control).toBe("select");
     expect(fields.boardCount.options).toEqual(["1", "2", "3", "4"]);

@@ -1704,6 +1704,7 @@ export function Workspace({
     const source = step.draft.trim();
     if (!source) return "";
     const extractedPrompt =
+      extractStoryboardImageSection(source) ??
       source.match(/GPT-image-2出图提示词[：:]\s*([\s\S]*)$/)?.[1]?.trim() ??
       source.match(/GPT-image2四宫格单图提示词[：:：]?\s*([\s\S]*)$/)?.[1]?.trim() ??
       source;
@@ -1720,6 +1721,12 @@ export function Workspace({
       "",
       extractedPrompt,
     ].join("\n");
+  }
+
+  function extractStoryboardImageSection(source: string) {
+    const imageSectionMatch = source.match(/【图片提示词区[^】]*】([\s\S]*?)(?:_::~FIELD::~_|【视频提示词区】)/);
+    if (!imageSectionMatch) return null;
+    return `【图片提示词区｜对白已明确标注】${imageSectionMatch[1]}`.trim();
   }
 
   function renderAssetLibraryItemCard(item: AssetLibraryItem) {

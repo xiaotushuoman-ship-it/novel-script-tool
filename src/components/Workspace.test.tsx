@@ -519,7 +519,18 @@ describe("Workspace storyboard controls", () => {
     project.steps["gpt-image2-storyboard"].inputs.panelLayout = "六宫格3x2";
     project.steps["gpt-image2-storyboard"].inputs.imageModel = "gemini-3.1-flash-preview";
     project.steps["gpt-image2-storyboard"].inputs.imageResolution = "2K";
-    project.steps["gpt-image2-storyboard"].draft = "GPT-image-2出图提示词：一张六宫格故事板图。";
+    project.steps["gpt-image2-storyboard"].draft = [
+      "_::~OUTPUT_START::~_",
+      "【图片提示词区｜对白已明确标注】",
+      "短剧导演分镜工作板，6 Cut左右排版，一张六宫格故事板图。",
+      "Cut 1｜00:00-00:02",
+      "【对白标注】无对白",
+      "_::~FIELD::~_",
+      "【视频提示词区】",
+      "参考当前导演分镜图依次帮我生成视频",
+      "Cut 1 (00:00-00:02): 夜市摊前，许明舟端出葱油面",
+      "_::~OUTPUT_END::~_",
+    ].join("\n");
 
     render(
       <Workspace
@@ -546,6 +557,8 @@ describe("Workspace storyboard controls", () => {
 
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
     expect(callImageGenerationMock.mock.calls[0][1]).toContain("一张六宫格故事板图");
+    expect(callImageGenerationMock.mock.calls[0][1]).toContain("【图片提示词区｜对白已明确标注】");
+    expect(callImageGenerationMock.mock.calls[0][1]).not.toContain("【视频提示词区】");
     expect(callImageGenerationMock.mock.calls[0][1]).toContain("六宫格3x2");
     expect(callImageGenerationMock.mock.calls[0][2]).toBe("gemini-3.1-flash-preview");
     expect(callImageGenerationMock.mock.calls[0][3]).toBe("16:9");
