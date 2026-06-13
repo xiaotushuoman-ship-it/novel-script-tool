@@ -625,7 +625,7 @@ describe("Workspace storyboard controls", () => {
     );
   });
 
-  it("uses gemini flash image model for 2K storyboard image generation", async () => {
+  it("keeps the selected image model for 2K storyboard image generation", async () => {
     callImageGenerationMock.mockResolvedValue("https://example.com/storyboard-2k.png");
     const project = createProject("故事板2K自动模型测试");
     project.currentStep = "gpt-image2-storyboard";
@@ -655,14 +655,14 @@ describe("Workspace storyboard controls", () => {
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
     expect(callImageGenerationMock.mock.calls[0][0]).toMatchObject({
       endpoint: "https://timeai.chat/v1",
-      apiKey: "sk-gemini",
-      model: "gemini-3.1-flash-preview",
+      apiKey: "sk-test",
+      model: "gpt-5.5",
     });
-    expect(callImageGenerationMock.mock.calls[0][2]).toBe("gemini-3.1-flash-preview");
+    expect(callImageGenerationMock.mock.calls[0][2]).toBe("gpt-image-2");
     expect(callImageGenerationMock.mock.calls[0][4]).toBe("2K");
   });
 
-  it("offers 4K storyboard image generation and routes it through gemini flash", async () => {
+  it("offers 4K storyboard image generation and keeps the selected image model", async () => {
     callImageGenerationMock.mockResolvedValue("https://example.com/storyboard-4k.png");
     const project = createProject("故事板4K自动模型测试");
     project.currentStep = "gpt-image2-storyboard";
@@ -693,7 +693,7 @@ describe("Workspace storyboard controls", () => {
     fireEvent.click(within(storyboardImagePanel).getByRole("button", { name: "生成故事板图片" }));
 
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
-    expect(callImageGenerationMock.mock.calls[0][2]).toBe("gemini-3.1-flash-preview");
+    expect(callImageGenerationMock.mock.calls[0][2]).toBe("gpt-image-2");
     expect(callImageGenerationMock.mock.calls[0][4]).toBe("4K");
   });
 
@@ -2385,7 +2385,7 @@ describe("Workspace asset extraction image generation", () => {
     expect(screen.getByRole("button", { name: "下载图片 1" })).toBeInTheDocument();
   });
 
-  it("routes 2K asset image generation through the Gemini flash image model", async () => {
+  it("keeps the selected asset image model during normal 2K image generation", async () => {
     callImageGenerationMock.mockResolvedValue("https://img.example.com/pro-asset.png");
     const project = createProject("Gemini Pro 生图测试");
     project.currentStep = "asset-extraction";
@@ -2423,10 +2423,10 @@ describe("Workspace asset extraction image generation", () => {
       expect.objectContaining({
         endpoint: "https://gemini.example/v1",
         apiKey: "sk-gemini",
-        model: "gemini-3.1-flash-preview",
+        model: "gemini-3-pro-image-preview",
       }),
     );
-    expect(callImageGenerationMock.mock.calls[0][2]).toBe("gemini-3.1-flash-preview");
+    expect(callImageGenerationMock.mock.calls[0][2]).toBe("gemini-3-pro-image-preview");
   });
 
   it("lets the user edit extracted character info before image generation", async () => {
