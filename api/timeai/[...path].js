@@ -9,7 +9,12 @@ export default async function handler(request, response) {
     return;
   }
 
-  const apiKey = process.env.TIMEAI_API_KEY;
+  const authorizationHeader = request.headers.authorization || request.headers.Authorization;
+  const bearerKey =
+    typeof authorizationHeader === "string" && authorizationHeader.toLowerCase().startsWith("bearer ")
+      ? authorizationHeader.slice(7).trim()
+      : "";
+  const apiKey = bearerKey || process.env.TIMEAI_API_KEY;
   if (!apiKey) {
     response.status(500).json({ error: { message: "Server missing TIMEAI_API_KEY" } });
     return;

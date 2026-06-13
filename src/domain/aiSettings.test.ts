@@ -1,5 +1,10 @@
-﻿import { beforeEach, describe, expect, it } from "vitest";
-import { AI_SETTINGS_KEY, loadAiSettings, normalizeAiSettings } from "./aiSettings";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  AI_SETTINGS_KEY,
+  loadAiSettings,
+  normalizeAiSettings,
+  normalizeAiSettingsForRuntime,
+} from "./aiSettings";
 
 beforeEach(() => {
   localStorage.clear();
@@ -43,13 +48,16 @@ describe("AI settings", () => {
     expect(normalizeAiSettings({ model: "gpt5.5" }).model).toBe("gpt-5.5");
   });
 
-  it("keeps the Gemini image fallback channel settings", () => {
+  it("keeps the Gemini image fallback channel settings on local runtimes", () => {
     expect(
-      normalizeAiSettings({
-        geminiImageEndpoint: "https://gemini.example/v1",
-        geminiImageApiKey: "sk-gemini",
-        geminiImageModel: "gemini-custom-image",
-      }),
+      normalizeAiSettingsForRuntime(
+        {
+          geminiImageEndpoint: "https://gemini.example/v1",
+          geminiImageApiKey: "sk-gemini",
+          geminiImageModel: "gemini-custom-image",
+        },
+        "http://127.0.0.1:5173/",
+      ),
     ).toMatchObject({
       geminiImageEndpoint: "https://gemini.example/v1",
       geminiImageApiKey: "sk-gemini",
@@ -74,6 +82,22 @@ describe("AI settings", () => {
       modelApiKeySources: {
         "deepseek-v4-pro": "secondary",
       },
+    });
+  });
+
+  it("forces the proxy endpoint on deployed runtime urls", () => {
+    expect(
+      normalizeAiSettingsForRuntime(
+        {
+          endpoint: "https://timeai.chat/v1",
+          geminiImageEndpoint: "https://timeai.chat/v1",
+          apiKey: "sk-primary",
+        },
+        "https://novel-script-tool.vercel.app/",
+      ),
+    ).toMatchObject({
+      endpoint: "/api/timeai/v1",
+      geminiImageEndpoint: "/api/timeai/v1",
     });
   });
 });
