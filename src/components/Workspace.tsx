@@ -2102,21 +2102,21 @@ export function Workspace({
               }
             }}
           >
-            <div className="image-preview-shell">
+            <div className="image-preview-shell" onClick={(event) => event.stopPropagation()}>
               <div className="image-preview-toolbar">
                 <strong>图片高清预览</strong>
                 <div className="image-preview-actions">
-                  <button className="secondary-button" onClick={zoomPreviewImage}>
+                  <button className="secondary-button" type="button" onClick={zoomPreviewImage}>
                     预览放大
                   </button>
-                  <button className="secondary-button" onClick={() => setPreviewScale(1)}>
+                  <button className="secondary-button" type="button" onClick={() => setPreviewScale(1)}>
                     原始比例
                   </button>
-                  <button className="secondary-button" onClick={() => downloadImageFile(previewImage.src, previewImage.filename)}>
+                  <button className="secondary-button" type="button" onClick={() => downloadImageFile(previewImage.src, previewImage.filename)}>
                     <Download size={16} />
                     下载原图
                   </button>
-                  <button className="ghost-button" onClick={() => setPreviewImage(null)}>
+                  <button className="ghost-button" type="button" onClick={() => setPreviewImage(null)}>
                     关闭
                   </button>
                 </div>
@@ -2527,7 +2527,7 @@ export function Workspace({
             }
           }}
         >
-          <div className="image-preview-shell">
+          <div className="image-preview-shell" onClick={(event) => event.stopPropagation()}>
             <div className="image-preview-toolbar">
               <strong>图片高清预览</strong>
               <div className="image-preview-actions">

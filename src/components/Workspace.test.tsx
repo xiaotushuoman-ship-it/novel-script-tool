@@ -1899,6 +1899,38 @@ describe("Workspace asset extraction image generation", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "图片高清预览" })).not.toBeInTheDocument());
   });
 
+  it("keeps asset library preview buttons clickable without closing the preview", async () => {
+    const project = createProject("资产库预览按钮测试");
+    project.currentStep = "asset-library";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("导入类型"), { target: { value: "场景" } });
+    fireEvent.change(screen.getByLabelText("资产名称"), { target: { value: "夜市街口" } });
+    fireEvent.change(screen.getByLabelText("导入图片"), {
+      target: {
+        files: [new File([new Uint8Array([137, 80, 78, 71])], "scene.png", { type: "image/png" })],
+      },
+    });
+
+    const previewButtons = await screen.findAllByRole("button", { name: "预览 夜市街口" });
+    fireEvent.click(previewButtons[0]);
+    const preview = await screen.findByRole("dialog", { name: "图片高清预览" });
+
+    fireEvent.click(screen.getByRole("button", { name: "预览放大" }));
+
+    expect(preview).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "高清预览：夜市街口" })).toHaveStyle({ transform: "scale(2)" });
+  });
+
   it("renames asset library items inline and persists the change", async () => {
     const project = createProject("资产库重命名测试");
     project.currentStep = "asset-library";

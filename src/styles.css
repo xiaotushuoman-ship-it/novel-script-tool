@@ -662,11 +662,14 @@ textarea {
 }
 
 .image-preview-toolbar {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid #ded6c9;
+  background: #fffdf8;
   padding: 10px 12px;
 }
 
