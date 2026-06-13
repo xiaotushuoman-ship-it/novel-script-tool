@@ -2,17 +2,18 @@ import type { AiSettings } from "./aiClient";
 
 export const AI_SETTINGS_KEY = "novel-script-tool.ai-settings";
 const PROXY_TIMEAI_ENDPOINT = "/api/timeai/v1";
+const DEFAULT_TIMEAI_ENDPOINT = "https://timeai.chat/v1";
 const PROXY_API_KEY_PLACEHOLDER = "server-proxy";
 const LOCAL_PROXY_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"]);
 
 export const DEFAULT_AI_SETTINGS: AiSettings = {
-  endpoint: PROXY_TIMEAI_ENDPOINT,
+  endpoint: DEFAULT_TIMEAI_ENDPOINT,
   apiKey: PROXY_API_KEY_PLACEHOLDER,
   apiKeySecondary: "",
   apiKeySource: "primary",
   modelApiKeySources: {},
   model: "gpt-5.5",
-  geminiImageEndpoint: PROXY_TIMEAI_ENDPOINT,
+  geminiImageEndpoint: DEFAULT_TIMEAI_ENDPOINT,
   geminiImageApiKey: PROXY_API_KEY_PLACEHOLDER,
   geminiImageModel: "gemini-3.1-flash-preview",
 };

@@ -11,15 +11,15 @@ beforeEach(() => {
 });
 
 describe("AI settings", () => {
-  it("uses the built-in server proxy endpoint and gpt-5.5 model by default", () => {
+  it("uses the TimeAI endpoint and gpt-5.5 model by default", () => {
     const settings = loadAiSettings();
 
-    expect(settings.endpoint).toBe("/api/timeai/v1");
+    expect(settings.endpoint).toBe("https://timeai.chat/v1");
     expect(settings.model).toBe("gpt-5.5");
     expect(settings.apiKeySource).toBe("primary");
     expect(settings.apiKeySecondary).toBe("");
     expect(settings.modelApiKeySources).toEqual({});
-    expect(settings.geminiImageEndpoint).toBe("/api/timeai/v1");
+    expect(settings.geminiImageEndpoint).toBe("https://timeai.chat/v1");
     expect(settings.geminiImageModel).toBe("gemini-3.1-flash-preview");
     expect(settings.geminiImageApiKey).toBe("server-proxy");
     expect(settings.apiKey).toBe("server-proxy");

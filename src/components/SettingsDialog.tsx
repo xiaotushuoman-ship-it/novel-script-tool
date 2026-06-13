@@ -19,6 +19,7 @@ const TEXT_MODEL_OPTIONS = [
 
 const GEMINI_IMAGE_MODEL_OPTIONS = ["gemini-3.1-flash-preview", "gemini-3-pro-image-preview"];
 const CONNECTION_TEST_PROMPT = "请只回复：连接正常";
+const TIMEAI_REGISTER_URL = "https://timeai.chat/register?aff=k2gn";
 
 async function defaultTestTextModelConnection(settings: AiSettings) {
   await callAi(settings, CONNECTION_TEST_PROMPT);
@@ -76,11 +77,20 @@ export function SettingsDialog({
 
         <label>
           <span>API 地址</span>
-          <input
-            value={settings.endpoint}
-            onChange={(event) => onChange({ ...settings, endpoint: event.target.value })}
-            placeholder="https://api.openai.com/v1/chat/completions"
-          />
+          <div className="endpoint-register-row">
+            <input
+              value={settings.endpoint}
+              onChange={(event) => onChange({ ...settings, endpoint: event.target.value })}
+              placeholder="https://timeai.chat/v1"
+            />
+            <button
+              className="secondary-button"
+              onClick={() => window.open(TIMEAI_REGISTER_URL, "_blank", "noopener,noreferrer")}
+              type="button"
+            >
+              注册
+            </button>
+          </div>
         </label>
 
         <label className="model-test-field">
