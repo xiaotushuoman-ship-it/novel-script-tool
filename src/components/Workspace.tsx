@@ -121,6 +121,8 @@ export function Workspace({
   const [isGeneratingCustomImages, setIsGeneratingCustomImages] = useState(false);
   const [assetImageResults, setAssetImageResults] = useState<ImageResult[]>([]);
   const [storyboardImageResults, setStoryboardImageResults] = useState<ImageResult[]>([]);
+  const [storyboardImageProgress, setStoryboardImageProgress] = useState<GenerationProgress | null>(null);
+  const [storyboardImageStatus, setStoryboardImageStatus] = useState("");
   const [customImagePrefix, setCustomImagePrefix] = useState(DEFAULT_CUSTOM_IMAGE_PREFIX);
   const [customImagePrompt, setCustomImagePrompt] = useState("");
   const [customImageCount, setCustomImageCount] = useState("1");
@@ -146,6 +148,7 @@ export function Workspace({
   const [previewScale, setPreviewScale] = useState(1);
   const [progress, setProgress] = useState<GenerationProgress | null>(null);
   const imageProgressTimerRef = useRef<number | null>(null);
+  const storyboardImageProgressTimerRef = useRef<number | null>(null);
   const textProgressTimerRefs = useRef<Partial<Record<TemplateId, number>>>({});
   const imageResultIdRef = useRef(0);
   const currentGeneration = generationByStep[project.currentStep] ?? {
@@ -168,6 +171,7 @@ export function Workspace({
     }
     return () => {
       stopImageProgressTimer();
+      stopStoryboardImageProgressTimer();
       stopAllTextProgressTimers();
     };
   }, [isAssetLibraryStep]);
@@ -655,6 +659,13 @@ export function Workspace({
     }
   }
 
+  function stopStoryboardImageProgressTimer() {
+    if (storyboardImageProgressTimerRef.current !== null) {
+      window.clearInterval(storyboardImageProgressTimerRef.current);
+      storyboardImageProgressTimerRef.current = null;
+    }
+  }
+
   function stopTextProgressTimer(stepId: TemplateId) {
     const timerId = textProgressTimerRefs.current[stepId];
     if (timerId !== undefined) {
@@ -689,6 +700,19 @@ export function Workspace({
       const elapsedSeconds = (Date.now() - startedAt) / 1000;
       const dynamicPercent = Math.min(96, 28 + Math.floor(elapsedSeconds * 3));
       setProgress((current) => {
+        if (!current || current.label !== "模型生图中") return current;
+        return { ...current, percent: Math.max(current.percent, dynamicPercent) };
+      });
+    }, 300);
+  }
+
+  function startStoryboardImageProgressTimer() {
+    stopStoryboardImageProgressTimer();
+    const startedAt = Date.now();
+    storyboardImageProgressTimerRef.current = window.setInterval(() => {
+      const elapsedSeconds = (Date.now() - startedAt) / 1000;
+      const dynamicPercent = Math.min(96, 28 + Math.floor(elapsedSeconds * 3));
+      setStoryboardImageProgress((current) => {
         if (!current || current.label !== "模型生图中") return current;
         return { ...current, percent: Math.max(current.percent, dynamicPercent) };
       });
@@ -1394,23 +1418,23 @@ export function Workspace({
   async function runStoryboardImageGeneration() {
     const storyboardPrompt = buildStoryboardImagePrompt();
     if (!storyboardPrompt.trim()) {
-      setStatus("请先生成或粘贴 GPT-image2 故事板提示词");
+      setStoryboardImageStatus("请先生成或粘贴 GPT-image2 故事板提示词");
       return;
     }
 
     setIsGeneratingImage(true);
-    setStatus("正在生成故事板图片...");
-    stopImageProgressTimer();
-    setProgress({ label: "准备故事板出图参数", percent: 8 });
+    setStoryboardImageStatus("正在生成故事板图片...");
+    stopStoryboardImageProgressTimer();
+    setStoryboardImageProgress({ label: "准备故事板出图参数", percent: 8 });
 
     try {
       const imageModel = step.inputs.imageModel ?? "gpt-image-2";
       const imageRatio = step.inputs.imageRatio ?? "16:9";
       const imageResolution = step.inputs.imageResolution ?? "1K";
       const imageCall = resolveImageCallSettings(imageModel);
-      setProgress({ label: "发送故事板生图请求", percent: 18 });
-      setProgress({ label: "模型生图中", percent: 28 });
-      startImageProgressTimer();
+      setStoryboardImageProgress({ label: "发送故事板生图请求", percent: 18 });
+      setStoryboardImageProgress({ label: "模型生图中", percent: 28 });
+      startStoryboardImageProgressTimer();
       const result = await callImageGenerationWithRetry(
         imageCall.settings,
         storyboardPrompt,
@@ -1418,11 +1442,12 @@ export function Workspace({
         imageRatio,
         imageResolution,
         (attempt, delaySeconds) => {
-          setStatus(`故事板出图触发限流，${delaySeconds}秒后自动重试第${attempt}次...`);
+          setStoryboardImageStatus(`故事板出图触发限流，${delaySeconds}秒后自动重试第${attempt}次...`);
+          setStoryboardImageProgress({ label: `限流等待重试 ${attempt}`, percent: 42 });
         },
       );
-      stopImageProgressTimer();
-      setProgress({ label: "接收故事板图片", percent: 90 });
+      stopStoryboardImageProgressTimer();
+      setStoryboardImageProgress({ label: "接收故事板图片", percent: 90 });
       const images = parseImageResults(result, "故事板", {
         assetType: "场景",
         prompt: storyboardPrompt,
@@ -1431,12 +1456,12 @@ export function Workspace({
         resolution: imageResolution,
       });
       setStoryboardImageResults(images);
-      setProgress({ label: "故事板出图完成", percent: 100 });
-      setStatus(images.length > 0 ? "故事板图片已生成，可预览和下载" : NO_PREVIEWABLE_IMAGE_MESSAGE);
+      setStoryboardImageProgress({ label: "故事板出图完成", percent: 100 });
+      setStoryboardImageStatus(images.length > 0 ? "故事板图片已生成，可预览和下载" : NO_PREVIEWABLE_IMAGE_MESSAGE);
     } catch (error) {
-      stopImageProgressTimer();
-      setProgress({ label: "故事板出图失败", percent: 100 });
-      setStatus(error instanceof Error ? error.message : "故事板出图失败");
+      stopStoryboardImageProgressTimer();
+      setStoryboardImageProgress({ label: "故事板出图失败", percent: 100 });
+      setStoryboardImageStatus(error instanceof Error ? error.message : "故事板出图失败");
     } finally {
       setIsGeneratingImage(false);
     }
@@ -2526,6 +2551,26 @@ export function Workspace({
             {renderSelectControl("分辨率", "imageResolution", IMAGE_RESOLUTION_OPTIONS, "1K")}
           </div>
           <p className="muted">会读取上方生成结果中的 GPT-image-2 出图提示词，并按当前画面布局、比例和影像风格生成故事板图片。</p>
+          {storyboardImageStatus ? <div className="status-line">{storyboardImageStatus}</div> : null}
+          {storyboardImageProgress ? (
+            <div className="generation-progress" aria-label="故事板图片生成进度" aria-live="polite">
+              <div className="progress-header">
+                <strong>故事板图片进度</strong>
+                <span>{storyboardImageProgress.label}</span>
+                <b>{storyboardImageProgress.percent}%</b>
+              </div>
+              <div
+                aria-label="故事板图片生成进度"
+                aria-valuemax={100}
+                aria-valuemin={0}
+                aria-valuenow={storyboardImageProgress.percent}
+                className="progress-track"
+                role="progressbar"
+              >
+                <div className="progress-fill" style={{ width: `${storyboardImageProgress.percent}%` }} />
+              </div>
+            </div>
+          ) : null}
           {renderImageResultsPanel(storyboardImageResults, "故事板生图结果预览")}
         </div>
       ) : null}

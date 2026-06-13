@@ -594,6 +594,37 @@ describe("Workspace storyboard controls", () => {
     expect(screen.queryByLabelText("生图结果预览")).not.toBeInTheDocument();
   });
 
+  it("shows storyboard image progress and failure feedback inside the storyboard image panel", async () => {
+    callImageGenerationMock.mockReturnValue(new Promise((_, reject) => window.setTimeout(() => reject(new Error("故事板图片接口失败")), 20)));
+    const project = createProject("故事板独立进度测试");
+    project.currentStep = "gpt-image2-storyboard";
+    project.steps["gpt-image2-storyboard"].draft = "GPT-image-2出图提示词：一张四宫格故事板图。";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    const storyboardImagePanel = screen.getByLabelText("故事板出图区");
+    fireEvent.click(within(storyboardImagePanel).getByRole("button", { name: "生成故事板图片" }));
+
+    expect(within(storyboardImagePanel).getByText("故事板出图中")).toBeInTheDocument();
+    expect(within(storyboardImagePanel).getByRole("progressbar", { name: "故事板图片生成进度" })).toHaveAttribute(
+      "aria-valuenow",
+      "28",
+    );
+    expect(await within(storyboardImagePanel).findByText("故事板图片接口失败")).toBeInTheDocument();
+    expect(within(storyboardImagePanel).getByRole("progressbar", { name: "故事板图片生成进度" })).toHaveAttribute(
+      "aria-valuenow",
+      "100",
+    );
+  });
+
   it("previews signed asset image urls that do not include a file extension", async () => {
     callImageGenerationMock.mockResolvedValue("https://oaidalleapiprodscus.blob.core.windows.net/private/generated?id=abc");
     const project = createProject("无后缀图片链接预览");
