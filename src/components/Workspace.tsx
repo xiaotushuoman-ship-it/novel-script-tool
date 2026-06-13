@@ -868,7 +868,8 @@ export function Workspace({
         setStatus(NO_PREVIEWABLE_IMAGE_MESSAGE);
       } else {
         appendImageResultLike(image.id, upscaledImages);
-        setStatus(`${targetResolution}高清放大图已生成，可预览和下载`);
+        setPreviewImage(null);
+        setStatus(`${targetResolution}高清放大图已追加到原图后方，原图已保留`);
       }
       setProgress({ label: `${targetResolution}高清放大完成`, percent: 100 });
     } catch (error) {
@@ -881,13 +882,20 @@ export function Workspace({
   }
 
   function appendImageResultLike(sourceImageId: string, upscaledImages: ImageResult[]) {
+    const appendAfterSource = (current: ImageResult[]) => {
+      const sourceIndex = current.findIndex((item) => item.id === sourceImageId);
+      if (sourceIndex === -1) return current;
+      return [
+        ...current.slice(0, sourceIndex + 1),
+        ...upscaledImages,
+        ...current.slice(sourceIndex + 1),
+      ];
+    };
     setAssetImageResults((current) => {
-      if (!current.some((item) => item.id === sourceImageId)) return current;
-      return [...current, ...upscaledImages];
+      return appendAfterSource(current);
     });
     setStoryboardImageResults((current) => {
-      if (!current.some((item) => item.id === sourceImageId)) return current;
-      return [...current, ...upscaledImages];
+      return appendAfterSource(current);
     });
   }
 

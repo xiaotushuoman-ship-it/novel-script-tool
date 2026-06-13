@@ -2516,10 +2516,57 @@ describe("Workspace asset extraction image generation", () => {
     expect(callImageGenerationMock.mock.calls[1][1]).toContain("原图参考：https://img.example.com/preview.png");
     expect(callImageGenerationMock.mock.calls[1][2]).toBe("gemini-3.1-flash-preview");
     expect(callImageGenerationMock.mock.calls[1][4]).toBe("4K");
+    expect(screen.getByRole("img", { name: "林晚 生图结果 1" })).toHaveAttribute(
+      "src",
+      "https://img.example.com/preview.png",
+    );
     expect(await screen.findByRole("img", { name: "林晚-4K高清 生图结果 1" })).toHaveAttribute(
       "src",
       "https://img.example.com/preview-4k.png",
     );
+    const resultImages = screen.getAllByRole("img").filter((image) => image.getAttribute("alt")?.includes("生图结果"));
+    expect(resultImages.map((image) => image.getAttribute("alt"))).toEqual([
+      "林晚 生图结果 1",
+      "林晚-4K高清 生图结果 1",
+    ]);
+    expect(screen.getByText("4K高清放大图已追加到原图后方，原图已保留")).toBeInTheDocument();
+  });
+
+  it("closes the preview after upscaling from the image preview dialog", async () => {
+    callImageGenerationMock
+      .mockResolvedValueOnce("https://img.example.com/preview.png")
+      .mockResolvedValueOnce("https://img.example.com/preview-2k.png");
+    const project = createProject("预览内高清放大测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，站在夜市摊前，神情警觉。";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚穿白衬衫站在夜市摊前。",
+      assetType: "人物",
+      visualStyle: "影视写实风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+    const originalImage = await screen.findByRole("img", { name: "林晚 生图结果 1" });
+    fireEvent.click(originalImage);
+    expect(await screen.findByRole("dialog", { name: "图片高清预览" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "2K高清" }));
+
+    expect(await screen.findByRole("img", { name: "林晚-2K高清 生图结果 1" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "图片高清预览" })).not.toBeInTheDocument());
   });
 
   it("marks generated asset images as draggable for ZZDH empty image slots", async () => {
