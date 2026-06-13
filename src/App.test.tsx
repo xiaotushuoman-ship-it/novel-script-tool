@@ -11,6 +11,6 @@ describe("App", () => {
     expect(screen.getAllByText("小说改剧本").length).toBeGreaterThan(0);
     expect(screen.getAllByText("剧本资产提取").length).toBeGreaterThan(0);
     expect(screen.getByText("生成结果 / 外部粘贴区")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "复制提示词" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "复制" })).toBeInTheDocument();
   });
 });

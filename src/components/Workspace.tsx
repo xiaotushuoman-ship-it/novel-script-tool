@@ -20,6 +20,7 @@ import {
   type TemplateField,
   type TemplateId,
 } from "../domain/templates";
+import { sendAssetsToZzdh, sendStoryboardToZzdh } from "../domain/zzdhClient";
 
 type GenerationProgress = {
   label: string;
@@ -87,7 +88,7 @@ const STEP_NAME_BY_ID: Record<TemplateId, string> = {
   "asset-extraction": "剧本资产提取",
   "asset-library": "资产库",
   "storyboard-15s": "15S 分镜脚本",
-  "gpt-image2-storyboard": "GPT-image2 四宫格故事板（暂不可用）",
+  "gpt-image2-storyboard": "GPT-image2 四宫格故事板",
 };
 
 const NO_PREVIEWABLE_IMAGE_MESSAGE = "模型已响应，但没有返回可预览图片。请换生图模型或检查该模型是否支持图片输出。";
@@ -112,6 +113,8 @@ export function Workspace({
   const [status, setStatus] = useState("");
   const [generationByStep, setGenerationByStep] = useState<Partial<Record<TemplateId, StepGenerationState>>>({});
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isSendingToZzdh, setIsSendingToZzdh] = useState(false);
+  const [isSendingAssetsToZzdh, setIsSendingAssetsToZzdh] = useState(false);
   const [generatingAssets, setGeneratingAssets] = useState<Record<string, boolean>>({});
   const [isGeneratingCustomImages, setIsGeneratingCustomImages] = useState(false);
   const [assetImageResults, setAssetImageResults] = useState<ImageResult[]>([]);
@@ -757,6 +760,33 @@ export function Workspace({
     setPreviewScale(1);
   }
 
+  function prepareImageDrag(event: React.DragEvent<HTMLImageElement>, image: ImageResult, filename: string) {
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData("text/uri-list", image.src);
+    event.dataTransfer.setData("text/plain", image.src);
+    event.dataTransfer.setData("application/x-xiaotu-asset-image", JSON.stringify({ ...image, filename }));
+    event.dataTransfer.setData("DownloadURL", `image/png:${filename}:${image.src}`);
+
+    const file = createFileFromDataUrl(image.src, filename);
+    if (file) {
+      event.dataTransfer.items.add(file);
+    }
+  }
+
+  function createFileFromDataUrl(src: string, filename: string): File | null {
+    const match = src.match(/^data:([^;,]+)(;base64)?,(.*)$/);
+    if (!match) return null;
+    const mimeType = match[1] || "image/png";
+    const isBase64 = Boolean(match[2]);
+    const payload = match[3] || "";
+    const binaryString = isBase64 ? atob(payload) : decodeURIComponent(payload);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let index = 0; index < binaryString.length; index += 1) {
+      bytes[index] = binaryString.charCodeAt(index);
+    }
+    return new File([bytes], filename, { type: mimeType });
+  }
+
   function zoomPreviewImage() {
     setPreviewScale((current) => Math.min(4, current + 1));
   }
@@ -988,6 +1018,46 @@ export function Workspace({
       });
     } finally {
       updateStepGeneration(runStepId, { isCalling: false });
+    }
+  }
+
+  async function sendCurrentStoryboardToZzdh() {
+    if (project.currentStep !== "storyboard-15s") return;
+    if (!step.draft.trim()) {
+      setStatus("请先生成或粘贴15S分镜脚本，再发送到字字动画。");
+      return;
+    }
+
+    setIsSendingToZzdh(true);
+    setStatus("正在发送到字字动画...");
+    try {
+      await sendStoryboardToZzdh(project.name, step.draft);
+      setStatus("已发送到字字动画，并自动创建/打开项目");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "发送到字字动画失败");
+    } finally {
+      setIsSendingToZzdh(false);
+    }
+  }
+
+  async function sendCurrentAssetsToZzdh() {
+    if (project.currentStep !== "asset-extraction") return;
+    const assets = extractedAssets.map(withEditedAssetDescription);
+    if (assets.length === 0) {
+      setStatus("请先提取人物、场景或物品资产，再发送到字字动画。");
+      return;
+    }
+
+    setIsSendingAssetsToZzdh(true);
+    setStatus("正在发送资产到字字动画...");
+    try {
+      const result = await sendAssetsToZzdh(assets);
+      const failedText = result.failed.length > 0 ? `，失败 ${result.failed.length} 个` : "";
+      setStatus(`已发送到字字动画：新建 ${result.created.length} 个，跳过同名 ${result.skippedExisting.length} 个${failedText}`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "发送资产到字字动画失败");
+    } finally {
+      setIsSendingAssetsToZzdh(false);
     }
   }
 
@@ -1775,13 +1845,15 @@ export function Workspace({
                 <img
                   alt={imageAlt}
                   className="image-result-thumbnail"
+                  draggable
                   src={image.src}
-                  title="左键预览，右键下载原图"
+                  title="左键预览，右键下载，拖拽到字字动画图片位"
                   onClick={() => openImagePreview(image.src, imageAlt, imageFilename)}
                   onContextMenu={(event) => {
                     event.preventDefault();
                     void downloadImageFile(image.src, imageFilename);
                   }}
+                  onDragStart={(event) => prepareImageDrag(event, image, imageFilename)}
                 />
                 <figcaption>
                   <span>
@@ -2050,6 +2122,12 @@ export function Workspace({
           <Bot size={16} />
           {currentGeneration.isCalling ? "生成中" : "调用 AI 生成"}
         </button>
+        {project.currentStep === "storyboard-15s" ? (
+          <button className="secondary-button" disabled={isSendingToZzdh || !step.draft.trim()} onClick={sendCurrentStoryboardToZzdh}>
+            <Play size={16} />
+            {isSendingToZzdh ? "发送中" : "发送分镜到字字动画"}
+          </button>
+        ) : null}
         <button className="secondary-button" onClick={() => onSaveVersion(step.draft)}>
           <Save size={16} />
           保存结果
@@ -2207,6 +2285,14 @@ export function Workspace({
                 {isGeneratingImage ? "批量生图中" : "生成全部"}
               </button>
               <button
+                className="secondary-button"
+                disabled={isSendingAssetsToZzdh || extractedAssets.length === 0}
+                onClick={sendCurrentAssetsToZzdh}
+              >
+                <Bot size={16} />
+                {isSendingAssetsToZzdh ? "发送中" : "发送到字字动画"}
+              </button>
+              <button
                 aria-label="清除资产图片"
                 className="secondary-button"
                 disabled={assetImageResults.length === 0}
@@ -2318,7 +2404,7 @@ export function Workspace({
       {project.currentStep === "gpt-image2-storyboard" ? (
         <div aria-label="故事板出图区" className="asset-generation-panel">
           <div className="section-heading">
-            <h3>故事板出图区（暂不可用）</h3>
+            <h3>故事板出图区</h3>
             <div className="heading-actions">
               <button className="secondary-button" disabled={isGeneratingImage || !step.draft.trim()} onClick={runStoryboardImageGeneration}>
                 <FileImage size={16} />
@@ -2341,25 +2427,35 @@ export function Workspace({
 
       {project.currentStep === "asset-extraction" ? renderImageResultsPanel(assetImageResults) : null}
       {previewImage ? (
-        <div className="image-preview-backdrop" role="dialog" aria-label="图片高清预览">
+        <div
+          className="image-preview-backdrop"
+          role="dialog"
+          aria-label="图片高清预览"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setPreviewImage(null);
+            }
+          }}
+        >
           <div className="image-preview-shell">
             <div className="image-preview-toolbar">
               <strong>图片高清预览</strong>
               <div className="image-preview-actions">
-                <button className="secondary-button" onClick={zoomPreviewImage}>
+                <button className="secondary-button" type="button" onClick={zoomPreviewImage}>
                   高清放大
                 </button>
-                <button className="secondary-button" onClick={() => setPreviewScale(1)}>
+                <button className="secondary-button" type="button" onClick={() => setPreviewScale(1)}>
                   原始比例
                 </button>
                 <button
                   className="secondary-button"
+                  type="button"
                   onClick={() => downloadImageFile(previewImage.src, previewImage.filename)}
                 >
                   <Download size={16} />
                   下载原图
                 </button>
-                <button className="ghost-button" onClick={() => setPreviewImage(null)}>
+                <button className="ghost-button" type="button" onClick={() => setPreviewImage(null)}>
                   关闭
                 </button>
               </div>

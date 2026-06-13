@@ -7,7 +7,6 @@ const NEXT_STEP: Partial<Record<TemplateId, TemplateId>> = {
   "prose-generation": "novel-to-script",
   "novel-to-script": "asset-extraction",
   "asset-extraction": "storyboard-15s",
-  "storyboard-15s": "gpt-image2-storyboard",
 };
 
 export function transferToNextStep(project: Project, fromStep: TemplateId): Project {

@@ -1,4 +1,4 @@
-import douyinViralShortDramaTemplate from "../prompts/douyin-viral-shortdrama-template.md?raw";
+﻿import douyinViralShortDramaTemplate from "../prompts/douyin-viral-shortdrama-template.md?raw";
 
 export type TemplateId =
   | "outline-expansion"
@@ -703,7 +703,7 @@ ${PLATFORM_REVIEW_RULES}
   },
   {
     id: "gpt-image2-storyboard",
-    name: "GPT-image2 四宫格故事板（暂不可用）",
+    name: "GPT-image2 四宫格故事板",
     description: "把当前小说、剧本或分镜的15S内容压缩成一张图，用四个画面完整展示剧情信息。",
     fields: [
       { key: "sourceText", label: "小说/剧本/分镜内容", multiline: true, required: true },
@@ -835,3 +835,4 @@ export function buildPrompt(template: TemplateDefinition, values: PromptValues):
     return values[key] ?? template.fields.find((field) => field.key === key)?.defaultValue ?? "";
   });
 }
+

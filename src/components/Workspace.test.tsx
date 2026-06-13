@@ -8,6 +8,8 @@ import { within } from "@testing-library/react";
 const callAiMock = vi.fn();
 const callAiStreamMock = vi.fn();
 const callImageGenerationMock = vi.fn();
+const sendStoryboardToZzdhMock = vi.fn();
+const sendAssetsToZzdhMock = vi.fn();
 
 vi.mock("../domain/aiClient", async () => {
   const actual = await vi.importActual<typeof import("../domain/aiClient")>("../domain/aiClient");
@@ -18,6 +20,11 @@ vi.mock("../domain/aiClient", async () => {
     callImageGeneration: (...args: unknown[]) => callImageGenerationMock(...args),
   };
 });
+
+vi.mock("../domain/zzdhClient", () => ({
+  sendStoryboardToZzdh: (...args: unknown[]) => sendStoryboardToZzdhMock(...args),
+  sendAssetsToZzdh: (...args: unknown[]) => sendAssetsToZzdhMock(...args),
+}));
 
 afterEach(() => {
   vi.useRealTimers();
@@ -533,7 +540,7 @@ describe("Workspace storyboard controls", () => {
     expect(within(storyboardImagePanel).getByRole("combobox", { name: "画面布局" })).toBeInTheDocument();
     expect(within(storyboardImagePanel).getByRole("combobox", { name: "生图模型" })).toBeInTheDocument();
     expect(within(storyboardImagePanel).getByRole("combobox", { name: "分辨率" })).toBeInTheDocument();
-    expect(within(storyboardImagePanel).getByText("故事板出图区（暂不可用）")).toBeInTheDocument();
+    expect(within(storyboardImagePanel).getByText("故事板出图区")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "生成故事板图片" }));
 
@@ -744,6 +751,37 @@ describe("Workspace storyboard controls", () => {
       await Promise.resolve();
     });
     await waitFor(() => expect(resultEditor).toHaveDisplayValue("分镜1：开场入画\n分镜2：冲突推进"));
+  });
+
+  it("sends storyboard draft to ZZDH from the 15s storyboard step", async () => {
+    sendStoryboardToZzdhMock.mockResolvedValue({ success: true });
+    const project = createProject("字字动画联动测试");
+    project.currentStep = "storyboard-15s";
+    project.steps["storyboard-15s"].inputs.scriptText = "夜市摊前，许明舟抬头看见有人来收摊费。";
+    project.steps["storyboard-15s"].draft = [
+      "第1段 15S：夜市摊前",
+      "分镜1 开场（0-3s）：许明舟站在摊前。",
+      "对白：许明舟：今天这摊，我守定了。",
+    ].join("\n");
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "发送分镜到字字动画" }));
+
+    await waitFor(() => expect(sendStoryboardToZzdhMock).toHaveBeenCalledTimes(1));
+    expect(sendStoryboardToZzdhMock).toHaveBeenCalledWith(
+      "字字动画联动测试",
+      project.steps["storyboard-15s"].draft,
+    );
+    expect(await screen.findByText("已发送到字字动画，并自动创建/打开项目")).toBeInTheDocument();
   });
 
   it("keeps storyboard and asset image previews independent when switching steps", async () => {
@@ -1335,6 +1373,12 @@ describe("Workspace asset extraction image generation", () => {
     expect(screen.getByRole("img", { name: "高清预览：林晚 生图结果 1" })).toHaveStyle({
       transform: "scale(2)",
     });
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "图片高清预览" })).not.toBeInTheDocument());
+
+    fireEvent.click(thumbnail);
+    fireEvent.click(screen.getByRole("dialog", { name: "图片高清预览" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "图片高清预览" })).not.toBeInTheDocument());
 
     fireEvent.contextMenu(thumbnail);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("https://img.example.com/preview.png"));
@@ -2284,6 +2328,91 @@ describe("Workspace asset extraction image generation", () => {
       "src",
       "https://img.example.com/edited-asset.png",
     );
+  });
+
+  it("marks generated asset images as draggable for ZZDH empty image slots", async () => {
+    const imageSrc = "data:image/png;base64,aGVsbG8=";
+    callImageGenerationMock.mockResolvedValue(imageSrc);
+    const project = createProject("拖拽图片测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，站在夜市摊前。";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚站在夜市摊前。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+    const image = await screen.findByRole("img", { name: "林晚 生图结果 1" });
+    expect(image).toHaveAttribute("draggable", "true");
+
+    const dataTransfer = {
+      effectAllowed: "",
+      items: { add: vi.fn() },
+      setData: vi.fn(),
+    };
+    fireEvent.dragStart(image, { dataTransfer });
+
+    expect(dataTransfer.setData).toHaveBeenCalledWith("text/uri-list", imageSrc);
+    expect(dataTransfer.setData).toHaveBeenCalledWith("text/plain", imageSrc);
+    expect(dataTransfer.setData).toHaveBeenCalledWith(
+      "DownloadURL",
+      expect.stringContaining("image/png:拖拽图片测试-剧本资产提取-林晚-image-1.png:"),
+    );
+    expect(dataTransfer.items.add).toHaveBeenCalledWith(expect.any(File));
+  });
+
+  it("sends edited extracted assets to ZZDH entity managers", async () => {
+    sendAssetsToZzdhMock.mockResolvedValue({
+      created: [{ name: "林晚", type: "人物", description: "女性，黑色风衣", entityType: "character", entityId: "char-1" }],
+      skippedExisting: [],
+      failed: [],
+    });
+    const project = createProject("资产发送测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫。\n【场景】夜市：霓虹灯。";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚站在夜市摊前。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("林晚 人物信息"), {
+      target: { value: "女性，黑色风衣" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送到字字动画" }));
+
+    await waitFor(() => expect(sendAssetsToZzdhMock).toHaveBeenCalledTimes(1));
+    expect(sendAssetsToZzdhMock).toHaveBeenCalledWith([
+      expect.objectContaining({ name: "林晚", type: "人物", description: "女性，黑色风衣" }),
+    ]);
+    expect(await screen.findByText("已发送到字字动画：新建 1 个，跳过同名 0 个")).toBeInTheDocument();
   });
 
   it("lets the user edit extracted scene and prop info before image generation", async () => {

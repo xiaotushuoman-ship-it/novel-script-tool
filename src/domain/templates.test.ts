@@ -242,7 +242,7 @@ describe("buildPrompt", () => {
     const fields = Object.fromEntries(template.fields.map((field) => [field.key, field]));
     const fieldKeys = template.fields.map((field) => field.key);
 
-    expect(template.name).toBe("GPT-image2 四宫格故事板（暂不可用）");
+    expect(template.name).toBe("GPT-image2 四宫格故事板");
     expect(template.description).toContain("一张图");
     expect(prompt).toContain("GPT-image-2");
     expect(prompt).toContain("一张图");
