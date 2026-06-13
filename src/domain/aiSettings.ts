@@ -27,7 +27,8 @@ export function normalizeAiSettingsForRuntime(
 ): AiSettings {
   const model = settings?.model?.trim();
   const geminiImageModel = settings?.geminiImageModel?.trim();
-  const geminiImageEndpoint = settings?.geminiImageEndpoint?.trim();
+  const endpoint = normalizeDisplayEndpoint(settings?.endpoint);
+  const geminiImageEndpoint = normalizeDisplayEndpoint(settings?.geminiImageEndpoint);
   const geminiImageApiKey = settings?.geminiImageApiKey?.trim();
   const apiKeySecondary = settings?.apiKeySecondary?.trim();
   const apiKeySource = settings?.apiKeySource === "secondary" ? "secondary" : "primary";
@@ -35,14 +36,14 @@ export function normalizeAiSettingsForRuntime(
   void runtimeUrl;
 
   return {
-    endpoint: settings?.endpoint?.trim() || DEFAULT_AI_SETTINGS.endpoint,
+    endpoint,
     apiKey: settings?.apiKey?.trim() || DEFAULT_AI_SETTINGS.apiKey,
     apiKeySecondary: apiKeySecondary || DEFAULT_AI_SETTINGS.apiKeySecondary,
     apiKeySource,
     modelApiKeySources:
       modelApiKeySources && typeof modelApiKeySources === "object" ? modelApiKeySources : {},
     model: model === "gpt5.5" ? "gpt-5.5" : model || DEFAULT_AI_SETTINGS.model,
-    geminiImageEndpoint: geminiImageEndpoint || DEFAULT_AI_SETTINGS.geminiImageEndpoint,
+    geminiImageEndpoint,
     geminiImageApiKey: geminiImageApiKey || DEFAULT_AI_SETTINGS.geminiImageApiKey,
     geminiImageModel: geminiImageModel || DEFAULT_AI_SETTINGS.geminiImageModel,
   };
@@ -59,4 +60,10 @@ export function loadAiSettings(): AiSettings {
 
 export function saveAiSettings(settings: AiSettings) {
   localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(normalizeAiSettingsForRuntime(settings)));
+}
+
+function normalizeDisplayEndpoint(endpoint: string | undefined): string {
+  const trimmed = endpoint?.trim();
+  if (!trimmed || trimmed === PROXY_TIMEAI_ENDPOINT) return DEFAULT_TIMEAI_ENDPOINT;
+  return trimmed;
 }

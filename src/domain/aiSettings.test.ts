@@ -44,6 +44,23 @@ describe("AI settings", () => {
     expect(loadAiSettings()).toEqual(normalizeAiSettings(null));
   });
 
+  it("migrates previously saved proxy endpoints to full TimeAI URLs for display", () => {
+    localStorage.setItem(
+      AI_SETTINGS_KEY,
+      JSON.stringify({
+        endpoint: "/api/timeai/v1",
+        geminiImageEndpoint: "/api/timeai/v1",
+        apiKey: "server-proxy",
+        geminiImageApiKey: "server-proxy",
+      }),
+    );
+
+    expect(loadAiSettings()).toMatchObject({
+      endpoint: "https://timeai.chat/v1",
+      geminiImageEndpoint: "https://timeai.chat/v1",
+    });
+  });
+
   it("migrates the old gpt5.5 spelling to the working gpt-5.5 model id", () => {
     expect(normalizeAiSettings({ model: "gpt5.5" }).model).toBe("gpt-5.5");
   });
