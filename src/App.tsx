@@ -16,8 +16,6 @@ import {
 } from "./domain/projects";
 import type { TemplateId } from "./domain/templates";
 
-const OWNER_EXPORTS_KEY = "novel-script-tool.owner-exports";
-
 export default function App() {
   const [projects, setProjects] = useState<Project[]>(() => {
     const stored = loadProjects();
@@ -28,18 +26,6 @@ export default function App() {
   const [activeProjectId, setActiveProjectId] = useState(() => projects[0].id);
   const [aiSettings, setAiSettings] = useState(loadAiSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [allowOwnerExports] = useState(() => {
-    const ownerParam = new URLSearchParams(window.location.search).get("owner");
-    if (ownerParam === "1") {
-      localStorage.setItem(OWNER_EXPORTS_KEY, "1");
-      return true;
-    }
-    if (ownerParam === "0") {
-      localStorage.removeItem(OWNER_EXPORTS_KEY);
-      return false;
-    }
-    return localStorage.getItem(OWNER_EXPORTS_KEY) === "1";
-  });
 
   const activeProject = useMemo(() => {
     return projects.find((project) => project.id === activeProjectId) ?? projects[0];
@@ -124,7 +110,6 @@ export default function App() {
           onSaveVersion={saveCurrentVersion}
         />
         <SidePanel
-          allowOwnerExports={allowOwnerExports}
           project={activeProject}
           onDeleteVersion={deleteSavedVersion}
           onRestoreVersion={restoreSavedVersion}

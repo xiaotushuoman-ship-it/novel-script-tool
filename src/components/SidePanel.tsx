@@ -4,13 +4,12 @@ import { exportProjectMarkdown } from "../domain/exportMarkdown";
 import { getTemplate, type TemplateId } from "../domain/templates";
 
 type Props = {
-  allowOwnerExports?: boolean;
   project: Project;
   onDeleteVersion: (stepId: TemplateId, versionId: string) => void;
   onRestoreVersion: (stepId: TemplateId, versionId: string) => void;
 };
 
-export function SidePanel({ allowOwnerExports = false, project, onDeleteVersion, onRestoreVersion }: Props) {
+export function SidePanel({ project, onDeleteVersion, onRestoreVersion }: Props) {
   const step = project.steps[project.currentStep];
   const markdown = exportProjectMarkdown(project);
 
@@ -59,18 +58,16 @@ export function SidePanel({ allowOwnerExports = false, project, onDeleteVersion,
         )}
       </div>
 
-      {allowOwnerExports ? (
-        <div className="side-actions">
-          <button onClick={() => navigator.clipboard.writeText(markdown)}>
-            <FileText size={16} />
-            复制项目 Markdown
-          </button>
-          <button className="secondary-button" onClick={downloadMarkdown}>
-            <Download size={16} />
-            下载 Markdown
-          </button>
-        </div>
-      ) : null}
+      <div className="side-actions">
+        <button onClick={() => navigator.clipboard.writeText(markdown)}>
+          <FileText size={16} />
+          复制项目 Markdown
+        </button>
+        <button className="secondary-button" onClick={downloadMarkdown}>
+          <Download size={16} />
+          下载 Markdown
+        </button>
+      </div>
     </aside>
   );
 }
