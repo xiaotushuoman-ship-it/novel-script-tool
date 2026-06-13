@@ -14,4 +14,16 @@ describe("exportProjectMarkdown", () => {
     expect(markdown).not.toContain("项目资料");
     expect(markdown).not.toContain("市井小镇");
   });
+
+  it("exports current drafts even when no version has been saved", () => {
+    const project = createProject("当前结果导出测试");
+    project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，夜市摊主。";
+
+    const markdown = exportProjectMarkdown(project);
+
+    expect(markdown).toContain("## 剧本资产提取");
+    expect(markdown).toContain("### 当前结果");
+    expect(markdown).toContain("【人物】林晚：白衬衫，夜市摊主。");
+    expect(markdown).not.toContain("暂无保存版本。");
+  });
 });

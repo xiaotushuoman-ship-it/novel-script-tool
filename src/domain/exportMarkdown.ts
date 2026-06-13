@@ -11,13 +11,20 @@ export function exportProjectMarkdown(project: Project): string {
 
   for (const template of TEMPLATES) {
     const step = project.steps[template.id];
+    const currentDraft = step.draft.trim();
+    if (!currentDraft && step.versions.length === 0) continue;
+
     lines.push("", `## ${template.name}`, "");
+    if (currentDraft) {
+      lines.push("### 当前结果", "", currentDraft, "");
+    }
+
     if (step.versions.length === 0) {
-      lines.push("暂无保存版本。");
       continue;
     }
+    lines.push("### 历史版本", "");
     step.versions.forEach((version, index) => {
-      lines.push(`### 版本 ${index + 1} - ${version.createdAt}`, "", version.content, "");
+      lines.push(`#### 版本 ${index + 1} - ${version.createdAt}`, "", version.content, "");
     });
   }
 
