@@ -10,6 +10,10 @@
   geminiImageModel?: string;
 };
 
+const TIMEAI_ENDPOINT = "https://timeai.chat/v1";
+const TIMEAI_PROXY_ENDPOINT = "/api/timeai/v1";
+const PROXY_API_KEY_PLACEHOLDER = "server-proxy";
+
 export async function callAi(
   settings: AiSettings,
   prompt: string,
@@ -19,10 +23,11 @@ export async function callAi(
   const apiKey = resolveApiKey(settings);
   if (!apiKey.trim()) throw new Error("请填写 API Key");
   if (!settings.model.trim()) throw new Error("请填写模型名");
+  const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint, apiKey);
 
   const response = await requestAi(
     () =>
-      fetchImpl(resolveChatCompletionsEndpoint(settings.endpoint), {
+      fetchImpl(resolveChatCompletionsEndpoint(runtimeEndpoint), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -33,7 +38,7 @@ export async function callAi(
           messages: [{ role: "user", content: prompt }],
         }),
       }),
-    settings.endpoint,
+    runtimeEndpoint,
   );
 
   if (!response.ok) {
@@ -56,10 +61,11 @@ export async function callAiStream(
   const apiKey = resolveApiKey(settings);
   if (!apiKey.trim()) throw new Error("请填写 API Key");
   if (!settings.model.trim()) throw new Error("请填写模型名");
+  const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint, apiKey);
 
   const response = await requestAi(
     () =>
-      fetchImpl(resolveChatCompletionsEndpoint(settings.endpoint), {
+      fetchImpl(resolveChatCompletionsEndpoint(runtimeEndpoint), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -71,7 +77,7 @@ export async function callAiStream(
           stream: true,
         }),
       }),
-    settings.endpoint,
+    runtimeEndpoint,
   );
 
   if (!response.ok) {
@@ -150,14 +156,16 @@ export async function callImageGeneration(
   const apiKey = resolveApiKey(settings);
   if (!apiKey.trim()) throw new Error("请填写 API Key");
   if (!imageModel.trim()) throw new Error("请选择生图模型");
+  const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint, apiKey);
+  const runtimeSettings = { ...settings, endpoint: runtimeEndpoint };
 
-  if (isGeminiNativeEndpoint(settings.endpoint) && isGeminiImageModel(imageModel)) {
-    return callGeminiImageGeneration(settings, apiKey, prompt, imageModel, imageRatio, imageResolution, fetchImpl);
+  if (isGeminiNativeEndpoint(runtimeEndpoint) && isGeminiImageModel(imageModel)) {
+    return callGeminiImageGeneration(runtimeSettings, apiKey, prompt, imageModel, imageRatio, imageResolution, fetchImpl);
   }
 
   const response = await requestAi(
     () =>
-      fetchImpl(resolveImageGenerationsEndpoint(settings.endpoint), {
+      fetchImpl(resolveImageGenerationsEndpoint(runtimeEndpoint), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -169,13 +177,13 @@ export async function callImageGeneration(
           size: resolveImageSize(imageRatio, imageResolution),
         }),
       }),
-    settings.endpoint,
+    runtimeEndpoint,
   );
 
   if (!response.ok) {
-    if (isGeminiImageModel(imageModel) && !isGeminiNativeEndpoint(settings.endpoint)) {
+    if (isGeminiImageModel(imageModel) && !isGeminiNativeEndpoint(runtimeEndpoint)) {
       return callThirdPartyGeminiChatImageGeneration(
-        settings,
+        runtimeSettings,
         apiKey,
         prompt,
         imageModel,
@@ -337,6 +345,14 @@ function resolveApiKey(settings: AiSettings): string {
   const source = model ? settings.modelApiKeySources?.[model] ?? settings.apiKeySource ?? "primary" : "primary";
   if (source === "secondary") return settings.apiKeySecondary?.trim() || settings.apiKey.trim();
   return settings.apiKey.trim();
+}
+
+function resolveRuntimeEndpoint(endpoint: string, apiKey: string): string {
+  const normalizedEndpoint = endpoint.trim().replace(/\/+$/, "");
+  if (apiKey.trim() === PROXY_API_KEY_PLACEHOLDER && normalizedEndpoint === TIMEAI_ENDPOINT) {
+    return TIMEAI_PROXY_ENDPOINT;
+  }
+  return endpoint;
 }
 
 async function requestAi(fetcher: () => Promise<Response>, endpoint: string): Promise<Response> {

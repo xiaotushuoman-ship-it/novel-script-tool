@@ -4,7 +4,6 @@ export const AI_SETTINGS_KEY = "novel-script-tool.ai-settings";
 const PROXY_TIMEAI_ENDPOINT = "/api/timeai/v1";
 const DEFAULT_TIMEAI_ENDPOINT = "https://timeai.chat/v1";
 const PROXY_API_KEY_PLACEHOLDER = "server-proxy";
-const LOCAL_PROXY_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"]);
 
 export const DEFAULT_AI_SETTINGS: AiSettings = {
   endpoint: DEFAULT_TIMEAI_ENDPOINT,
@@ -33,17 +32,17 @@ export function normalizeAiSettingsForRuntime(
   const apiKeySecondary = settings?.apiKeySecondary?.trim();
   const apiKeySource = settings?.apiKeySource === "secondary" ? "secondary" : "primary";
   const modelApiKeySources = settings?.modelApiKeySources;
-  const forceProxy = shouldForceProxyEndpoint(runtimeUrl);
+  void runtimeUrl;
 
   return {
-    endpoint: forceProxy ? PROXY_TIMEAI_ENDPOINT : settings?.endpoint?.trim() || DEFAULT_AI_SETTINGS.endpoint,
+    endpoint: settings?.endpoint?.trim() || DEFAULT_AI_SETTINGS.endpoint,
     apiKey: settings?.apiKey?.trim() || DEFAULT_AI_SETTINGS.apiKey,
     apiKeySecondary: apiKeySecondary || DEFAULT_AI_SETTINGS.apiKeySecondary,
     apiKeySource,
     modelApiKeySources:
       modelApiKeySources && typeof modelApiKeySources === "object" ? modelApiKeySources : {},
     model: model === "gpt5.5" ? "gpt-5.5" : model || DEFAULT_AI_SETTINGS.model,
-    geminiImageEndpoint: forceProxy ? PROXY_TIMEAI_ENDPOINT : geminiImageEndpoint || DEFAULT_AI_SETTINGS.geminiImageEndpoint,
+    geminiImageEndpoint: geminiImageEndpoint || DEFAULT_AI_SETTINGS.geminiImageEndpoint,
     geminiImageApiKey: geminiImageApiKey || DEFAULT_AI_SETTINGS.geminiImageApiKey,
     geminiImageModel: geminiImageModel || DEFAULT_AI_SETTINGS.geminiImageModel,
   };
@@ -60,13 +59,4 @@ export function loadAiSettings(): AiSettings {
 
 export function saveAiSettings(settings: AiSettings) {
   localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(normalizeAiSettingsForRuntime(settings)));
-}
-
-function shouldForceProxyEndpoint(runtimeUrl: string): boolean {
-  try {
-    const location = new URL(runtimeUrl, "http://localhost");
-    return !LOCAL_PROXY_HOSTNAMES.has(location.hostname);
-  } catch {
-    return false;
-  }
 }

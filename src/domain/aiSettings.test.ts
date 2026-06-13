@@ -85,7 +85,7 @@ describe("AI settings", () => {
     });
   });
 
-  it("forces the proxy endpoint on deployed runtime urls", () => {
+  it("keeps full TimeAI endpoints visible on deployed runtime urls", () => {
     expect(
       normalizeAiSettingsForRuntime(
         {
@@ -96,8 +96,8 @@ describe("AI settings", () => {
         "https://novel-script-tool.vercel.app/",
       ),
     ).toMatchObject({
-      endpoint: "/api/timeai/v1",
-      geminiImageEndpoint: "/api/timeai/v1",
+      endpoint: "https://timeai.chat/v1",
+      geminiImageEndpoint: "https://timeai.chat/v1",
     });
   });
 });

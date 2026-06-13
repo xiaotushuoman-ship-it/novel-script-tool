@@ -39,6 +39,24 @@ describe("callAi", () => {
     );
   });
 
+  it("uses the local proxy for TimeAI calls on deployed runtime while keeping the full endpoint in settings", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "ok" } }] }),
+    });
+
+    await callAi(
+      { endpoint: "https://timeai.chat/v1", apiKey: "server-proxy", model: "gpt-5.5" },
+      "完整提示词",
+      fetchImpl,
+    );
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/timeai/v1/chat/completions",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("sends supported third-party text model ids unchanged", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
