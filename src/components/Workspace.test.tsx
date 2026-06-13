@@ -697,6 +697,40 @@ describe("Workspace storyboard controls", () => {
     expect(callImageGenerationMock.mock.calls[0][4]).toBe("4K");
   });
 
+  it("shows upscale progress in the storyboard image result area", async () => {
+    callImageGenerationMock
+      .mockResolvedValueOnce("https://example.com/storyboard.png")
+      .mockReturnValueOnce(new Promise((resolve) => window.setTimeout(() => resolve("https://example.com/storyboard-2k.png"), 20)));
+    const project = createProject("故事板高清放大进度测试");
+    project.currentStep = "gpt-image2-storyboard";
+    project.steps["gpt-image2-storyboard"].draft = "GPT-image-2出图提示词：一张四宫格故事板图。";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    const storyboardImagePanel = screen.getByLabelText("故事板出图区");
+    fireEvent.click(within(storyboardImagePanel).getByRole("button", { name: "生成故事板图片" }));
+    expect(await within(storyboardImagePanel).findByRole("img", { name: "故事板 生图结果 1" })).toBeInTheDocument();
+
+    fireEvent.click(within(storyboardImagePanel).getByRole("button", { name: "2K放大" }));
+
+    expect(within(storyboardImagePanel).getByText("正在生成 2K 高清放大图...")).toBeInTheDocument();
+    expect(within(storyboardImagePanel).getByRole("progressbar", { name: "高清放大进度" })).toHaveAttribute(
+      "aria-valuenow",
+      "22",
+    );
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(2));
+    expect(callImageGenerationMock.mock.calls[1][2]).toBe("gemini-3.1-flash-preview");
+    expect(await within(storyboardImagePanel).findByRole("img", { name: "故事板-2K高清 生图结果 1" })).toBeInTheDocument();
+  });
+
   it("previews signed asset image urls that do not include a file extension", async () => {
     callImageGenerationMock.mockResolvedValue("https://oaidalleapiprodscus.blob.core.windows.net/private/generated?id=abc");
     const project = createProject("无后缀图片链接预览");
@@ -2529,7 +2563,7 @@ describe("Workspace asset extraction image generation", () => {
       "林晚 生图结果 1",
       "林晚-4K高清 生图结果 1",
     ]);
-    expect(screen.getByText("4K高清放大图已追加到原图后方，原图已保留")).toBeInTheDocument();
+    expect(screen.getAllByText("4K高清放大图已追加到原图后方，原图已保留").length).toBeGreaterThan(0);
   });
 
   it("closes the preview after upscaling from the image preview dialog", async () => {
