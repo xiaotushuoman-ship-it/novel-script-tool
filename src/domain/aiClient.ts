@@ -272,7 +272,7 @@ async function callThirdPartyGeminiGenerateContent(
             responseFormat: {
               image: {
                 aspectRatio: normalizeImageRatio(imageRatio),
-                imageSize: imageResolution.trim().toUpperCase() === "2K" ? "2K" : "1K",
+                imageSize: resolveGeminiImageSize(imageResolution),
               },
             },
           },
@@ -315,7 +315,7 @@ async function callGeminiImageGeneration(
             responseFormat: {
               image: {
                 aspectRatio: normalizeImageRatio(imageRatio),
-                imageSize: imageResolution.trim().toUpperCase() === "2K" ? "2K" : "1K",
+                imageSize: resolveGeminiImageSize(imageResolution),
               },
             },
           },
@@ -338,6 +338,13 @@ function resolveImageModel(imageModel: string, imageResolution: string): string 
   const normalizedResolution = imageResolution.trim().toUpperCase();
   if (normalizedResolution === "2K" && imageModel.trim() === "gpt-image-1") return "gpt-image-2";
   return imageModel;
+}
+
+function resolveGeminiImageSize(imageResolution: string): string {
+  const normalizedResolution = imageResolution.trim().toUpperCase();
+  if (normalizedResolution === "4K") return "4K";
+  if (normalizedResolution === "2K") return "2K";
+  return "1K";
 }
 
 function resolveApiKey(settings: AiSettings): string {
@@ -645,7 +652,15 @@ function resolveImageSize(imageRatio: string, imageResolution: string): string {
     "4:3": "2048x1536",
     "3:4": "1536x2048",
   };
-  const sizes = normalizedResolution === "2K" ? twoKSizes : oneKSizes;
+  const fourKSizes: Record<string, string> = {
+    "1:1": "4096x4096",
+    "16:9": "3840x2160",
+    "9:16": "2160x3840",
+    "21:9": "4096x1755",
+    "4:3": "4096x3072",
+    "3:4": "3072x4096",
+  };
+  const sizes = normalizedResolution === "4K" ? fourKSizes : normalizedResolution === "2K" ? twoKSizes : oneKSizes;
   return sizes[normalized] ?? sizes["16:9"];
 }
 

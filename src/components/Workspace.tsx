@@ -48,6 +48,7 @@ type PreviewImage = {
   src: string;
   alt: string;
   filename: string;
+  image?: ImageResult;
 };
 
 type ExtractedAsset = {
@@ -115,6 +116,7 @@ export function Workspace({
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isSendingToZzdh, setIsSendingToZzdh] = useState(false);
   const [isSendingAssetsToZzdh, setIsSendingAssetsToZzdh] = useState(false);
+  const [upscalingImageId, setUpscalingImageId] = useState<string | null>(null);
   const [generatingAssets, setGeneratingAssets] = useState<Record<string, boolean>>({});
   const [isGeneratingCustomImages, setIsGeneratingCustomImages] = useState(false);
   const [assetImageResults, setAssetImageResults] = useState<ImageResult[]>([]);
@@ -755,8 +757,8 @@ export function Workspace({
     }
   }
 
-  function openImagePreview(src: string, alt: string, filename: string) {
-    setPreviewImage({ src, alt, filename });
+  function openImagePreview(src: string, alt: string, filename: string, image?: ImageResult) {
+    setPreviewImage({ src, alt, filename, image });
     setPreviewScale(1);
   }
 
@@ -789,6 +791,80 @@ export function Workspace({
 
   function zoomPreviewImage() {
     setPreviewScale((current) => Math.min(4, current + 1));
+  }
+
+  async function upscaleImageResult(image: ImageResult, targetResolution: "2K" | "4K") {
+    if (!image.prompt.trim()) {
+      setStatus("该图片缺少原始提示词，无法进行高清放大");
+      return;
+    }
+
+    setUpscalingImageId(image.id);
+    setStatus(`正在生成 ${targetResolution} 高清放大图...`);
+    stopImageProgressTimer();
+    setProgress({ label: `准备${targetResolution}高清放大`, percent: 10 });
+
+    try {
+      const imageModel = image.model || step.inputs.imageModel || "gpt-image-2";
+      const imageRatio = image.ratio || step.inputs.imageRatio || "16:9";
+      const imageCall = resolveImageCallSettings(imageModel);
+      const upscalePrompt = [
+        `请基于以下原图生成一张${targetResolution}高清放大版本，保持角色/场景/物品主体、构图、风格、服装、材质和光影一致。`,
+        "提升细节清晰度、边缘锐度、纹理层次和整体画面完成度，不要改变身份、脸型、服装、道具、场景结构，不要添加文字、水印、logo。",
+        `原图参考：${image.src}`,
+        "原始提示词：",
+        image.prompt,
+      ].join("\n");
+
+      setProgress({ label: `发送${targetResolution}高清放大请求`, percent: 22 });
+      startImageProgressTimer();
+      const result = await callImageGenerationWithRetry(
+        imageCall.settings,
+        upscalePrompt,
+        imageCall.model,
+        imageRatio,
+        targetResolution,
+        (attempt, delaySeconds) => {
+          setStatus(`${targetResolution}高清放大触发限流，${delaySeconds}秒后自动重试第${attempt}次...`);
+          setProgress({ label: `限流等待重试 ${attempt}`, percent: 42 });
+        },
+      );
+
+      stopImageProgressTimer();
+      setProgress({ label: `接收${targetResolution}高清图`, percent: 90 });
+      const upscaledImages = parseImageResults(result, `${image.assetName}-${targetResolution}高清`, {
+        assetType: image.assetType,
+        prompt: upscalePrompt,
+        model: imageCall.model,
+        ratio: imageRatio,
+        resolution: targetResolution,
+      });
+
+      if (upscaledImages.length === 0) {
+        setStatus(NO_PREVIEWABLE_IMAGE_MESSAGE);
+      } else {
+        appendImageResultLike(image.id, upscaledImages);
+        setStatus(`${targetResolution}高清放大图已生成，可预览和下载`);
+      }
+      setProgress({ label: `${targetResolution}高清放大完成`, percent: 100 });
+    } catch (error) {
+      stopImageProgressTimer();
+      setProgress({ label: `${targetResolution}高清放大失败`, percent: 100 });
+      setStatus(error instanceof Error ? error.message : `${targetResolution}高清放大失败`);
+    } finally {
+      setUpscalingImageId(null);
+    }
+  }
+
+  function appendImageResultLike(sourceImageId: string, upscaledImages: ImageResult[]) {
+    setAssetImageResults((current) => {
+      if (!current.some((item) => item.id === sourceImageId)) return current;
+      return [...current, ...upscaledImages];
+    });
+    setStoryboardImageResults((current) => {
+      if (!current.some((item) => item.id === sourceImageId)) return current;
+      return [...current, ...upscaledImages];
+    });
   }
 
   function resolveImageCallSettings(imageModel: string) {
@@ -1848,7 +1924,7 @@ export function Workspace({
                   draggable
                   src={image.src}
                   title="左键预览，右键下载，拖拽到字字动画图片位"
-                  onClick={() => openImagePreview(image.src, imageAlt, imageFilename)}
+                  onClick={() => openImagePreview(image.src, imageAlt, imageFilename, image)}
                   onContextMenu={(event) => {
                     event.preventDefault();
                     void downloadImageFile(image.src, imageFilename);
@@ -1872,6 +1948,20 @@ export function Workspace({
                 >
                   <Save size={16} />
                   保存到资产库 {assetImageIndex}
+                </button>
+                <button
+                  className="secondary-button image-upscale-link"
+                  disabled={upscalingImageId === image.id}
+                  onClick={() => void upscaleImageResult(image, "2K")}
+                >
+                  {upscalingImageId === image.id ? "放大中" : "2K放大"}
+                </button>
+                <button
+                  className="secondary-button image-upscale-link"
+                  disabled={upscalingImageId === image.id}
+                  onClick={() => void upscaleImageResult(image, "4K")}
+                >
+                  {upscalingImageId === image.id ? "放大中" : "4K放大"}
                 </button>
                 <button
                   aria-label={`删除图片 ${index + 1}`}
@@ -2017,7 +2107,7 @@ export function Workspace({
                 <strong>图片高清预览</strong>
                 <div className="image-preview-actions">
                   <button className="secondary-button" onClick={zoomPreviewImage}>
-                    高清放大
+                    预览放大
                   </button>
                   <button className="secondary-button" onClick={() => setPreviewScale(1)}>
                     原始比例
@@ -2441,9 +2531,29 @@ export function Workspace({
             <div className="image-preview-toolbar">
               <strong>图片高清预览</strong>
               <div className="image-preview-actions">
-                <button className="secondary-button" type="button" onClick={zoomPreviewImage}>
-                  高清放大
-                </button>
+                  <button className="secondary-button" type="button" onClick={zoomPreviewImage}>
+                    预览放大
+                  </button>
+                  {previewImage.image ? (
+                    <>
+                      <button
+                        className="secondary-button"
+                        disabled={upscalingImageId === previewImage.image.id}
+                        type="button"
+                        onClick={() => void upscaleImageResult(previewImage.image!, "2K")}
+                      >
+                        2K高清
+                      </button>
+                      <button
+                        className="secondary-button"
+                        disabled={upscalingImageId === previewImage.image.id}
+                        type="button"
+                        onClick={() => void upscaleImageResult(previewImage.image!, "4K")}
+                      >
+                        4K高清
+                      </button>
+                    </>
+                  ) : null}
                 <button className="secondary-button" type="button" onClick={() => setPreviewScale(1)}>
                   原始比例
                 </button>

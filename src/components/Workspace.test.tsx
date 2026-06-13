@@ -1369,7 +1369,7 @@ describe("Workspace asset extraction image generation", () => {
       "src",
       "https://img.example.com/preview.png",
     );
-    fireEvent.click(screen.getByRole("button", { name: "高清放大" }));
+    fireEvent.click(screen.getByRole("button", { name: "预览放大" }));
     expect(screen.getByRole("img", { name: "高清预览：林晚 生图结果 1" })).toHaveStyle({
       transform: "scale(2)",
     });
@@ -2326,6 +2326,50 @@ describe("Workspace asset extraction image generation", () => {
     expect(await screen.findByRole("img", { name: "林晚 生图结果 1" })).toHaveAttribute(
       "src",
       "https://img.example.com/edited-asset.png",
+    );
+  });
+
+  it("generates a new 4K image from an existing asset image result", async () => {
+    callImageGenerationMock
+      .mockResolvedValueOnce("https://img.example.com/preview.png")
+      .mockResolvedValueOnce("https://img.example.com/preview-4k.png");
+    const project = createProject("4K高清放大测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，站在夜市摊前，神情警觉。";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚穿白衬衫站在夜市摊前。",
+      assetType: "人物",
+      visualStyle: "影视写实风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+    expect(await screen.findByRole("img", { name: "林晚 生图结果 1" })).toHaveAttribute(
+      "src",
+      "https://img.example.com/preview.png",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "4K放大" }));
+
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(2));
+    expect(callImageGenerationMock.mock.calls[1][1]).toContain("4K高清放大版本");
+    expect(callImageGenerationMock.mock.calls[1][1]).toContain("原图参考：https://img.example.com/preview.png");
+    expect(callImageGenerationMock.mock.calls[1][4]).toBe("4K");
+    expect(await screen.findByRole("img", { name: "林晚-4K高清 生图结果 1" })).toHaveAttribute(
+      "src",
+      "https://img.example.com/preview-4k.png",
     );
   });
 

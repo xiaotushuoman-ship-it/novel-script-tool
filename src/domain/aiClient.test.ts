@@ -316,6 +316,27 @@ describe("callImageGeneration", () => {
     });
   });
 
+  it("uses 4K image sizes when 4K upscaling is requested", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ url: "https://img.example.com/4k.png" }] }),
+    });
+
+    await callImageGeneration(
+      { endpoint: "https://api.example.com/v1", apiKey: "key", model: "gpt-5.5" },
+      "人物高清放大提示词",
+      "gpt-image-2",
+      "16:9",
+      "4K",
+      fetchImpl,
+    );
+
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body as string)).toMatchObject({
+      model: "gpt-image-2",
+      size: "3840x2160",
+    });
+  });
+
   it("uses the OpenAI-compatible image endpoint for third-party Gemini image models", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
