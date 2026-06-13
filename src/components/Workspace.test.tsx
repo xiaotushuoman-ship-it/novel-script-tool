@@ -500,7 +500,7 @@ describe("Workspace storyboard controls", () => {
 
     await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(1));
     expect(callAiMock.mock.calls[0][0]).toMatchObject({
-      endpoint: "https://timeai.chat/v1",
+      endpoint: "/api/timeai/v1",
       model: "gpt-5.5",
     });
     expect(callAiMock.mock.calls[0][1]).toContain("GPT-image-2");

@@ -1028,6 +1028,13 @@ export function Workspace({
     return combinedResult;
   }
 
+  function getTextAiSettingsForStep(stepId: TemplateId): AiSettings {
+    if (stepId !== "gpt-image2-storyboard") return aiSettings;
+    const normalizedEndpoint = aiSettings.endpoint.trim().replace(/\/+$/, "");
+    if (normalizedEndpoint !== "https://timeai.chat/v1") return aiSettings;
+    return { ...aiSettings, endpoint: "/api/timeai/v1" };
+  }
+
   async function runAi() {
     const runProjectId = project.id;
     const runStepId = project.currentStep;
@@ -1050,10 +1057,11 @@ export function Workspace({
       updateStepGeneration(runStepId, { progress: { label: "等待模型生成", percent: 65 } });
       startTextProgressTimer(runStepId, "等待模型生成", 65, 92);
       let initialResult = "";
+      const textAiSettings = getTextAiSettingsForStep(runStepId);
       if (runStepId === "storyboard-15s") {
         let streamedDraft = "";
         const streamedResult = await callAiStream(
-          aiSettings,
+          textAiSettings,
           runPrompt,
           (chunk) => {
             streamedDraft += chunk;
@@ -1062,7 +1070,7 @@ export function Workspace({
         );
         initialResult = cleanAiTextOutput(streamedResult);
       } else {
-        initialResult = cleanAiTextOutput(await callAi(aiSettings, runPrompt));
+        initialResult = cleanAiTextOutput(await callAi(textAiSettings, runPrompt));
       }
       stopTextProgressTimer(runStepId);
       if (!initialResult.trim()) {
