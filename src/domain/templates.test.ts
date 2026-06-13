@@ -314,10 +314,11 @@ describe("buildPrompt", () => {
     expect(template.body).toContain("性别、年龄感");
     expect(template.body).toContain("服装");
     expect(template.body).toContain("人物外貌：");
-    expect(template.body).toContain("整体风格：");
+    expect(template.body).toContain("整体风格：请生成一张真人质感的人物展示图");
     expect(template.body).toContain("人物的身份：");
     expect(template.body).toContain("图片的结构：");
-    expect(template.body).toContain("绝对注意事项：");
+    expect(template.body).not.toContain("绝对注意事项：");
+    expect(template.body).not.toContain("严禁风格跑偏");
     expect(template.body).toContain("场景资产必须是空场景/环境设定");
     expect(template.body).toContain("不得出现人物姓名、人物外貌、人物姿态、人物动作");
     expect(template.body).toContain("只描述空间本身");

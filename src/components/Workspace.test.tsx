@@ -1523,7 +1523,6 @@ describe("Workspace asset extraction image generation", () => {
       "整体风格：3D国漫风格，真人质感，柔和电影光影。",
       "人物的身份：夜市摊主。",
       "图片的结构：左边人物正面近景肖像，右边人物站立三视图。",
-      "绝对注意事项：不要字幕、水印、logo，不要随机换脸。",
     ].join("\n");
     project.steps["asset-extraction"].inputs = {
       sourceText: "林晚在夜市摊前抬头，看见有人来收摊费。",
