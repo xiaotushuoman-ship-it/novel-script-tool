@@ -69,7 +69,7 @@ type TopicRecommendationState = {
   isLoading: boolean;
   source: "local" | "ai";
   items: TopicRecommendation[];
-  error: string;
+  message: string;
 };
 
 type Props = {
@@ -144,7 +144,7 @@ export function Workspace({
     isLoading: false,
     source: "local",
     items: LOCAL_TREND_TOPIC_RECOMMENDATIONS,
-    error: "",
+    message: "",
   });
   const [previewImage, setPreviewImage] = useState<PreviewImage | null>(null);
   const [previewScale, setPreviewScale] = useState(1);
@@ -309,7 +309,7 @@ export function Workspace({
       isLoading: true,
       source: "local",
       items: fallbackItems,
-      error: "",
+      message: "正在在线刷新题材推荐...",
     });
 
     const prompt = [
@@ -337,14 +337,14 @@ export function Workspace({
         isLoading: false,
         source: normalized.length > 0 ? "ai" : "local",
         items: normalized.length > 0 ? normalized : fallbackItems,
-        error: normalized.length > 0 ? "" : "AI 推荐结果为空，已切换到本地题材池。",
+        message: normalized.length > 0 ? "已使用 AI 在线更新题材推荐。" : "AI 推荐结果为空，已切换到本地题材池。",
       });
     } catch (error) {
       setTopicRecommendations({
         isLoading: false,
         source: "local",
         items: fallbackItems,
-        error: error instanceof Error ? `AI 推荐失败，已使用本地题材池：${error.message}` : "AI 推荐失败，已使用本地题材池。",
+        message: "在线推荐暂不可用，已自动切换到本地爆款题材池。请确认 API Key、模型名和本地代理后可再次刷新。",
       });
     }
   }
@@ -2254,7 +2254,7 @@ export function Workspace({
           <p className="muted">
             {topicRecommendations.source === "ai" ? "当前为 AI 在线更新推荐。" : "当前为本地兜底推荐，点击刷新可尝试在线更新。"}
           </p>
-          {topicRecommendations.error ? <div className="status-line">{topicRecommendations.error}</div> : null}
+          {topicRecommendations.message ? <div className="status-line">{topicRecommendations.message}</div> : null}
           <div className="topic-recommendation-grid">
             {topicRecommendations.items.map((item) => (
               <article className="topic-recommendation-card" key={item.title}>

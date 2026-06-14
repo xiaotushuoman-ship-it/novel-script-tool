@@ -357,6 +357,58 @@ describe("Workspace progress", () => {
     expect(screen.getByRole("button", { name: "刷新推荐" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "一键填入大纲" }).length).toBeGreaterThan(0);
   });
+
+  it("keeps local topic recommendations usable when online refresh fails", async () => {
+    callAiMock.mockRejectedValue(new Error("AI 调用失败：网络请求未完成"));
+    const project = createProject("题材推荐失败兜底测试");
+    project.currentStep = "outline-expansion";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "刷新推荐" }));
+
+    expect(screen.getByText("正在在线刷新题材推荐...")).toBeInTheDocument();
+    expect(await screen.findByText("在线推荐暂不可用，已自动切换到本地爆款题材池。请确认 API Key、模型名和本地代理后可再次刷新。")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "一键填入大纲" }).length).toBeGreaterThan(0);
+  });
+
+  it("shows online topic recommendations after refresh succeeds", async () => {
+    callAiMock.mockResolvedValue(
+      JSON.stringify([
+        {
+          title: "夜市焕新",
+          summary: "年轻摊主帮助老街小店重新被看见。",
+          outline: "主角接手冷清夜市摊位，用短视频运营和真诚服务带动整条街复兴。",
+          tags: ["现实主义", "烟火气"],
+        },
+      ]),
+    );
+    const project = createProject("题材推荐在线测试");
+    project.currentStep = "outline-expansion";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "刷新推荐" }));
+
+    expect(await screen.findByText("已使用 AI 在线更新题材推荐。")).toBeInTheDocument();
+    expect(screen.getByText("夜市焕新")).toBeInTheDocument();
+  });
 });
 
 describe("Workspace AI settings", () => {
