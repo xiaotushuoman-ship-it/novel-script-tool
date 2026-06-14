@@ -465,7 +465,10 @@ export function Workspace({
       ].join("\n");
       updateStepGeneration(runStepId, { progress: { label: "等待模型续写", percent: 65 } });
       startTextProgressTimer(runStepId, "等待模型续写", 65, 92);
-      const result = cleanAiTextOutput(await callAi(getTextAiSettings(), continuationPrompt));
+      const result = await streamAiText(getTextAiSettings(), continuationPrompt, (partial) => {
+        const nextDraft = [step.draft.trim(), partial].filter(Boolean).join("\n\n");
+        writeDraftForStep(runProjectId, runStepId, nextDraft);
+      });
       stopTextProgressTimer(runStepId);
       const nextDraft = [step.draft.trim(), result].filter(Boolean).join("\n\n");
       updateStepGeneration(runStepId, { progress: { label: "写入续写章节", percent: 90 } });
@@ -522,7 +525,9 @@ export function Workspace({
       ].join("\n");
       updateStepGeneration(runStepId, { progress: { label: "等待模型优化", percent: 65 } });
       startTextProgressTimer(runStepId, "等待模型优化", 65, 92);
-      const result = cleanAiTextOutput(await callAi(getTextAiSettings(), revisionPrompt));
+      const result = await streamAiText(getTextAiSettings(), revisionPrompt, (partial) => {
+        writeDraftForStep(runProjectId, runStepId, replaceNovelChapterBlock(step.draft, chapterNumber, partial));
+      });
       stopTextProgressTimer(runStepId);
       const nextDraft = replaceNovelChapterBlock(step.draft, chapterNumber, result);
       updateStepGeneration(runStepId, { progress: { label: "替换优化章节", percent: 90 } });
@@ -1027,6 +1032,7 @@ export function Workspace({
     originalPrompt: string,
     inputs: Record<string, string>,
     stepId: TemplateId,
+    onCombinedResult?: (combinedResult: string) => void,
   ) {
     const expectedCount = getExpectedChapterCount(inputs);
     if (!expectedCount) return initialResult;
@@ -1054,8 +1060,12 @@ export function Workspace({
         "不要重复已经生成的章节，不要总结，不要解释，只输出缺失章节。",
         "保持与前文相同格式、标题粒度、剧情连贯性和章节信息密度。",
       ].join("\n");
-      const continuationResult = cleanAiTextOutput(await callAi(getTextAiSettings(), continuationPrompt));
+      const baseResult = combinedResult;
+      const continuationResult = await streamAiText(getTextAiSettings(), continuationPrompt, (partial) => {
+        onCombinedResult?.([baseResult, partial].filter(Boolean).join("\n\n"));
+      });
       combinedResult = [combinedResult, continuationResult].filter(Boolean).join("\n\n");
+      onCombinedResult?.(combinedResult);
     }
 
     const remainingRange = getMissingChapterRange(combinedResult, expectedCount);
@@ -1065,6 +1075,7 @@ export function Workspace({
         "",
         `【系统提醒】当前章节拆分仍缺少第${remainingRange.start}章到第${remainingRange.end}章，请再次点击“调用 AI 生成”或降低总章数后重试。`,
       ].join("\n");
+      onCombinedResult?.(combinedResult);
     }
 
     return combinedResult;
@@ -1078,6 +1089,22 @@ export function Workspace({
 
   function getTextAiSettingsForStep(_stepId: TemplateId): AiSettings {
     return getTextAiSettings();
+  }
+
+  async function streamAiText(settings: AiSettings, runPrompt: string, onPartial?: (partial: string) => void) {
+    let streamedDraft = "";
+    const streamedResult = await callAiStream(settings, runPrompt, (chunk) => {
+      streamedDraft += chunk;
+      const cleanedPartial = cleanAiTextOutput(streamedDraft);
+      if (cleanedPartial.trim()) {
+        onPartial?.(cleanedPartial);
+      }
+    });
+    const result = cleanAiTextOutput(streamedResult || streamedDraft);
+    if (result.trim() && result !== cleanAiTextOutput(streamedDraft)) {
+      onPartial?.(result);
+    }
+    return result;
   }
 
   function formatAiError(error: unknown, fallback: string) {
@@ -1112,35 +1139,29 @@ export function Workspace({
       await new Promise((resolve) => window.setTimeout(resolve, 120));
       updateStepGeneration(runStepId, { progress: { label: "等待模型生成", percent: 65 } });
       startTextProgressTimer(runStepId, "等待模型生成", 65, 92);
-      let initialResult = "";
       const textAiSettings = getTextAiSettingsForStep(runStepId);
-      if (runStepId === "storyboard-15s") {
-        let streamedDraft = "";
-        const streamedResult = await callAiStream(
-          textAiSettings,
-          runPrompt,
-          (chunk) => {
-            streamedDraft += chunk;
-            writeDraftForStep(runProjectId, runStepId, streamedDraft);
-          },
-        );
-        initialResult = cleanAiTextOutput(streamedResult);
-      } else {
-        initialResult = cleanAiTextOutput(await callAi(textAiSettings, runPrompt));
-      }
+      const initialResult = await streamAiText(textAiSettings, runPrompt, (partial) => {
+        writeDraftForStep(runProjectId, runStepId, partial);
+      });
       stopTextProgressTimer(runStepId);
       if (!initialResult.trim()) {
         throw new Error("AI 返回内容为空，请检查模型是否只返回了思考过程或更换模型重试。");
       }
       const result =
         runStepId === "chapter-split"
-          ? await ensureCompleteChapterSplit(initialResult, runPrompt, runInputs, runStepId)
+          ? await ensureCompleteChapterSplit(initialResult, runPrompt, runInputs, runStepId, (partial) => {
+              writeDraftForStep(runProjectId, runStepId, partial);
+            })
           : initialResult;
       if (!result.trim()) {
         throw new Error("AI 返回内容为空，请检查模型是否只返回了思考过程或更换模型重试。");
       }
       updateStepGeneration(runStepId, { progress: { label: "写入草稿", percent: 90 } });
-      writeDraftForStep(runProjectId, runStepId, result);
+      if (result !== initialResult) {
+        writeDraftForStep(runProjectId, runStepId, result);
+      } else {
+        writeDraftForStep(runProjectId, runStepId, initialResult);
+      }
       updateStepGeneration(runStepId, {
         progress: { label: "生成完成", percent: 100 },
         status: "AI 结果已放入草稿区",

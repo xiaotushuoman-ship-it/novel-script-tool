@@ -11,6 +11,13 @@ const callImageGenerationMock = vi.fn();
 const sendStoryboardToZzdhMock = vi.fn();
 const sendAssetsToZzdhMock = vi.fn();
 
+function mockStreamTextOnce(text: string) {
+  callAiStreamMock.mockImplementationOnce(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
+    onChunk(text);
+    return text;
+  });
+}
+
 vi.mock("../domain/aiClient", async () => {
   const actual = await vi.importActual<typeof import("../domain/aiClient")>("../domain/aiClient");
   return {
@@ -53,7 +60,7 @@ describe("Workspace progress", () => {
 
   it("shows a generation progress bar while AI is running", async () => {
     vi.useFakeTimers();
-    callAiMock.mockReturnValue(new Promise(() => {}));
+    callAiStreamMock.mockReturnValue(new Promise(() => {}));
     const project = createProject("进度测试");
     project.steps["outline-expansion"].inputs.outline = "主角被赶出家门。";
 
@@ -95,7 +102,7 @@ describe("Workspace progress", () => {
   });
 
   it("lets different workflow steps generate at the same time without blocking each other", async () => {
-    callAiMock
+    callAiStreamMock
       .mockReturnValueOnce(new Promise(() => {}))
       .mockReturnValueOnce(new Promise(() => {}));
     const project = createProject("并发步骤测试");
@@ -115,7 +122,7 @@ describe("Workspace progress", () => {
     const { rerender } = render(<Workspace {...sharedProps} project={project} />);
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
-    await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("button", { name: "生成中" })).toBeDisabled();
 
     const chapterProject = {
@@ -128,12 +135,12 @@ describe("Workspace progress", () => {
     expect(chapterGenerateButton).not.toBeDisabled();
     fireEvent.click(chapterGenerateButton);
 
-    await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(2));
   });
 
   it("shows a background task center for concurrent step generations", async () => {
-    callAiMock.mockClear();
-    callAiMock
+    callAiStreamMock.mockClear();
+    callAiStreamMock
       .mockReturnValueOnce(new Promise(() => {}))
       .mockReturnValueOnce(new Promise(() => {}));
     const project = createProject("后台任务中心测试");
@@ -152,11 +159,11 @@ describe("Workspace progress", () => {
     const { rerender } = render(<Workspace {...sharedProps} project={project} />);
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
-    await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
 
     rerender(<Workspace {...sharedProps} project={{ ...project, currentStep: "chapter-split" }} />);
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
-    await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(2));
 
     const taskCenter = screen.getByLabelText("后台任务中心");
     expect(within(taskCenter).getByText("后台任务中心")).toBeInTheDocument();
@@ -165,12 +172,54 @@ describe("Workspace progress", () => {
     expect(within(taskCenter).getAllByText("运行中")).toHaveLength(2);
   });
 
+  it("streams normal text generation into the result area before the request finishes", async () => {
+    let finishStream: ((value: string) => void) | undefined;
+    callAiStreamMock.mockImplementation(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
+      onChunk("第一段实时出现。");
+      await new Promise<string>((resolve) => {
+        finishStream = resolve;
+      });
+      onChunk("第二段继续补上。");
+      return "第一段实时出现。第二段继续补上。";
+    });
+    const project = createProject("流式正文测试");
+    project.steps["outline-expansion"].inputs.outline = "主角被赶出家门。";
+    const onStepDraftChange = vi.fn();
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+        onStepDraftChange={onStepDraftChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
+
+    await waitFor(() =>
+      expect(onStepDraftChange).toHaveBeenCalledWith(project.id, "outline-expansion", "第一段实时出现。"),
+    );
+    expect(screen.getByRole("button", { name: "生成中" })).toBeDisabled();
+
+    await act(async () => {
+      finishStream?.("done");
+    });
+
+    await waitFor(() =>
+      expect(onStepDraftChange).toHaveBeenLastCalledWith(
+        project.id,
+        "outline-expansion",
+        "第一段实时出现。第二段继续补上。",
+      ),
+    );
+  });
+
   it("continues chapter split generation until the requested total chapters are present", async () => {
-    callAiMock
-      .mockResolvedValueOnce(
-        ["第1章：开局。", "第2章：夜市。", "第3章：追兵。", "第4章：反击。", "第5章：线索。"].join("\n"),
-      )
-      .mockResolvedValueOnce(["第6章：暗巷。", "第7章：旧友。", "第8章：码头。"].join("\n"));
+    mockStreamTextOnce(["第1章：开局。", "第2章：夜市。", "第3章：追兵。", "第4章：反击。", "第5章：线索。"].join("\n"));
+    mockStreamTextOnce(["第6章：暗巷。", "第7章：旧友。", "第8章：码头。"].join("\n"));
     const project = createProject("章节补齐测试");
     project.currentStep = "chapter-split";
     project.steps["chapter-split"].inputs.storySetting = "夜市逆袭故事。";
@@ -190,9 +239,9 @@ describe("Workspace progress", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-    await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(2));
-    expect(callAiMock.mock.calls[1][1]).toContain("继续补齐章节拆分");
-    expect(callAiMock.mock.calls[1][1]).toContain("从第6章继续输出到第8章");
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(2));
+    expect(callAiStreamMock.mock.calls[1][1]).toContain("继续补齐章节拆分");
+    expect(callAiStreamMock.mock.calls[1][1]).toContain("从第6章继续输出到第8章");
     await waitFor(() =>
       expect(onStepDraftChange).toHaveBeenLastCalledWith(
         project.id,
@@ -203,7 +252,7 @@ describe("Workspace progress", () => {
   });
 
   it("removes model thinking tags before writing AI output into the result area", async () => {
-    callAiMock.mockResolvedValue(
+    mockStreamTextOnce(
       [
         "<think>**Drafting Chinese fiction**",
         "",
@@ -239,7 +288,7 @@ describe("Workspace progress", () => {
   });
 
   it("shows a clear failure when AI output is empty after cleanup", async () => {
-    callAiMock.mockResolvedValue("<think>only hidden reasoning</think>");
+    mockStreamTextOnce("<think>only hidden reasoning</think>");
     const project = createProject("空结果提示测试");
     project.steps["outline-expansion"].inputs.outline = "许明舟被许家赶出门。";
     const onStepDraftChange = vi.fn();
@@ -262,13 +311,10 @@ describe("Workspace progress", () => {
   });
 
   it("keeps continuing chapter split generation until all 20 chapters are present", async () => {
-    callAiMock
-      .mockResolvedValueOnce(
-        ["第1章：开局。", "第2章：立摊。", "第3章：破局。", "第4章：举报。", "第5章：收款。"].join("\n"),
-      )
-      .mockResolvedValueOnce(["第6章：暗线。", "第7章：新客。", "第8章：熬汤。", "第9章：抢摊。", "第10章：证据。"].join("\n"))
-      .mockResolvedValueOnce(["第11章：对赌。", "第12章：直播。", "第13章：翻盘。", "第14章：旧账。", "第15章：招牌。"].join("\n"))
-      .mockResolvedValueOnce(["第16章：围剿。", "第17章：反证。", "第18章：夜宴。", "第19章：归名。", "第20章：开张。"].join("\n"));
+    mockStreamTextOnce(["第1章：开局。", "第2章：立摊。", "第3章：破局。", "第4章：举报。", "第5章：收款。"].join("\n"));
+    mockStreamTextOnce(["第6章：暗线。", "第7章：新客。", "第8章：熬汤。", "第9章：抢摊。", "第10章：证据。"].join("\n"));
+    mockStreamTextOnce(["第11章：对赌。", "第12章：直播。", "第13章：翻盘。", "第14章：旧账。", "第15章：招牌。"].join("\n"));
+    mockStreamTextOnce(["第16章：围剿。", "第17章：反证。", "第18章：夜宴。", "第19章：归名。", "第20章：开张。"].join("\n"));
     const project = createProject("二十章补齐测试");
     project.currentStep = "chapter-split";
     project.steps["chapter-split"].inputs.storySetting = "夜市逆袭故事。";
@@ -288,10 +334,10 @@ describe("Workspace progress", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-    await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(4));
-    expect(callAiMock.mock.calls[1][1]).toContain("从第6章继续输出到第20章");
-    expect(callAiMock.mock.calls[2][1]).toContain("从第11章继续输出到第20章");
-    expect(callAiMock.mock.calls[3][1]).toContain("从第16章继续输出到第20章");
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(4));
+    expect(callAiStreamMock.mock.calls[1][1]).toContain("从第6章继续输出到第20章");
+    expect(callAiStreamMock.mock.calls[2][1]).toContain("从第11章继续输出到第20章");
+    expect(callAiStreamMock.mock.calls[3][1]).toContain("从第16章继续输出到第20章");
     await waitFor(() =>
       expect(onStepDraftChange).toHaveBeenLastCalledWith(
         project.id,
@@ -302,9 +348,9 @@ describe("Workspace progress", () => {
   });
 
   it("uses enough continuation attempts when the model only returns a few chapters each time", async () => {
-    callAiMock.mockResolvedValueOnce(["第1章：开局。", "第2章：立摊。"].join("\n"));
+    mockStreamTextOnce(["第1章：开局。", "第2章：立摊。"].join("\n"));
     for (let chapter = 3; chapter <= 20; chapter += 2) {
-      callAiMock.mockResolvedValueOnce(
+      mockStreamTextOnce(
         [`第${chapter}章：节点${chapter}。`, `第${chapter + 1}章：节点${chapter + 1}。`].join("\n"),
       );
     }
@@ -327,7 +373,7 @@ describe("Workspace progress", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-    await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(10));
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(10));
     await waitFor(() =>
       expect(onStepDraftChange).toHaveBeenLastCalledWith(
         project.id,
@@ -413,8 +459,7 @@ describe("Workspace progress", () => {
 
 describe("Workspace AI settings", () => {
   it("routes all text-generation steps through the same TimeAI proxy endpoint", async () => {
-    callAiMock.mockResolvedValue("生成结果");
-    callAiStreamMock.mockResolvedValue("分镜结果");
+    callAiStreamMock.mockResolvedValue("生成结果");
     const stepCases = [
       { step: "outline-expansion", inputs: { outline: "夜市摊主逆袭。" } },
       { step: "chapter-split", inputs: { storySetting: "夜市摊主逆袭。" } },
@@ -453,19 +498,15 @@ describe("Workspace AI settings", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-      if (item.step === "storyboard-15s") {
-        await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
-        expect(callAiStreamMock.mock.calls[0][0]).toMatchObject({ endpoint: "/api/timeai/v1" });
-      } else {
-        await waitFor(() => expect(callAiMock).toHaveBeenCalled());
-        expect(callAiMock.mock.calls[0][0]).toMatchObject({ endpoint: "/api/timeai/v1" });
-      }
+      await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
+      expect(callAiStreamMock.mock.calls[0][0]).toMatchObject({ endpoint: "/api/timeai/v1" });
+      expect(callAiMock).not.toHaveBeenCalled();
       unmount();
     }
   });
 
   it("shows a unified friendly message when a text-generation proxy request does not complete", async () => {
-    callAiMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    callAiStreamMock.mockRejectedValue(new TypeError("Failed to fetch"));
     const project = createProject("统一网络错误提示测试");
     project.steps["outline-expansion"].inputs.outline = "夜市摊主逆袭。";
 
@@ -602,7 +643,7 @@ describe("Workspace storyboard controls", () => {
   });
 
   it("uses the language model to convert GPT-image2 storyboard source into an image prompt", async () => {
-    callAiMock.mockResolvedValue(
+    mockStreamTextOnce(
       [
         "_::~OUTPUT_START::~_",
         "【图片提示词区｜对白已明确标注】",
@@ -633,13 +674,13 @@ describe("Workspace storyboard controls", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-    await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(1));
-    expect(callAiMock.mock.calls[0][0]).toMatchObject({
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
+    expect(callAiStreamMock.mock.calls[0][0]).toMatchObject({
       endpoint: "/api/timeai/v1",
       model: "gpt-5.5",
     });
-    expect(callAiMock.mock.calls[0][1]).toContain("GPT-image-2");
-    expect(callAiMock.mock.calls[0][1]).toContain("夜市摊前");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("GPT-image-2");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("夜市摊前");
     expect(callImageGenerationMock).not.toHaveBeenCalled();
     const result = await screen.findByDisplayValue(/GPT-image-2出图提示词：一张四宫格故事板图。/);
     expect(result).toBeInTheDocument();
@@ -1150,7 +1191,7 @@ describe("Workspace writing flow", () => {
   });
 
   it("continues the next novel chapter from the generated result", async () => {
-    callAiMock.mockResolvedValue("第2章：新摊开张\n许明舟把炉火压稳，第二晚的第一位客人已经站到摊前。");
+    mockStreamTextOnce("第2章：新摊开张\n许明舟把炉火压稳，第二晚的第一位客人已经站到摊前。");
     const project = createProject("续写测试");
     project.currentStep = "outline-expansion";
     project.steps["outline-expansion"].inputs.outline = "许明舟被赶出许家后经营夜市摊。";
@@ -1172,9 +1213,9 @@ describe("Workspace writing flow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "续写下一章" }));
 
-    await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(1));
-    expect(callAiMock.mock.calls[0][1]).toContain("续写第2章");
-    expect(callAiMock.mock.calls[0][1]).toContain("单章目标字数：2500");
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("续写第2章");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("单章目标字数：2500");
     await waitFor(() =>
       expect(onStepDraftChange).toHaveBeenLastCalledWith(
         project.id,
@@ -1185,7 +1226,7 @@ describe("Workspace writing flow", () => {
   });
 
   it("optimizes the selected chapter without replacing the whole novel result", async () => {
-    callAiMock.mockResolvedValue("第1章：断亲书\n许明舟没有争辩，只把断亲书推回桌心，字字像刀。");
+    mockStreamTextOnce("第1章：断亲书\n许明舟没有争辩，只把断亲书推回桌心，字字像刀。");
     const project = createProject("单章优化测试");
     project.currentStep = "outline-expansion";
     project.steps["outline-expansion"].inputs.outline = "许明舟被赶出许家后经营夜市摊。";
@@ -1211,8 +1252,8 @@ describe("Workspace writing flow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "优化选中章节" }));
 
-    await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(1));
-    expect(callAiMock.mock.calls[0][1]).toContain("优化第1章");
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("优化第1章");
     await waitFor(() =>
       expect(onStepDraftChange).toHaveBeenLastCalledWith(
         project.id,
@@ -1435,7 +1476,7 @@ describe("Workspace writing flow", () => {
   });
 
   it("shows generated chapters in the optimize chapter dropdown after continuation adds chapter 2", async () => {
-    callAiMock.mockResolvedValue("第2章：新摊开张\n许明舟把炉火压稳，第二晚的第一位客人已经站到摊前。");
+    mockStreamTextOnce("第2章：新摊开张\n许明舟把炉火压稳，第二晚的第一位客人已经站到摊前。");
     const project = createProject("章节下拉测试");
     project.currentStep = "outline-expansion";
     project.steps["outline-expansion"].inputs.outline = "许明舟被赶出许家后经营夜市摊。";
@@ -1461,7 +1502,7 @@ describe("Workspace writing flow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "续写下一章" }));
 
-    await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole("option", { name: "第2章" })).toBeInTheDocument();
   });
 
@@ -1717,7 +1758,7 @@ describe("Workspace asset extraction image generation", () => {
   });
 
   it("builds an asset extraction prompt that only asks for the selected asset type", async () => {
-    callAiMock.mockResolvedValue("【场景】破碎祭坛：月光、石柱、暗红符文。");
+    mockStreamTextOnce("【场景】破碎祭坛：月光、石柱、暗红符文。");
     const project = createProject("资产类型提取测试");
     project.currentStep = "asset-extraction";
     project.steps["asset-extraction"].inputs = {
@@ -1741,8 +1782,8 @@ describe("Workspace asset extraction image generation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-    await waitFor(() => expect(callAiMock).toHaveBeenCalled());
-    const extractionPrompt = callAiMock.mock.calls[0][1] as string;
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalled());
+    const extractionPrompt = callAiStreamMock.mock.calls[0][1] as string;
     expect(extractionPrompt).toContain("本次只提取：场景");
     expect(extractionPrompt).toContain("不要输出人物资产");
     expect(extractionPrompt).toContain("不要输出物品资产");
