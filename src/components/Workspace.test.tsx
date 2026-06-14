@@ -412,6 +412,79 @@ describe("Workspace progress", () => {
 });
 
 describe("Workspace AI settings", () => {
+  it("routes all text-generation steps through the same TimeAI proxy endpoint", async () => {
+    callAiMock.mockResolvedValue("生成结果");
+    callAiStreamMock.mockResolvedValue("分镜结果");
+    const stepCases = [
+      { step: "outline-expansion", inputs: { outline: "夜市摊主逆袭。" } },
+      { step: "chapter-split", inputs: { storySetting: "夜市摊主逆袭。" } },
+      {
+        step: "prose-generation",
+        inputs: {
+          storySetting: "许明舟是被逐出家门的夜市摊主。",
+          chapterOutline: "主角守住摊位。",
+        },
+      },
+      { step: "novel-to-script", inputs: { sourceScene: "主角端出第一碗面。" } },
+      { step: "asset-extraction", inputs: { sourceText: "【人物】许明舟：夜市摊主。" } },
+      { step: "storyboard-15s", inputs: { scriptText: "许明舟在夜市摊前挡住收摊费的人。" } },
+      { step: "gpt-image2-storyboard", inputs: { sourceText: "夜市摊前，许明舟端出葱油面。" } },
+    ] as const;
+
+    for (const item of stepCases) {
+      callAiMock.mockClear();
+      callAiStreamMock.mockClear();
+      const project = createProject(`统一代理测试-${item.step}`);
+      project.currentStep = item.step;
+      project.steps[item.step].inputs = {
+        ...project.steps[item.step].inputs,
+        ...item.inputs,
+      };
+
+      const { unmount } = render(
+        <Workspace
+          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "claude-opus-4-8" }}
+          project={project}
+          onAiSettingsChange={() => undefined}
+          onProjectChange={() => undefined}
+          onSaveVersion={() => undefined}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
+
+      if (item.step === "storyboard-15s") {
+        await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
+        expect(callAiStreamMock.mock.calls[0][0]).toMatchObject({ endpoint: "/api/timeai/v1" });
+      } else {
+        await waitFor(() => expect(callAiMock).toHaveBeenCalled());
+        expect(callAiMock.mock.calls[0][0]).toMatchObject({ endpoint: "/api/timeai/v1" });
+      }
+      unmount();
+    }
+  });
+
+  it("shows a unified friendly message when a text-generation proxy request does not complete", async () => {
+    callAiMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    const project = createProject("统一网络错误提示测试");
+    project.steps["outline-expansion"].inputs.outline = "夜市摊主逆袭。";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "claude-opus-4-8" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
+
+    expect(await screen.findByText("AI 调用失败：站内代理未返回结果。请刷新页面后重试；本地版请重启 npm run dev，网页端请等待部署完成。")).toBeInTheDocument();
+    expect(screen.queryByText(/TIMEAI_API_KEY/)).not.toBeInTheDocument();
+  });
+
   it("keeps API editing in the settings dialog and only shows the active model in the workspace", () => {
     const project = createProject("AI 设置测试");
     project.steps["outline-expansion"].inputs.outline = "主角被赶出家门。";

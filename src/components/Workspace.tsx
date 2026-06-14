@@ -320,7 +320,7 @@ export function Workspace({
     ].join("\n");
 
     try {
-      const result = cleanAiTextOutput(await callAi(aiSettings, prompt));
+      const result = cleanAiTextOutput(await callAi(getTextAiSettings(), prompt));
       const parsed = JSON.parse(result) as TopicRecommendation[];
       const normalized = Array.isArray(parsed)
         ? parsed
@@ -465,7 +465,7 @@ export function Workspace({
       ].join("\n");
       updateStepGeneration(runStepId, { progress: { label: "等待模型续写", percent: 65 } });
       startTextProgressTimer(runStepId, "等待模型续写", 65, 92);
-      const result = cleanAiTextOutput(await callAi(aiSettings, continuationPrompt));
+      const result = cleanAiTextOutput(await callAi(getTextAiSettings(), continuationPrompt));
       stopTextProgressTimer(runStepId);
       const nextDraft = [step.draft.trim(), result].filter(Boolean).join("\n\n");
       updateStepGeneration(runStepId, { progress: { label: "写入续写章节", percent: 90 } });
@@ -478,7 +478,7 @@ export function Workspace({
       stopTextProgressTimer(runStepId);
       updateStepGeneration(runStepId, {
         progress: { label: "续写失败", percent: 100 },
-        status: error instanceof Error ? error.message : "AI 续写失败",
+        status: formatAiError(error, "AI 续写失败"),
       });
     } finally {
       updateStepGeneration(runStepId, { isCalling: false });
@@ -522,7 +522,7 @@ export function Workspace({
       ].join("\n");
       updateStepGeneration(runStepId, { progress: { label: "等待模型优化", percent: 65 } });
       startTextProgressTimer(runStepId, "等待模型优化", 65, 92);
-      const result = cleanAiTextOutput(await callAi(aiSettings, revisionPrompt));
+      const result = cleanAiTextOutput(await callAi(getTextAiSettings(), revisionPrompt));
       stopTextProgressTimer(runStepId);
       const nextDraft = replaceNovelChapterBlock(step.draft, chapterNumber, result);
       updateStepGeneration(runStepId, { progress: { label: "替换优化章节", percent: 90 } });
@@ -535,7 +535,7 @@ export function Workspace({
       stopTextProgressTimer(runStepId);
       updateStepGeneration(runStepId, {
         progress: { label: "优化失败", percent: 100 },
-        status: error instanceof Error ? error.message : "AI 优化失败",
+        status: formatAiError(error, "AI 优化失败"),
       });
     } finally {
       updateStepGeneration(runStepId, { isCalling: false });
@@ -1054,7 +1054,7 @@ export function Workspace({
         "不要重复已经生成的章节，不要总结，不要解释，只输出缺失章节。",
         "保持与前文相同格式、标题粒度、剧情连贯性和章节信息密度。",
       ].join("\n");
-      const continuationResult = cleanAiTextOutput(await callAi(aiSettings, continuationPrompt));
+      const continuationResult = cleanAiTextOutput(await callAi(getTextAiSettings(), continuationPrompt));
       combinedResult = [combinedResult, continuationResult].filter(Boolean).join("\n\n");
     }
 
@@ -1070,11 +1070,25 @@ export function Workspace({
     return combinedResult;
   }
 
-  function getTextAiSettingsForStep(stepId: TemplateId): AiSettings {
-    if (stepId !== "gpt-image2-storyboard") return aiSettings;
+  function getTextAiSettings(): AiSettings {
     const normalizedEndpoint = aiSettings.endpoint.trim().replace(/\/+$/, "");
     if (normalizedEndpoint !== "https://timeai.chat/v1") return aiSettings;
     return { ...aiSettings, endpoint: "/api/timeai/v1" };
+  }
+
+  function getTextAiSettingsForStep(_stepId: TemplateId): AiSettings {
+    return getTextAiSettings();
+  }
+
+  function formatAiError(error: unknown, fallback: string) {
+    const message = error instanceof Error ? error.message : fallback;
+    if (/HTTP 524/.test(message)) {
+      return "AI 调用超时：HTTP 524。请缩短输入内容或切换响应更快的模型/接口。";
+    }
+    if (/网络请求未完成|Failed to fetch|fetch failed|load failed/i.test(message)) {
+      return "AI 调用失败：站内代理未返回结果。请刷新页面后重试；本地版请重启 npm run dev，网页端请等待部署完成。";
+    }
+    return message;
   }
 
   async function runAi() {
@@ -1133,14 +1147,9 @@ export function Workspace({
       });
     } catch (error) {
       stopTextProgressTimer(runStepId);
-      const message = error instanceof Error ? error.message : "AI 调用失败";
-      const friendlyMessage =
-        /HTTP 524/.test(message)
-          ? "AI 调用超时：HTTP 524。请缩短输入内容或切换响应更快的模型/接口。"
-          : message;
       updateStepGeneration(runStepId, {
         progress: { label: "生成失败", percent: 100 },
-        status: friendlyMessage,
+        status: formatAiError(error, "AI 调用失败"),
       });
     } finally {
       updateStepGeneration(runStepId, { isCalling: false });

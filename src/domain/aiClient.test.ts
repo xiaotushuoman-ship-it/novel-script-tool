@@ -116,7 +116,7 @@ describe("callAi", () => {
         "完整提示词",
         fetchImpl,
       ),
-    ).rejects.toThrow("/api/timeai");
+    ).rejects.toThrow("站内代理");
   });
 });
 

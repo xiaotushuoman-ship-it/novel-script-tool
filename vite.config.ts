@@ -12,6 +12,20 @@ export default defineConfig({
         target: "https://timeai.chat",
         changeOrigin: true,
         secure: true,
+        configure: (proxy) => {
+          proxy.on("error", (_error, _request, response) => {
+            if (!response.headersSent) {
+              response.writeHead(502, { "Content-Type": "application/json" });
+            }
+            response.end(
+              JSON.stringify({
+                error: {
+                  message: "TimeAI local proxy request failed",
+                },
+              }),
+            );
+          });
+        },
         rewrite: (path) => path.replace(/^\/api\/timeai/, ""),
       },
       "/api/zzdh": {

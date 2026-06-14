@@ -381,8 +381,8 @@ function buildNetworkErrorMessage(endpoint: string): string {
   const normalized = endpoint.trim();
   const isBrowserDirectRemote = /^https?:\/\//i.test(normalized);
   const suggestion = isBrowserDirectRemote
-    ? "当前像是在浏览器里直连三方 API，可能被跨域 CORS 或网络策略拦截。建议把 API 地址改回 /api/timeai/v1，或确认线上部署已配置服务端代理和 TIMEAI_API_KEY。"
-    : "请确认本地 Vite 服务正在运行、/api/timeai 代理可用，并且 TIMEAI_API_KEY 已配置。";
+    ? "当前像是在浏览器里直连三方 API，可能被跨域 CORS 或网络策略拦截。请把 TimeAI 地址填写为 https://timeai.chat/v1，让软件自动走站内代理。"
+    : "当前站内代理没有返回结果。请确认本地开发服务已重启，或稍后重试；网页端请等待 Vercel 部署完成后刷新页面。";
   return `AI 调用失败：网络请求未完成。${suggestion}`;
 }
 
