@@ -529,7 +529,17 @@ describe("Workspace storyboard controls", () => {
   });
 
   it("uses the language model to convert GPT-image2 storyboard source into an image prompt", async () => {
-    callAiMock.mockResolvedValue("GPT-image-2出图提示词：一张四宫格故事板图。");
+    callAiMock.mockResolvedValue(
+      [
+        "_::~OUTPUT_START::~_",
+        "【图片提示词区｜对白已明确标注】",
+        "GPT-image-2出图提示词：一张四宫格故事板图。",
+        "_::~FIELD::~_",
+        "【视频提示词区】",
+        "参考当前导演分镜图依次帮我生成视频",
+        "_::~OUTPUT_END::~_",
+      ].join("\n"),
+    );
     const project = createProject("故事板提示词转换测试");
     project.currentStep = "gpt-image2-storyboard";
     project.steps["gpt-image2-storyboard"].inputs.sourceText = "夜市摊前，许明舟端出第一碗葱油面。";
@@ -558,7 +568,11 @@ describe("Workspace storyboard controls", () => {
     expect(callAiMock.mock.calls[0][1]).toContain("GPT-image-2");
     expect(callAiMock.mock.calls[0][1]).toContain("夜市摊前");
     expect(callImageGenerationMock).not.toHaveBeenCalled();
-    expect(await screen.findByDisplayValue("GPT-image-2出图提示词：一张四宫格故事板图。")).toBeInTheDocument();
+    const result = await screen.findByDisplayValue(/GPT-image-2出图提示词：一张四宫格故事板图。/);
+    expect(result).toBeInTheDocument();
+    expect((result as HTMLTextAreaElement).value).not.toContain("_::~OUTPUT_START::~_");
+    expect((result as HTMLTextAreaElement).value).not.toContain("_::~FIELD::~_");
+    expect((result as HTMLTextAreaElement).value).not.toContain("_::~OUTPUT_END::~_");
   });
 
   it("shows a storyboard image generation panel under GPT-image2 storyboard results", async () => {

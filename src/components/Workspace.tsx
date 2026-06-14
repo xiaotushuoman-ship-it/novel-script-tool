@@ -994,6 +994,7 @@ export function Workspace({
   function cleanAiTextOutput(value: string) {
     return value
       .replace(/<\s*(think|thinking|reasoning)\s*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+      .replace(/^\s*_::~(?:OUTPUT_START|OUTPUT_END|FIELD|RECORD)::~_\s*$/gim, "")
       .replace(/^\s*(?:```(?:text|markdown|md)?\s*)/i, "")
       .replace(/\s*```\s*$/i, "")
       .trim();
