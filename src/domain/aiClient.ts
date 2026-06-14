@@ -396,6 +396,9 @@ function buildHttpErrorMessage(operation: string, status: number): string {
   if (status === 503 || status === 524) {
     return `${operation}失败：HTTP ${status}。中转站或模型当前响应超时/不可用，请稍后重试或切换模型。`;
   }
+  if (status === 502) {
+    return `${operation}失败：HTTP 502。本地/网页代理转发到中转站失败，通常是中转站连接被断开、模型响应过慢或请求过长。请稍后重试；如果只在第6项出现，请减少输入长度或切换文本模型。`;
+  }
   return `${operation}失败：HTTP ${status}`;
 }
 
