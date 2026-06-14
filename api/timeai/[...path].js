@@ -1,6 +1,17 @@
 const TIMEAI_BASE_URL = "https://timeai.chat";
 
-export default async function handler(request, response) {
+export function buildTimeAiTargetUrl(path) {
+  const rawPath = Array.isArray(path) ? path.join("/") : String(path || "");
+  const normalizedPath = rawPath
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part).replace(/%3A/gi, ":"))
+    .join("/");
+  return `${TIMEAI_BASE_URL}/${normalizedPath}`;
+}
+
+export async function forwardTimeAiRequest(request, response, path = request.query.path) {
   if (request.method === "OPTIONS") {
     response.setHeader("Access-Control-Allow-Origin", "*");
     response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -20,8 +31,7 @@ export default async function handler(request, response) {
     return;
   }
 
-  const pathParts = Array.isArray(request.query.path) ? request.query.path : [request.query.path].filter(Boolean);
-  const targetUrl = `${TIMEAI_BASE_URL}/${pathParts.map(encodeURIComponent).join("/")}`;
+  const targetUrl = buildTimeAiTargetUrl(path);
 
   try {
     const upstream = await fetch(targetUrl, {
@@ -46,4 +56,8 @@ export default async function handler(request, response) {
       },
     });
   }
+}
+
+export default async function handler(request, response) {
+  await forwardTimeAiRequest(request, response);
 }

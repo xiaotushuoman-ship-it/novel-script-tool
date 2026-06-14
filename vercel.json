@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/timeai/:path*",
+      "destination": "/api/timeai?path=:path*"
+    }
+  ]
+}
