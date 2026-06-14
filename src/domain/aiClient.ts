@@ -103,35 +103,21 @@ export async function callAiStream(
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    const frames = buffer.split(/\r?\n\r?\n/);
-    buffer = frames.pop() ?? "";
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? "";
 
-    for (const frame of frames) {
-      const lines = frame
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-      for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        const data = line.slice(5).trim();
-        if (!data || data === "[DONE]") continue;
-        const parsed = safeJsonParse(data);
-        const delta = extractStreamingDeltaText(parsed);
-        if (delta) {
-          fullText += delta;
-          onChunk(delta);
-        }
+    for (const line of lines) {
+      const delta = extractStreamingLineText(line);
+      if (delta) {
+        fullText += delta;
+        onChunk(delta);
       }
     }
   }
 
   if (buffer.trim()) {
-    for (const line of buffer.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)) {
-      if (!line.startsWith("data:")) continue;
-      const data = line.slice(5).trim();
-      if (!data || data === "[DONE]") continue;
-      const parsed = safeJsonParse(data);
-      const delta = extractStreamingDeltaText(parsed);
+    for (const line of buffer.split(/\r?\n/)) {
+      const delta = extractStreamingLineText(line);
       if (delta) {
         fullText += delta;
         onChunk(delta);
@@ -141,6 +127,15 @@ export async function callAiStream(
 
   if (!fullText.trim()) throw new Error("AI 返回格式不正确");
   return fullText;
+}
+
+function extractStreamingLineText(line: string): string | null {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith(":")) return null;
+  const data = trimmed.startsWith("data:") ? trimmed.slice(5).trim() : trimmed;
+  if (!data || data === "[DONE]") return null;
+  const parsed = safeJsonParse(data);
+  return extractStreamingDeltaText(parsed);
 }
 
 export async function callImageGeneration(
@@ -558,6 +553,8 @@ function extractChatCompletionText(data: unknown): string | null {
 
 function extractStreamingDeltaText(data: unknown): string | null {
   const root = data as {
+    delta?: unknown;
+    type?: unknown;
     choices?: Array<{
       delta?: {
         content?: unknown;
@@ -567,21 +564,43 @@ function extractStreamingDeltaText(data: unknown): string | null {
       };
     }>;
     output_text?: unknown;
+    outputText?: unknown;
     text?: unknown;
   };
   const choice = Array.isArray(root.choices) ? root.choices[0] : undefined;
-  const content = choice?.delta?.content ?? choice?.message?.content ?? root.output_text ?? root.text;
+  const content =
+    choice?.delta?.content ??
+    choice?.message?.content ??
+    root.delta ??
+    root.output_text ??
+    root.outputText ??
+    root.text;
+  return extractTextFromContentPart(content);
+}
+
+function extractTextFromContentPart(content: unknown): string | null {
   if (typeof content === "string") return content;
+  if (!content) return null;
   if (Array.isArray(content)) {
-    return content
-      .map((part) => {
-        const item = part as { text?: unknown; content?: unknown };
-        if (typeof item.text === "string") return item.text;
-        if (typeof item.content === "string") return item.content;
-        return "";
-      })
+    const text = content
+      .map((part) => extractTextFromContentPart(part))
       .filter(Boolean)
-      .join("\n");
+      .join("");
+    return text || null;
+  }
+  if (typeof content === "object") {
+    const item = content as {
+      text?: unknown;
+      content?: unknown;
+      output_text?: unknown;
+      outputText?: unknown;
+    };
+    return (
+      extractTextFromContentPart(item.text) ??
+      extractTextFromContentPart(item.content) ??
+      extractTextFromContentPart(item.output_text) ??
+      extractTextFromContentPart(item.outputText)
+    );
   }
   return null;
 }

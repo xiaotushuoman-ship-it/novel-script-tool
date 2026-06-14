@@ -162,6 +162,75 @@ describe("callAiStream", () => {
     );
   });
 
+  it("streams third-party chunk shapes used by long prompt models", async () => {
+    const chunks = [
+      'data: {"choices":[{"delta":{"content":[{"type":"text","text":"资产提示词"}]}}]}\n\n',
+      'data: {"choices":[{"delta":{"reasoning_content":"隐藏推理"}}]}\n\n',
+      'data: {"type":"response.output_text.delta","delta":"故事板提示词"}\n\n',
+      "data: [DONE]\n\n",
+    ];
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      body: {
+        getReader() {
+          let index = 0;
+          return {
+            read: async () => {
+              if (index >= chunks.length) return { done: true, value: undefined };
+              const value = new TextEncoder().encode(chunks[index++]);
+              return { done: false, value };
+            },
+          };
+        },
+      },
+    });
+    const seen: string[] = [];
+
+    const result = await callAiStream(
+      { endpoint: "https://timeai.chat/v1", apiKey: "key", model: "claude-opus-4-8" },
+      "长提示词",
+      (chunk) => seen.push(chunk),
+      fetchImpl,
+    );
+
+    expect(seen).toEqual(["资产提示词", "故事板提示词"]);
+    expect(result).toBe("资产提示词故事板提示词");
+  });
+
+  it("streams data lines even when the proxy or upstream does not send blank SSE frame separators", async () => {
+    const chunks = [
+      'data: {"choices":[{"delta":{"content":"人物资产"}}]}\n',
+      '{"choices":[{"delta":{"content":"场景资产"}}]}\n',
+      'data: {"type":"response.output_text.delta","delta":"故事板"}\n',
+    ];
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      body: {
+        getReader() {
+          let index = 0;
+          return {
+            read: async () => {
+              if (index >= chunks.length) return { done: true, value: undefined };
+              const value = new TextEncoder().encode(chunks[index++]);
+              return { done: false, value };
+            },
+          };
+        },
+      },
+    });
+    const seen: string[] = [];
+
+    const result = await callAiStream(
+      { endpoint: "https://timeai.chat/v1", apiKey: "key", model: "gpt-5.5" },
+      "资产和故事板长提示词",
+      (chunk) => seen.push(chunk),
+      fetchImpl,
+    );
+
+    expect(seen).toEqual(["人物资产", "场景资产", "故事板"]);
+    expect(result).toBe("人物资产场景资产故事板");
+  });
+
   it("falls back to a normal chat completion when streaming is unavailable", async () => {
     const fetchImpl = vi
       .fn()
