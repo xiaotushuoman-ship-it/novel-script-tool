@@ -12,7 +12,6 @@
 
 const TIMEAI_ENDPOINT = "https://timeai.chat/v1";
 const TIMEAI_PROXY_ENDPOINT = "/api/timeai/v1";
-const PROXY_API_KEY_PLACEHOLDER = "server-proxy";
 
 export async function callAi(
   settings: AiSettings,
@@ -23,7 +22,7 @@ export async function callAi(
   const apiKey = resolveApiKey(settings);
   if (!apiKey.trim()) throw new Error("请填写 API Key");
   if (!settings.model.trim()) throw new Error("请填写模型名");
-  const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint, apiKey);
+  const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint);
 
   const response = await requestAi(
     () =>
@@ -61,7 +60,7 @@ export async function callAiStream(
   const apiKey = resolveApiKey(settings);
   if (!apiKey.trim()) throw new Error("请填写 API Key");
   if (!settings.model.trim()) throw new Error("请填写模型名");
-  const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint, apiKey);
+  const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint);
 
   const response = await requestAi(
     () =>
@@ -156,7 +155,7 @@ export async function callImageGeneration(
   const apiKey = resolveApiKey(settings);
   if (!apiKey.trim()) throw new Error("请填写 API Key");
   if (!imageModel.trim()) throw new Error("请选择生图模型");
-  const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint, apiKey);
+  const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint);
   const runtimeSettings = { ...settings, endpoint: runtimeEndpoint };
 
   if (isGeminiNativeEndpoint(runtimeEndpoint) && isGeminiImageModel(imageModel)) {
@@ -354,9 +353,9 @@ function resolveApiKey(settings: AiSettings): string {
   return settings.apiKey.trim();
 }
 
-function resolveRuntimeEndpoint(endpoint: string, apiKey: string): string {
+function resolveRuntimeEndpoint(endpoint: string): string {
   const normalizedEndpoint = endpoint.trim().replace(/\/+$/, "");
-  if (apiKey.trim() === PROXY_API_KEY_PLACEHOLDER && normalizedEndpoint === TIMEAI_ENDPOINT) {
+  if (normalizedEndpoint === TIMEAI_ENDPOINT) {
     return TIMEAI_PROXY_ENDPOINT;
   }
   return endpoint;

@@ -34,7 +34,7 @@ describe("callAi", () => {
     );
 
     expect(fetchImpl).toHaveBeenCalledWith(
-      "https://timeai.chat/v1/chat/completions",
+      "/api/timeai/v1/chat/completions",
       expect.objectContaining({ method: "POST" }),
     );
   });
@@ -116,7 +116,7 @@ describe("callAi", () => {
         "完整提示词",
         fetchImpl,
       ),
-    ).rejects.toThrow("跨域 CORS");
+    ).rejects.toThrow("/api/timeai");
   });
 });
 
@@ -154,7 +154,7 @@ describe("callAiStream", () => {
     expect(seen).toEqual(["第一段", "第二段"]);
     expect(result).toBe("第一段第二段");
     expect(fetchImpl).toHaveBeenCalledWith(
-      "https://timeai.chat/v1/chat/completions",
+      "/api/timeai/v1/chat/completions",
       expect.objectContaining({
         method: "POST",
         body: expect.stringContaining('"stream":true'),
@@ -353,7 +353,7 @@ describe("callImageGeneration", () => {
     );
 
     expect(fetchImpl).toHaveBeenCalledWith(
-      "https://timeai.chat/v1/images/generations",
+      "/api/timeai/v1/images/generations",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -401,12 +401,12 @@ describe("callImageGeneration", () => {
     expect(result).toBe("https://img.example.com/from-chat.png");
     expect(fetchImpl).toHaveBeenNthCalledWith(
       1,
-      "https://timeai.chat/v1/images/generations",
+      "/api/timeai/v1/images/generations",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetchImpl).toHaveBeenNthCalledWith(
       2,
-      "https://timeai.chat/v1/chat/completions",
+      "/api/timeai/v1/chat/completions",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -508,7 +508,7 @@ describe("callImageGeneration", () => {
     expect(result).toBe("data:image/png;base64,third-party-base64");
     expect(fetchImpl).toHaveBeenNthCalledWith(
       3,
-      "https://timeai.chat/v1beta/models/gemini-3.1-flash-image-preview:generateContent",
+      "/api/timeai/v1beta/models/gemini-3.1-flash-image-preview:generateContent",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -592,7 +592,7 @@ describe("callImageGeneration", () => {
     );
 
     expect(fetchImpl).toHaveBeenCalledWith(
-      "https://timeai.chat/v1/chat/completions",
+      "/api/timeai/v1/chat/completions",
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: "Bearer sk-secondary",
