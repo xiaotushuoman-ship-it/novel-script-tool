@@ -49,7 +49,9 @@ async function forwardLocalTimeAiRequest(request: IncomingMessage, response: Ser
 
     response.statusCode = upstream.status;
     response.setHeader("Content-Type", upstream.headers.get("content-type") || "application/json");
-    response.end(await upstream.text());
+    response.setHeader("Cache-Control", "no-cache, no-transform");
+    response.setHeader("X-Accel-Buffering", "no");
+    await pipeWebStreamToNodeResponse(upstream, response);
   } catch (error) {
     response.statusCode = 502;
     response.setHeader("Content-Type", "application/json");
@@ -60,6 +62,27 @@ async function forwardLocalTimeAiRequest(request: IncomingMessage, response: Ser
         },
       }),
     );
+  }
+}
+
+async function pipeWebStreamToNodeResponse(upstream: Response, response: ServerResponse) {
+  if (!upstream.body) {
+    response.end(await upstream.text());
+    return;
+  }
+
+  const reader = upstream.body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        response.write(Buffer.from(value));
+      }
+    }
+  } finally {
+    response.end();
+    reader.releaseLock();
   }
 }
 

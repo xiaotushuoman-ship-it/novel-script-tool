@@ -46,15 +46,35 @@ export async function forwardTimeAiRequest(request, response, path = request.que
     const contentType = upstream.headers.get("content-type") || "application/json";
     response.status(upstream.status);
     response.setHeader("Content-Type", contentType);
+    response.setHeader("Cache-Control", "no-cache, no-transform");
+    response.setHeader("X-Accel-Buffering", "no");
 
-    const body = await upstream.text();
-    response.send(body);
+    await pipeUpstreamToResponse(upstream, response);
   } catch (error) {
     response.status(502).json({
       error: {
         message: error instanceof Error ? error.message : "TimeAI proxy request failed",
       },
     });
+  }
+}
+
+async function pipeUpstreamToResponse(upstream, response) {
+  if (!upstream.body) {
+    response.send(await upstream.text());
+    return;
+  }
+
+  const reader = upstream.body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) response.write(Buffer.from(value));
+    }
+  } finally {
+    response.end();
+    reader.releaseLock();
   }
 }
 
