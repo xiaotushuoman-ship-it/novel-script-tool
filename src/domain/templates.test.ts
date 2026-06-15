@@ -143,7 +143,7 @@ describe("buildPrompt", () => {
     });
 
     expect(prompt).toContain("只允许改编用户提供的小说原文");
-    expect(prompt).toContain("不得新增原文不存在的人物、场景、事件、关系");
+    expect(prompt).toContain("不得新增原文不存在的人物、场景、事件、关系、身份反转、道具功能或后续剧情");
     expect(prompt).toContain("原文事实锁定");
     expect(prompt).toContain("前三秒钩子");
     expect(prompt).toContain("冲突升级");
@@ -159,9 +159,9 @@ describe("buildPrompt", () => {
     expect(prompt).not.toContain("人物动机评分");
     expect(prompt).not.toContain("可拍摄评分");
     expect(prompt).not.toContain("合规评分");
-    expect(prompt).not.toContain("短剧钩子评分");
-    expect(prompt).not.toContain("人物动机评分");
     expect(prompt).not.toContain("本段质量自检");
+    expect(prompt).toContain("若原文中已经分成 N 集 / N 段 / N 个剧情节点，必须输出 N 段");
+    expect(prompt).toContain("不得把所有内容压成 1 集");
     expect(prompt).toContain("许明舟被二叔逼签断亲书");
   });
 
