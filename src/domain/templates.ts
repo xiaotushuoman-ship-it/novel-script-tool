@@ -706,7 +706,7 @@ ${PLATFORM_REVIEW_RULES}
   },
   {
     id: "gpt-image2-storyboard",
-    name: "GPT-image2 四宫格故事板",
+    name: "GPT-image2 六宫格故事板",
     description: "把当前小说、剧本或分镜内容改为导演分镜工作板图片提示词，并配套逐Cut视频提示词。",
     fields: [
       { key: "sourceText", label: "小说/剧本/分镜内容", multiline: true, required: true },
@@ -749,9 +749,9 @@ ${PLATFORM_REVIEW_RULES}
       {
         key: "panelLayout",
         label: "画面布局",
-        defaultValue: "四宫格2x2",
+        defaultValue: "六宫格3x2",
         control: "select",
-        options: ["四宫格2x2", "六宫格3x2", "九宫格3x3", "横向四连格", "竖向四连格"],
+        options: ["六宫格3x2"],
       },
     ],
     body: `# Role

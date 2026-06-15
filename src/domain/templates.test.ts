@@ -242,7 +242,7 @@ describe("buildPrompt", () => {
     const fields = Object.fromEntries(template.fields.map((field) => [field.key, field]));
     const fieldKeys = template.fields.map((field) => field.key);
 
-    expect(template.name).toBe("GPT-image2 四宫格故事板");
+    expect(template.name).toBe("GPT-image2 六宫格故事板");
     expect(template.description).toContain("图片提示词");
     expect(prompt).toContain("GPT-image-2");
     expect(prompt).toContain("_::~OUTPUT_START::~_");
@@ -274,9 +274,7 @@ describe("buildPrompt", () => {
     expect(fields.boardCount.control).toBe("select");
     expect(fields.boardCount.options).toEqual(["1", "2", "3", "4"]);
     expect(fields.panelLayout.control).toBe("select");
-    expect(fields.panelLayout.options).toContain("四宫格2x2");
-    expect(fields.panelLayout.options).toContain("六宫格3x2");
-    expect(fields.panelLayout.options).toContain("九宫格3x3");
+    expect(fields.panelLayout.options).toEqual(["六宫格3x2"]);
     expect(fields.imageModel.control).toBe("select");
     expect(fields.imageModel.options).toContain("gpt-image-2");
     expect(fields.imageModel.options).toContain("gpt-image-2-all");

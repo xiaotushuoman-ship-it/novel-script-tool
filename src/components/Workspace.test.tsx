@@ -723,7 +723,7 @@ describe("Workspace storyboard controls", () => {
     );
 
     expect(screen.getByRole("option", { name: "六宫格3x2" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "九宫格3x3" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "九宫格3x3" })).not.toBeInTheDocument();
     const storyboardImagePanel = screen.getByLabelText("故事板出图区");
     expect(within(storyboardImagePanel).getByRole("combobox", { name: "故事板数量" })).toBeInTheDocument();
     expect(within(storyboardImagePanel).getByRole("combobox", { name: "画面比例" })).toBeInTheDocument();

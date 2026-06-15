@@ -89,7 +89,7 @@ const STEP_NAME_BY_ID: Record<TemplateId, string> = {
   "asset-extraction": "剧本资产提取",
   "asset-library": "资产库",
   "storyboard-15s": "15S 分镜脚本",
-  "gpt-image2-storyboard": "GPT-image2 四宫格故事板",
+  "gpt-image2-storyboard": "GPT-image2 六宫格故事板",
 };
 
 const NO_PREVIEWABLE_IMAGE_MESSAGE = "模型已响应，但没有返回可预览图片。请换生图模型或检查该模型是否支持图片输出。";
@@ -1789,7 +1789,7 @@ export function Workspace({
       source.match(/GPT-image-2出图提示词[：:]\s*([\s\S]*)$/)?.[1]?.trim() ??
       source.match(/GPT-image2四宫格单图提示词[：:：]?\s*([\s\S]*)$/)?.[1]?.trim() ??
       source;
-    const panelLayout = step.inputs.panelLayout || "四宫格2x2";
+    const panelLayout = step.inputs.panelLayout || "六宫格3x2";
     const imageRatio = step.inputs.imageRatio || "16:9";
     const visualStyle = step.inputs.visualStyle || "3D国漫风格";
 
@@ -2618,7 +2618,7 @@ export function Workspace({
             {renderSelectControl("生图模型", "imageModel", IMAGE_MODEL_OPTIONS, "gpt-image-2")}
             {renderSelectControl("分辨率", "imageResolution", IMAGE_RESOLUTION_OPTIONS, "1K")}
           </div>
-          <p className="muted">会读取上方生成结果中的 GPT-image-2 出图提示词，并按当前画面布局、比例和影像风格生成故事板图片。</p>
+          <p className="muted">会读取上方生成结果中的 GPT-image-2 出图提示词，并按六宫格3x2布局、比例和影像风格生成故事板图片。</p>
           {storyboardImageStatus ? <div className="status-line">{storyboardImageStatus}</div> : null}
           {storyboardImageProgress ? (
             <div className="generation-progress" aria-label="故事板图片生成进度" aria-live="polite">
