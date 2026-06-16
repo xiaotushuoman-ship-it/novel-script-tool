@@ -1611,6 +1611,40 @@ describe("Workspace asset extraction image generation", () => {
     );
   });
 
+  it("previews custom prompt images from gateway image fields without file extensions", async () => {
+    callImageGenerationMock.mockResolvedValue('{"image":"https://cdn.example.com/generated?id=custom&token=secure"}');
+    const project = createProject("自定义提示词网关格式测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "顾玄站在破碎祭坛中央。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2-all",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("主提示词"), {
+      target: { value: "电影宽屏，黑衣刀客站在破碎祭坛，冷月逆光。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "按提示词出图" }));
+
+    expect(await screen.findByRole("img", { name: "自定义提示词 生图结果 1" })).toHaveAttribute(
+      "src",
+      "https://cdn.example.com/generated?id=custom&token=secure",
+    );
+  });
+
   it("downloads generated images through a local blob instead of relying on remote link download", async () => {
     callImageGenerationMock.mockResolvedValue("https://img.example.com/asset.png");
     const fetchMock = vi

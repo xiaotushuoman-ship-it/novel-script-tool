@@ -345,6 +345,28 @@ describe("callImageGeneration", () => {
     expect(result).toBe("https://oaidalleapiprodscus.blob.core.windows.net/private/generated?id=abc");
   });
 
+  it("extracts image urls from common third-party gateway image fields", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        result: {
+          image: "https://cdn.example.com/generated?id=abc&token=secure",
+        },
+      }),
+    });
+
+    const result = await callImageGeneration(
+      { endpoint: "https://timeai.chat/v1", apiKey: "key", model: "gpt-5.5" },
+      "人物出图提示词",
+      "gpt-image-2-all",
+      "16:9",
+      "1K",
+      fetchImpl,
+    );
+
+    expect(result).toBe("https://cdn.example.com/generated?id=abc&token=secure");
+  });
+
   it("explains image rate limits with an actionable message", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: false,

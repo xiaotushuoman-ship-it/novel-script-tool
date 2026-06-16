@@ -187,6 +187,7 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("【视觉基调】");
     expect(prompt).toContain("【色彩与影调】");
     expect(prompt).toContain("【主体和空间关系】");
+    expect(prompt).toContain("【人物互动关系表】");
     expect(prompt).toContain("分镜1");
     expect(prompt).toContain("对白：角色名：台词");
     expect(prompt).toContain("不要把台词揉进动作描述里");
@@ -196,6 +197,9 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("只允许使用该段剧情实际出现的人物、场景、物品");
     expect(prompt).toContain("不要把全文所有出场人物、所有场景、所有物品资产塞进每一段");
     expect(prompt).toContain("禁止每段都用闪白、黑场、强转场、硬切转场来衔接");
+    expect(prompt).toContain("人物互动防错规则");
+    expect(prompt).toContain("发起者、承受者、关系类型、原文依据");
+    expect(prompt).toContain("不能颠倒");
     expect(prompt).toContain("情绪导演增强");
     expect(prompt).toContain("可拍摄的生理反应");
     expect(prompt).toContain("听者反应");

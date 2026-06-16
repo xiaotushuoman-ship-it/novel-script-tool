@@ -88,7 +88,7 @@ const STEP_NAME_BY_ID: Record<TemplateId, string> = {
   "novel-to-script": "小说改剧本",
   "asset-extraction": "剧本资产提取",
   "asset-library": "资产库",
-  "storyboard-15s": "15S 分镜脚本",
+  "storyboard-15s": "15S 分镜脚本（只支持单集剧本拆分）",
   "gpt-image2-storyboard": "GPT-image2 六宫格故事板",
 };
 
@@ -1553,8 +1553,10 @@ export function Workspace({
       }
       for (const [key, nestedValue] of Object.entries(value)) {
         if (typeof nestedValue === "string") {
-          if (/^(url|image_url|imageUrl|src|href|b64_json|b64Json)$/i.test(key)) {
-            add(key.toLowerCase().startsWith("b64") ? `data:image/png;base64,${nestedValue}` : nestedValue);
+          if (/^(url|image_url|imageUrl|image|output_url|outputUrl|file_url|fileUrl|download_url|downloadUrl|public_url|publicUrl|src|href|b64_json|b64Json|base64|image_base64|imageBase64)$/i.test(key)) {
+            const normalizedKey = key.toLowerCase();
+            const isBase64Field = normalizedKey.startsWith("b64") || normalizedKey === "base64" || normalizedKey.includes("base64");
+            add(isBase64Field ? `data:image/png;base64,${nestedValue}` : nestedValue);
           }
         } else {
           walk(nestedValue);
@@ -1572,7 +1574,7 @@ export function Workspace({
     for (const match of result.matchAll(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g)) add(match[0]);
     for (const match of result.matchAll(/!\[[^\]]*]\((https?:\/\/[^)\s]+)\)/g)) add(match[1]);
     for (const match of result.matchAll(/<img\b[^>]*\bsrc=["'](https?:\/\/[^"']+)["'][^>]*>/gi)) add(match[1]);
-    for (const match of result.matchAll(/["'](?:url|image_url|imageUrl|src)["']\s*:\s*["'](https?:\/\/[^"']+)["']/g)) add(match[1]);
+    for (const match of result.matchAll(/["'](?:url|image_url|imageUrl|image|output_url|outputUrl|file_url|fileUrl|download_url|downloadUrl|public_url|publicUrl|src)["']\s*:\s*["'](https?:\/\/[^"']+)["']/g)) add(match[1]);
     for (const match of result.matchAll(/https?:\/\/[^\s)"'<>]+/gi)) add(match[0].replace(/[，。,.;；\]}]+$/, ""));
 
     return [...references];

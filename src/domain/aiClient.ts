@@ -486,8 +486,20 @@ function extractImagesFromUnknown(value: unknown): string[] {
 
   const item = value as Record<string, unknown>;
   const references: string[] = [];
-  const directUrl = item.url ?? item.image_url ?? item.imageUrl;
-  const directBase64 = item.b64_json ?? item.b64Json;
+  const directUrl =
+    item.url ??
+    item.image_url ??
+    item.imageUrl ??
+    item.image ??
+    item.output_url ??
+    item.outputUrl ??
+    item.file_url ??
+    item.fileUrl ??
+    item.download_url ??
+    item.downloadUrl ??
+    item.public_url ??
+    item.publicUrl;
+  const directBase64 = item.b64_json ?? item.b64Json ?? item.base64 ?? item.image_base64 ?? item.imageBase64;
   const inlineData = item.inlineData as { mimeType?: unknown; data?: unknown } | undefined;
   const inlineDataSnake = item.inline_data as { mime_type?: unknown; data?: unknown } | undefined;
 
@@ -645,7 +657,8 @@ function extractImageReferencesFromText(text: string): string[] {
   const htmlImagePattern = /<img\b[^>]*\bsrc=["'](https?:\/\/[^"']+)["'][^>]*>/gi;
   for (const match of text.matchAll(htmlImagePattern)) references.add(match[1]);
 
-  const jsonImageUrlPattern = /["'](?:url|image_url|imageUrl)["']\s*:\s*["'](https?:\/\/[^"']+)["']/g;
+  const jsonImageUrlPattern =
+    /["'](?:url|image_url|imageUrl|image|output_url|outputUrl|file_url|fileUrl|download_url|downloadUrl|public_url|publicUrl)["']\s*:\s*["'](https?:\/\/[^"']+)["']/g;
   for (const match of text.matchAll(jsonImageUrlPattern)) references.add(match[1]);
 
   const imageUrlPattern = /https?:\/\/[^\s)"'<>]+?\.(?:png|jpe?g|webp|gif)(?:\?[^\s)"'<>]+)?/gi;
