@@ -386,6 +386,25 @@ describe("callImageGeneration", () => {
     ).rejects.toThrow("限流/额度限制");
   });
 
+  it("explains oversized image requests with an actionable message", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 413,
+      json: async () => ({ error: { message: "payload too large" } }),
+    });
+
+    await expect(
+      callImageGeneration(
+        { endpoint: "https://timeai.chat/v1", apiKey: "key", model: "gpt-5.5" },
+        "data:image/png;base64," + "a".repeat(2000),
+        "gpt-image-2",
+        "16:9",
+        "4K",
+        fetchImpl,
+      ),
+    ).rejects.toThrow("请求内容过大");
+  });
+
   it("switches to a 2K-capable model and size when high resolution is selected", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,

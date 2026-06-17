@@ -877,40 +877,6 @@ describe("Workspace storyboard controls", () => {
     expect(callImageGenerationMock.mock.calls[0][4]).toBe("4K");
   });
 
-  it("shows upscale progress in the storyboard image result area", async () => {
-    callImageGenerationMock
-      .mockResolvedValueOnce("https://example.com/storyboard.png")
-      .mockReturnValueOnce(new Promise((resolve) => window.setTimeout(() => resolve("https://example.com/storyboard-2k.png"), 20)));
-    const project = createProject("故事板高清放大进度测试");
-    project.currentStep = "gpt-image2-storyboard";
-    project.steps["gpt-image2-storyboard"].draft = "GPT-image-2出图提示词：一张四宫格故事板图。";
-
-    render(
-      <Workspace
-        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
-        project={project}
-        onAiSettingsChange={() => undefined}
-        onProjectChange={() => undefined}
-        onSaveVersion={() => undefined}
-      />,
-    );
-
-    const storyboardImagePanel = screen.getByLabelText("故事板出图区");
-    fireEvent.click(within(storyboardImagePanel).getByRole("button", { name: "生成故事板图片" }));
-    expect(await within(storyboardImagePanel).findByRole("img", { name: "故事板 生图结果 1" })).toBeInTheDocument();
-
-    fireEvent.click(within(storyboardImagePanel).getByRole("button", { name: "2K放大" }));
-
-    expect(within(storyboardImagePanel).getByText("正在生成 2K 高清放大图...")).toBeInTheDocument();
-    expect(within(storyboardImagePanel).getByRole("progressbar", { name: "高清放大进度" })).toHaveAttribute(
-      "aria-valuenow",
-      "22",
-    );
-    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(2));
-    expect(callImageGenerationMock.mock.calls[1][2]).toBe("gemini-3.1-flash-preview");
-    expect(await within(storyboardImagePanel).findByRole("img", { name: "故事板-2K高清 生图结果 1" })).toBeInTheDocument();
-  });
-
   it("previews signed asset image urls that do not include a file extension", async () => {
     callImageGenerationMock.mockResolvedValue("https://oaidalleapiprodscus.blob.core.windows.net/private/generated?id=abc");
     const project = createProject("无后缀图片链接预览");
@@ -2725,65 +2691,8 @@ describe("Workspace asset extraction image generation", () => {
     );
   });
 
-  it("generates a new 4K image from an existing asset image result", async () => {
-    callImageGenerationMock
-      .mockResolvedValueOnce("https://img.example.com/preview.png")
-      .mockResolvedValueOnce("https://img.example.com/preview-4k.png");
-    const project = createProject("4K高清放大测试");
-    project.currentStep = "asset-extraction";
-    project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，站在夜市摊前，神情警觉。";
-    project.steps["asset-extraction"].inputs = {
-      sourceText: "林晚穿白衬衫站在夜市摊前。",
-      assetType: "人物",
-      visualStyle: "影视写实风格",
-      imageModel: "gpt-image-2",
-      imageRatio: "16:9",
-      imageResolution: "1K",
-    };
-
-    render(
-      <Workspace
-        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
-        project={project}
-        onAiSettingsChange={() => undefined}
-        onProjectChange={() => undefined}
-        onSaveVersion={() => undefined}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
-    expect(await screen.findByRole("img", { name: "林晚 生图结果 1" })).toHaveAttribute(
-      "src",
-      "https://img.example.com/preview.png",
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "4K放大" }));
-
-    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(2));
-    expect(callImageGenerationMock.mock.calls[1][1]).toContain("4K高清放大版本");
-    expect(callImageGenerationMock.mock.calls[1][1]).toContain("原图参考：https://img.example.com/preview.png");
-    expect(callImageGenerationMock.mock.calls[1][2]).toBe("gemini-3.1-flash-preview");
-    expect(callImageGenerationMock.mock.calls[1][4]).toBe("4K");
-    expect(screen.getByRole("img", { name: "林晚 生图结果 1" })).toHaveAttribute(
-      "src",
-      "https://img.example.com/preview.png",
-    );
-    expect(await screen.findByRole("img", { name: "林晚-4K高清 生图结果 1" })).toHaveAttribute(
-      "src",
-      "https://img.example.com/preview-4k.png",
-    );
-    const resultImages = screen.getAllByRole("img").filter((image) => image.getAttribute("alt")?.includes("生图结果"));
-    expect(resultImages.map((image) => image.getAttribute("alt"))).toEqual([
-      "林晚 生图结果 1",
-      "林晚-4K高清 生图结果 1",
-    ]);
-    expect(screen.getAllByText("4K高清放大图已追加到原图后方，原图已保留").length).toBeGreaterThan(0);
-  });
-
-  it("closes the preview after upscaling from the image preview dialog", async () => {
-    callImageGenerationMock
-      .mockResolvedValueOnce("https://img.example.com/preview.png")
-      .mockResolvedValueOnce("https://img.example.com/preview-2k.png");
+  it("does not show 2K or 4K upscale controls in image result cards or preview dialog", async () => {
+    callImageGenerationMock.mockResolvedValueOnce("https://img.example.com/preview.png");
     const project = createProject("预览内高清放大测试");
     project.currentStep = "asset-extraction";
     project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，站在夜市摊前，神情警觉。";
@@ -2808,13 +2717,14 @@ describe("Workspace asset extraction image generation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
     const originalImage = await screen.findByRole("img", { name: "林晚 生图结果 1" });
+    expect(screen.queryByRole("button", { name: "2K放大" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "4K放大" })).not.toBeInTheDocument();
+
     fireEvent.click(originalImage);
     expect(await screen.findByRole("dialog", { name: "图片高清预览" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "2K高清" }));
-
-    expect(await screen.findByRole("img", { name: "林晚-2K高清 生图结果 1" })).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "图片高清预览" })).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "2K高清" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "4K高清" })).not.toBeInTheDocument();
+    expect(callImageGenerationMock).toHaveBeenCalledTimes(1);
   });
 
   it("marks generated asset images as draggable for ZZDH empty image slots", async () => {

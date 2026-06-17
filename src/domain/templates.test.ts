@@ -201,6 +201,10 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("发起者、承受者、关系类型、原文依据");
     expect(prompt).toContain("不能颠倒");
     expect(prompt).toContain("情绪导演增强");
+    expect(prompt).toContain("角色音色与对白节奏锁定");
+    expect(prompt).toContain("【角色音色锁定表】");
+    expect(prompt).toContain("轻/重/缓/急");
+    expect(prompt).toContain("对白：角色名（音色标签，轻/重，缓/急，情绪状态）：台词");
     expect(prompt).toContain("可拍摄的生理反应");
     expect(prompt).toContain("听者反应");
     expect(prompt).toContain("不要只写“悲伤/愤怒/心动/紧张/释然”");

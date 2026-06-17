@@ -385,6 +385,9 @@ function buildHttpErrorMessage(operation: string, status: number): string {
   if (status === 429) {
     return `${operation}失败：HTTP 429。当前 API Key、模型分组或中转站触发限流/额度限制，请降低批量生图数量、稍等后重试，或切换更高额度的 API Key/模型分组。`;
   }
+  if (status === 413) {
+    return `${operation}失败：HTTP 413。请求内容过大，通常是图片 base64 或提示词太长导致中转站拒收；请不要把原图数据直接放进提示词，或改用更短提示词后重试。`;
+  }
   if (status === 401 || status === 403) {
     return `${operation}失败：HTTP ${status}。请检查 API Key 是否有效、模型名是否与 API 分组对应。`;
   }

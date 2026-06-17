@@ -116,15 +116,12 @@ export function Workspace({
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isSendingToZzdh, setIsSendingToZzdh] = useState(false);
   const [isSendingAssetsToZzdh, setIsSendingAssetsToZzdh] = useState(false);
-  const [upscalingImageId, setUpscalingImageId] = useState<string | null>(null);
   const [generatingAssets, setGeneratingAssets] = useState<Record<string, boolean>>({});
   const [isGeneratingCustomImages, setIsGeneratingCustomImages] = useState(false);
   const [assetImageResults, setAssetImageResults] = useState<ImageResult[]>([]);
   const [storyboardImageResults, setStoryboardImageResults] = useState<ImageResult[]>([]);
   const [storyboardImageProgress, setStoryboardImageProgress] = useState<GenerationProgress | null>(null);
   const [storyboardImageStatus, setStoryboardImageStatus] = useState("");
-  const [upscaleProgress, setUpscaleProgress] = useState<GenerationProgress | null>(null);
-  const [upscaleStatus, setUpscaleStatus] = useState("");
   const [customImagePrefix, setCustomImagePrefix] = useState(DEFAULT_CUSTOM_IMAGE_PREFIX);
   const [customImagePrompt, setCustomImagePrompt] = useState("");
   const [customImageCount, setCustomImageCount] = useState("1");
@@ -822,95 +819,6 @@ export function Workspace({
 
   function zoomPreviewImage() {
     setPreviewScale((current) => Math.min(4, current + 1));
-  }
-
-  async function upscaleImageResult(image: ImageResult, targetResolution: "2K" | "4K") {
-    setUpscalingImageId(image.id);
-    setStatus(`正在生成 ${targetResolution} 高清放大图...`);
-    setUpscaleStatus(`正在生成 ${targetResolution} 高清放大图...`);
-    stopImageProgressTimer();
-    setProgress({ label: `准备${targetResolution}高清放大`, percent: 10 });
-    setUpscaleProgress({ label: `准备${targetResolution}高清放大`, percent: 10 });
-
-    try {
-      const imageModel = "gemini-3.1-flash-preview";
-      const imageRatio = image.ratio || step.inputs.imageRatio || "16:9";
-      const imageCall = resolveImageCallSettings(imageModel);
-      const originalPrompt = image.prompt.trim() || "无";
-      const upscalePrompt = [
-        `请基于以下原图生成一张${targetResolution}高清放大版本，保持角色/场景/物品主体、构图、风格、服装、材质和光影一致。`,
-        "提升细节清晰度、边缘锐度、纹理层次和整体画面完成度，不要改变身份、脸型、服装、道具、场景结构，不要添加文字、水印、logo。",
-        `原图参考：${image.src}`,
-        "原始提示词：",
-        originalPrompt,
-      ].join("\n");
-
-      setProgress({ label: `发送${targetResolution}高清放大请求`, percent: 22 });
-      setUpscaleProgress({ label: `发送${targetResolution}高清放大请求`, percent: 22 });
-      startImageProgressTimer();
-      const result = await callImageGenerationWithRetry(
-        imageCall.settings,
-        upscalePrompt,
-        imageCall.model,
-        imageRatio,
-        targetResolution,
-        (attempt, delaySeconds) => {
-          setStatus(`${targetResolution}高清放大触发限流，${delaySeconds}秒后自动重试第${attempt}次...`);
-          setProgress({ label: `限流等待重试 ${attempt}`, percent: 42 });
-          setUpscaleStatus(`${targetResolution}高清放大触发限流，${delaySeconds}秒后自动重试第${attempt}次...`);
-          setUpscaleProgress({ label: `限流等待重试 ${attempt}`, percent: 42 });
-        },
-      );
-
-      stopImageProgressTimer();
-      setProgress({ label: `接收${targetResolution}高清图`, percent: 90 });
-      setUpscaleProgress({ label: `接收${targetResolution}高清图`, percent: 90 });
-      const upscaledImages = parseImageResults(result, `${image.assetName}-${targetResolution}高清`, {
-        assetType: image.assetType,
-        prompt: upscalePrompt,
-        model: imageCall.model,
-        ratio: imageRatio,
-        resolution: targetResolution,
-      });
-
-      if (upscaledImages.length === 0) {
-        setStatus(NO_PREVIEWABLE_IMAGE_MESSAGE);
-        setUpscaleStatus(NO_PREVIEWABLE_IMAGE_MESSAGE);
-      } else {
-        appendImageResultLike(image.id, upscaledImages);
-        setPreviewImage(null);
-        setStatus(`${targetResolution}高清放大图已追加到原图后方，原图已保留`);
-        setUpscaleStatus(`${targetResolution}高清放大图已追加到原图后方，原图已保留`);
-      }
-      setProgress({ label: `${targetResolution}高清放大完成`, percent: 100 });
-      setUpscaleProgress({ label: `${targetResolution}高清放大完成`, percent: 100 });
-    } catch (error) {
-      stopImageProgressTimer();
-      setProgress({ label: `${targetResolution}高清放大失败`, percent: 100 });
-      setStatus(error instanceof Error ? error.message : `${targetResolution}高清放大失败`);
-      setUpscaleProgress({ label: `${targetResolution}高清放大失败`, percent: 100 });
-      setUpscaleStatus(error instanceof Error ? error.message : `${targetResolution}高清放大失败`);
-    } finally {
-      setUpscalingImageId(null);
-    }
-  }
-
-  function appendImageResultLike(sourceImageId: string, upscaledImages: ImageResult[]) {
-    const appendAfterSource = (current: ImageResult[]) => {
-      const sourceIndex = current.findIndex((item) => item.id === sourceImageId);
-      if (sourceIndex === -1) return current;
-      return [
-        ...current.slice(0, sourceIndex + 1),
-        ...upscaledImages,
-        ...current.slice(sourceIndex + 1),
-      ];
-    };
-    setAssetImageResults((current) => {
-      return appendAfterSource(current);
-    });
-    setStoryboardImageResults((current) => {
-      return appendAfterSource(current);
-    });
   }
 
   function resolveImageCallSettings(imageModel: string) {
@@ -2001,26 +1909,6 @@ export function Workspace({
         <div className="section-heading">
           <h3>{heading}</h3>
         </div>
-        {upscaleStatus ? <div className="status-line">{upscaleStatus}</div> : null}
-        {upscaleProgress ? (
-          <div className="generation-progress" aria-label="高清放大进度" aria-live="polite">
-            <div className="progress-header">
-              <strong>高清放大进度</strong>
-              <span>{upscaleProgress.label}</span>
-              <b>{upscaleProgress.percent}%</b>
-            </div>
-            <div
-              aria-label="高清放大进度"
-              aria-valuemax={100}
-              aria-valuemin={0}
-              aria-valuenow={upscaleProgress.percent}
-              className="progress-track"
-              role="progressbar"
-            >
-              <div className="progress-fill" style={{ width: `${upscaleProgress.percent}%` }} />
-            </div>
-          </div>
-        ) : null}
         <div className="image-result-grid">
           {results.map((image, index) => {
             const assetImageIndex = results.slice(0, index + 1).filter((item) => item.assetName === image.assetName).length;
@@ -2058,20 +1946,6 @@ export function Workspace({
                 >
                   <Save size={16} />
                   保存到资产库 {assetImageIndex}
-                </button>
-                <button
-                  className="secondary-button image-upscale-link"
-                  disabled={upscalingImageId === image.id}
-                  onClick={() => void upscaleImageResult(image, "2K")}
-                >
-                  {upscalingImageId === image.id ? "放大中" : "2K放大"}
-                </button>
-                <button
-                  className="secondary-button image-upscale-link"
-                  disabled={upscalingImageId === image.id}
-                  onClick={() => void upscaleImageResult(image, "4K")}
-                >
-                  {upscalingImageId === image.id ? "放大中" : "4K放大"}
                 </button>
                 <button
                   aria-label={`删除图片 ${index + 1}`}
@@ -2664,26 +2538,6 @@ export function Workspace({
                   <button className="secondary-button" type="button" onClick={zoomPreviewImage}>
                     预览放大
                   </button>
-                  {previewImage.image ? (
-                    <>
-                      <button
-                        className="secondary-button"
-                        disabled={upscalingImageId === previewImage.image.id}
-                        type="button"
-                        onClick={() => void upscaleImageResult(previewImage.image!, "2K")}
-                      >
-                        2K高清
-                      </button>
-                      <button
-                        className="secondary-button"
-                        disabled={upscalingImageId === previewImage.image.id}
-                        type="button"
-                        onClick={() => void upscaleImageResult(previewImage.image!, "4K")}
-                      >
-                        4K高清
-                      </button>
-                    </>
-                  ) : null}
                 <button className="secondary-button" type="button" onClick={() => setPreviewScale(1)}>
                   原始比例
                 </button>
