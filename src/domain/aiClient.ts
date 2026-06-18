@@ -97,9 +97,10 @@ export async function callAiStream(
   const decoder = new TextDecoder();
   let buffer = "";
   let fullText = "";
+  const streamTimeoutMs = 30000;
 
   while (true) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readStreamChunkWithTimeout(reader, streamTimeoutMs);
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
@@ -127,6 +128,28 @@ export async function callAiStream(
 
   if (!fullText.trim()) throw new Error("AI 返回格式不正确");
   return fullText;
+}
+
+async function readStreamChunkWithTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  timeoutMs: number,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      reader.read(),
+      new Promise<ReadableStreamReadResult<Uint8Array>>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("AI 流式响应超时")), timeoutMs);
+      }),
+    ]);
+  } catch (error) {
+    if (error instanceof Error && error.message === "AI 流式响应超时") {
+      void reader.cancel?.().catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
 }
 
 function extractStreamingLineText(line: string): string | null {

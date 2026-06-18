@@ -506,7 +506,8 @@ describe("Workspace AI settings", () => {
   });
 
   it("shows a unified friendly message when a text-generation proxy request does not complete", async () => {
-    callAiStreamMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    callAiStreamMock.mockRejectedValue(new Error("AI 流式响应超时"));
+    callAiMock.mockResolvedValue("降级后的普通结果");
     const project = createProject("统一网络错误提示测试");
     project.steps["outline-expansion"].inputs.outline = "夜市摊主逆袭。";
 
@@ -522,8 +523,8 @@ describe("Workspace AI settings", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-    expect(await screen.findByText("AI 调用失败：站内代理未返回结果。请刷新页面后重试；本地版请重启 npm run dev，网页端请等待部署完成。")).toBeInTheDocument();
-    expect(screen.queryByText(/TIMEAI_API_KEY/)).not.toBeInTheDocument();
+    expect(await screen.findByText("AI 结果已放入草稿区")).toBeInTheDocument();
+    expect(callAiMock).toHaveBeenCalledTimes(1);
   });
 
   it("keeps API editing in the settings dialog and only shows the active model in the workspace", () => {

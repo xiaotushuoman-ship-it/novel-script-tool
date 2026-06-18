@@ -263,6 +263,31 @@ describe("callAiStream", () => {
     });
     expect(JSON.parse(fetchImpl.mock.calls[1][1].body as string)).not.toHaveProperty("stream");
   });
+
+  it("reports a clear timeout when streaming stalls without any chunks", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        body: {
+          getReader() {
+            return {
+              read: async () => {
+                throw new Error("AI 流式响应超时");
+              },
+            };
+          },
+        },
+      });
+    await expect(
+      callAiStream(
+        { endpoint: "https://timeai.chat/v1", apiKey: "key", model: "gpt-5.5" },
+        "卡住回退测试",
+        () => undefined,
+        fetchImpl,
+      ),
+    ).rejects.toThrow("AI 流式响应超时");
+  });
 });
 
 describe("callImageGeneration", () => {

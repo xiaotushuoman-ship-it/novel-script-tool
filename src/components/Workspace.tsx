@@ -1010,18 +1010,33 @@ export function Workspace({
 
   async function streamAiText(settings: AiSettings, runPrompt: string, onPartial?: (partial: string) => void) {
     let streamedDraft = "";
-    const streamedResult = await callAiStream(settings, runPrompt, (chunk) => {
-      streamedDraft += chunk;
-      const cleanedPartial = cleanAiTextOutput(streamedDraft);
-      if (cleanedPartial.trim()) {
-        onPartial?.(cleanedPartial);
+    try {
+      const streamedResult = await callAiStream(settings, runPrompt, (chunk) => {
+        streamedDraft += chunk;
+        const cleanedPartial = cleanAiTextOutput(streamedDraft);
+        if (cleanedPartial.trim()) {
+          onPartial?.(cleanedPartial);
+        }
+      });
+      const result = cleanAiTextOutput(streamedResult || streamedDraft);
+      if (result.trim() && result !== cleanAiTextOutput(streamedDraft)) {
+        onPartial?.(result);
       }
-    });
-    const result = cleanAiTextOutput(streamedResult || streamedDraft);
-    if (result.trim() && result !== cleanAiTextOutput(streamedDraft)) {
-      onPartial?.(result);
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (streamedDraft.trim()) {
+        return cleanAiTextOutput(streamedDraft);
+      }
+      if (!/AI 流式响应超时|AI 返回格式不正确/.test(message)) {
+        throw error;
+      }
+      const fallbackResult = cleanAiTextOutput(await callAi(settings, runPrompt));
+      if (fallbackResult.trim()) {
+        onPartial?.(fallbackResult);
+      }
+      return fallbackResult;
     }
-    return result;
   }
 
   function formatAiError(error: unknown, fallback: string) {
