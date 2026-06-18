@@ -187,6 +187,9 @@ describe("buildPrompt", () => {
     expect(prompt).not.toContain("_::~FIELD::~_");
     expect(prompt).toContain("【视觉基调】");
     expect(prompt).toContain("【色彩与影调】");
+    expect(prompt).toContain("【上一段尾帧缓冲】");
+    expect(prompt).toContain("只作为下一段开场连续性参考");
+    expect(prompt).toContain("不重复生成完整剧情，不重复对白，不推进新事件");
     expect(prompt).toContain("【本段开场继承】");
     expect(prompt).toContain("【主体和空间关系】");
     expect(prompt).toContain("【人物互动关系表】");
