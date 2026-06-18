@@ -187,9 +187,15 @@ describe("buildPrompt", () => {
     expect(prompt).not.toContain("_::~FIELD::~_");
     expect(prompt).toContain("【视觉基调】");
     expect(prompt).toContain("【色彩与影调】");
+    expect(prompt).toContain("【本段开场继承】");
     expect(prompt).toContain("【主体和空间关系】");
     expect(prompt).toContain("【人物互动关系表】");
     expect(prompt).toContain("分镜1");
+    expect(prompt).toContain("【本段结尾状态锁】");
+    expect(prompt).toContain("本段最后一帧的可接状态");
+    expect(prompt).toContain("角色位置、朝向、手部/脚步状态、道具状态、视线方向、声音余韵、环境状态");
+    expect(prompt).toContain("不能让上一段手里拿着的东西下一段凭空消失");
+    expect(prompt).toContain("如果剧情确实换场，必须用遮挡转场、声音先入、动作出画");
     expect(prompt).toContain("【画面内容】里的每个分镜不要再写横屏、竖屏、16:9、9:16、21:9等画面比例词");
     expect(prompt).toContain("对白：角色名：台词");
     expect(prompt).toContain("不要把台词揉进动作描述里");
