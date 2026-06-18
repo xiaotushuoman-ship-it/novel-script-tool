@@ -240,9 +240,16 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("听者反应");
     expect(prompt).toContain("不要只写“悲伤/愤怒/心动/紧张/释然”");
     expect(prompt).toContain("15S容量控制");
-    expect(prompt).toContain("每个15S段落优先使用3-4个分镜");
+    expect(prompt).toContain("高密度秒表模式");
+    expect(prompt).toContain("标准剧情模式");
+    expect(prompt).toContain("混合快节奏模式");
+    expect(prompt).toContain("0-1.5s入画");
+    expect(prompt).toContain("1.5-3s起势");
+    expect(prompt).toContain("6.5-8s动作卖点");
+    expect(prompt).toContain("动作卖点");
+    expect(prompt).toContain("对白最多2句");
     expect(prompt).toContain("对白总量最多2句");
-    expect(prompt).toContain("如果当前剧情必须超过5个分镜，必须拆成下一个15S段落单元");
+    expect(prompt).toContain("如果当前剧情必须超过所选模式容量，必须拆成下一个15S段落单元");
     expect(prompt).toContain("画面文字与乱码屏蔽规则");
     expect(prompt).toContain("字体、颜色、材质和排版必须根据剧情载体选择");
     expect(prompt).toContain("文字清晰工整，可读性高");
