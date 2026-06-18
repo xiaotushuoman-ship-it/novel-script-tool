@@ -308,6 +308,57 @@ textarea {
   margin: 10px 0;
 }
 
+.safety-panel {
+  border: 1px solid #ded6c9;
+  border-radius: 8px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.safety-panel.has-issues {
+  background: #fff6ed;
+  border-color: #e4b37d;
+}
+
+.safety-panel.is-clean {
+  background: #f0f8f2;
+  border-color: #9cc9a5;
+}
+
+.safety-panel .section-heading {
+  margin-top: 0;
+}
+
+.safety-issue-list {
+  display: grid;
+  gap: 8px;
+}
+
+.safety-issue {
+  background: #fffdf8;
+  border: 1px solid #e2d5c4;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.safety-issue div {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.safety-issue span {
+  border: 1px solid #c48f58;
+  border-radius: 999px;
+  color: #8a4f17;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.safety-issue p {
+  margin: 6px 0 0;
+}
+
 .asset-generation-list {
   display: grid;
   gap: 10px;

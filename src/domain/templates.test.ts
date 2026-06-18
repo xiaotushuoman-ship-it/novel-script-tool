@@ -253,6 +253,8 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("画面文字与乱码屏蔽规则");
     expect(prompt).toContain("字体、颜色、材质和排版必须根据剧情载体选择");
     expect(prompt).toContain("文字清晰工整，可读性高");
+    expect(prompt).toContain("SEEDAN2.0视频生成审核规避规则");
+    expect(prompt).toContain("不要输出血腥、断肢、爆头、喷血、肢解");
     expect(prompt).toContain("文字乱码、错别字、输入法候选栏");
     expect(prompt).toContain("不要字幕水印、不要多余UI文字");
     expect(prompt).toContain("信息载体朝向与镜头逻辑规则");

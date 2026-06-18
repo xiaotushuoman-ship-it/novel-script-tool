@@ -1049,6 +1049,33 @@ describe("Workspace storyboard controls", () => {
     await waitFor(() => expect(resultEditor).toHaveDisplayValue("分镜1：开场入画\n分镜2：冲突推进"));
   });
 
+  it("checks 15S storyboard results for SEEDAN2.0 video prompt forbidden words", () => {
+    const project = createProject("SEEDAN检测测试");
+    project.currentStep = "storyboard-15s";
+    project.steps["storyboard-15s"].inputs.scriptText = "夜市摊前，许明舟阻止对方。";
+    project.steps["storyboard-15s"].draft = "分镜1：角色掏枪开枪，画面出现血腥伤口和水印logo。";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "SEEDAN2.0违禁词检测" }));
+
+    const safetyPanel = screen.getByText("SEEDAN2.0 视频生成违禁词检测").closest(".safety-panel");
+    expect(safetyPanel).not.toBeNull();
+    expect(within(safetyPanel as HTMLElement).getByText("发现 3 类 SEEDAN2.0 视频生成风险，请按建议替换后再送入视频模型。")).toBeInTheDocument();
+    expect(within(safetyPanel as HTMLElement).getByText("暴力血腥")).toBeInTheDocument();
+    expect(within(safetyPanel as HTMLElement).getByText("危险违法")).toBeInTheDocument();
+    expect(within(safetyPanel as HTMLElement).getByText("平台与版权")).toBeInTheDocument();
+    expect(within(safetyPanel as HTMLElement).getByText(/改成非血腥受伤反馈/)).toBeInTheDocument();
+  });
+
   it("sends storyboard draft to ZZDH from the 15s storyboard step", async () => {
     sendStoryboardToZzdhMock.mockResolvedValue({ success: true });
     const project = createProject("字字动画联动测试");

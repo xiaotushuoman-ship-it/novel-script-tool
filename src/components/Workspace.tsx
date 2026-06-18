@@ -10,6 +10,7 @@ import {
   type AssetLibraryType,
 } from "../domain/assetLibrary";
 import type { Project } from "../domain/projects";
+import { checkSeedanceSafety, type SeedanceSafetyReport } from "../domain/seedanceSafety";
 import {
   buildPrompt,
   getTemplate,
@@ -122,6 +123,7 @@ export function Workspace({
   const [storyboardImageResults, setStoryboardImageResults] = useState<ImageResult[]>([]);
   const [storyboardImageProgress, setStoryboardImageProgress] = useState<GenerationProgress | null>(null);
   const [storyboardImageStatus, setStoryboardImageStatus] = useState("");
+  const [seedanceSafetyReport, setSeedanceSafetyReport] = useState<SeedanceSafetyReport | null>(null);
   const [customImagePrefix, setCustomImagePrefix] = useState(DEFAULT_CUSTOM_IMAGE_PREFIX);
   const [customImagePrompt, setCustomImagePrompt] = useState("");
   const [customImageCount, setCustomImageCount] = useState("1");
@@ -788,6 +790,13 @@ export function Workspace({
   function openImagePreview(src: string, alt: string, filename: string, image?: ImageResult) {
     setPreviewImage({ src, alt, filename, image });
     setPreviewScale(1);
+  }
+
+  function runSeedanceSafetyCheck() {
+    const checkedText = step.draft.trim() || prompt;
+    const report = checkSeedanceSafety(checkedText);
+    setSeedanceSafetyReport(report);
+    setStatus(report.summary);
   }
 
   function prepareImageDrag(event: React.DragEvent<HTMLImageElement>, image: ImageResult, filename: string) {
@@ -2202,6 +2211,11 @@ export function Workspace({
             {isSendingToZzdh ? "发送中" : "发送分镜到字字动画"}
           </button>
         ) : null}
+        {project.currentStep === "storyboard-15s" ? (
+          <button className="secondary-button" onClick={runSeedanceSafetyCheck}>
+            SEEDAN2.0违禁词检测
+          </button>
+        ) : null}
         <button className="secondary-button" onClick={() => onSaveVersion(step.draft)}>
           <Save size={16} />
           保存结果
@@ -2213,6 +2227,32 @@ export function Workspace({
       </div>
 
       {visibleStatus ? <div className="status-line">{visibleStatus}</div> : null}
+
+      {project.currentStep === "storyboard-15s" && seedanceSafetyReport ? (
+        <div className={`safety-panel ${seedanceSafetyReport.hasIssues ? "has-issues" : "is-clean"}`}>
+          <div className="section-heading">
+            <h3>SEEDAN2.0 视频生成违禁词检测</h3>
+            <button className="ghost-button" onClick={() => setSeedanceSafetyReport(null)}>
+              关闭
+            </button>
+          </div>
+          <p>{seedanceSafetyReport.summary}</p>
+          {seedanceSafetyReport.hasIssues ? (
+            <div className="safety-issue-list">
+              {seedanceSafetyReport.issues.map((issue) => (
+                <article className="safety-issue" key={issue.category}>
+                  <div>
+                    <strong>{issue.category}</strong>
+                    <span>{issue.severity}风险</span>
+                  </div>
+                  <p>命中词：{issue.matches.join("、")}</p>
+                  <p>替换建议：{issue.suggestion}</p>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {visibleProgress ? (
         <div className="generation-progress" aria-label="当前步骤生成进度" aria-live="polite">

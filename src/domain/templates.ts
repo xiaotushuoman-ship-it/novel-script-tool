@@ -420,6 +420,13 @@ const storyboardPerfectScoreRules = `# 100分成片级自检与自动返工
 9. 合规安全100分：避开平台审核红线，暴力、复仇、玄学、低俗、未成年人等高风险内容必须自动改写为合规表达。
 10. 输出洁净度100分：最终只输出正式分镜结果；不要输出评分、解释、思考过程、检查清单、项目资料、Markdown表格或旧字段块。`;
 
+const seedanceSafetyPromptRules = `# SEEDAN2.0视频生成审核规避规则
+1. 生成视频提示词前必须把当前内容改写成平台友好表达，保留戏剧张力，但不要输出血腥、断肢、爆头、喷血、肢解、虐杀、酷刑、尸体特写等高风险词。
+2. 涉及攻击、追逐、打斗时，用受力反馈、格挡、后退、尘土、碎片、武器擦过、镜头避让表达，不给可模仿伤害细节。
+3. 不写色情低俗、身体暴露、擦边挑逗、未成年人恋爱/身体化、违法教程、毒品、赌博、自伤自杀、恐怖极端、仇恨歧视和现实政治煽动。
+4. 不写水印、logo、二维码、联系方式、真实商标特写、明星同款脸、绕过审核、不被检测、隐藏违禁等平台高风险内容。
+5. 如原剧情有高风险桥段，必须自动替换为可拍摄、可过审、可生成的同等戏剧功能画面，不要把替换过程或审核解释输出给用户。`;
+
 const douyinStoryboardBody = `# 使用模板
 以下内容来自 manju-storyboard-director/references/douyin-viral-shortdrama-template.md。
 请严格按该模板生成，不要输出解释，不要要求用户再次选择；若风格字段已提供，就直接使用该风格。
@@ -451,6 +458,8 @@ ${onScreenTextRules}
 ${readablePropOrientationRules}
 
 ${storyboardPerfectScoreRules}
+
+${seedanceSafetyPromptRules}
 
 # 本次任务输入
 请把下面内容作为模板中的【当前文案】处理，并自动拆成每段{{segmentSeconds}}的提示词。总成片时长控制在{{targetDuration}}秒，允许范围60-600秒。
