@@ -226,6 +226,11 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("文字清晰工整，可读性高");
     expect(prompt).toContain("文字乱码、错别字、输入法候选栏");
     expect(prompt).toContain("不要字幕水印、不要多余UI文字");
+    expect(prompt).toContain("信息载体朝向与镜头逻辑规则");
+    expect(prompt).toContain("手机、纸张、合同、账单、屏幕、菜单、聊天界面等可读信息载体");
+    expect(prompt).toContain("人物正面对镜头、低头看手机，手机屏幕应朝向人物");
+    expect(prompt).toContain("不能让手机屏幕正对观众却又表现为角色正在阅读");
+    expect(prompt).toContain("过肩镜头、主观视角、插入特写、角色把手机转向镜头展示");
     expect(prompt).toContain("100分成片级自检与自动返工");
     expect(prompt).toContain("任何一项不达标都必须先自动重写");
     expect(prompt).toContain("最终只输出正式分镜结果");
