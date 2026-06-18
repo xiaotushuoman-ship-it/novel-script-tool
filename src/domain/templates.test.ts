@@ -181,6 +181,7 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("10-15秒自动选择");
     expect(prompt).toContain("横屏16:9");
     expect(prompt).toContain("复古欧美原子朋克风格");
+    expect(prompt).toContain("不要在【画面内容】的每条分镜里重复写横屏、竖屏");
     expect(prompt).toContain("夜市摊前");
     expect(prompt).not.toContain("_::~OUTPUT_START::~_");
     expect(prompt).not.toContain("_::~FIELD::~_");
@@ -189,6 +190,7 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("【主体和空间关系】");
     expect(prompt).toContain("【人物互动关系表】");
     expect(prompt).toContain("分镜1");
+    expect(prompt).toContain("【画面内容】里的每个分镜不要再写横屏、竖屏、16:9、9:16、21:9等画面比例词");
     expect(prompt).toContain("对白：角色名：台词");
     expect(prompt).toContain("不要把台词揉进动作描述里");
     expect(prompt).toContain("对白：刘婶：年轻人嫌麻烦！");
@@ -200,6 +202,13 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("人物互动防错规则");
     expect(prompt).toContain("发起者、承受者、关系类型、原文依据");
     expect(prompt).toContain("不能颠倒");
+    expect(prompt).toContain("人物一致性与服装描述控制");
+    expect(prompt).toContain("默认不要在【主体和空间关系】或【画面内容】中反复描述服装");
+    expect(prompt).toContain("只有剧情明确需要时才可以写服装");
+    expect(prompt).toContain("动作/打戏专项规则");
+    expect(prompt).toContain("起势 -> 发力 -> 接触/避让 -> 受力反馈 -> 落点");
+    expect(prompt).toContain("攻方/发起者、守方/承受者");
+    expect(prompt).toContain("站位必须连续");
     expect(prompt).toContain("情绪导演增强");
     expect(prompt).toContain("角色音色与对白节奏锁定");
     expect(prompt).toContain("【角色音色锁定表】");
@@ -212,6 +221,14 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("每个15S段落优先使用3-4个分镜");
     expect(prompt).toContain("对白总量最多2句");
     expect(prompt).toContain("如果当前剧情必须超过5个分镜，必须拆成下一个15S段落单元");
+    expect(prompt).toContain("画面文字与乱码屏蔽规则");
+    expect(prompt).toContain("字体、颜色、材质和排版必须根据剧情载体选择");
+    expect(prompt).toContain("文字清晰工整，可读性高");
+    expect(prompt).toContain("文字乱码、错别字、输入法候选栏");
+    expect(prompt).toContain("不要字幕水印、不要多余UI文字");
+    expect(prompt).toContain("100分成片级自检与自动返工");
+    expect(prompt).toContain("任何一项不达标都必须先自动重写");
+    expect(prompt).toContain("最终只输出正式分镜结果");
     expect(prompt).toContain("负面限制：不要随机换脸，不要字幕水印。");
   });
 
