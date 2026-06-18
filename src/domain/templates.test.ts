@@ -194,6 +194,10 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("【本段结尾状态锁】");
     expect(prompt).toContain("本段最后一帧的可接状态");
     expect(prompt).toContain("角色位置、朝向、手部/脚步状态、道具状态、视线方向、声音余韵、环境状态");
+    expect(prompt).toContain("最后一镜景别");
+    expect(prompt).toContain("下一段开场景别必须继承上一段最后一镜景别或使用相邻景别过渡");
+    expect(prompt).toContain("不允许大特写直接跳到远景/航拍");
+    expect(prompt).toContain("远景 -> 全景 -> 中景");
     expect(prompt).toContain("不能让上一段手里拿着的东西下一段凭空消失");
     expect(prompt).toContain("如果剧情确实换场，必须用遮挡转场、声音先入、动作出画");
     expect(prompt).toContain("【画面内容】里的每个分镜不要再写横屏、竖屏、16:9、9:16、21:9等画面比例词");
