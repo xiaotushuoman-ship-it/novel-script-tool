@@ -209,6 +209,15 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("起势 -> 发力 -> 接触/避让 -> 受力反馈 -> 落点");
     expect(prompt).toContain("攻方/发起者、守方/承受者");
     expect(prompt).toContain("站位必须连续");
+    expect(prompt).toContain("高级运镜与视角库");
+    expect(prompt).toContain("ACT动作视角");
+    expect(prompt).toContain("超微距视角");
+    expect(prompt).toContain("过肩视角");
+    expect(prompt).toContain("主观POV视角");
+    expect(prompt).toContain("FPV穿越机式视角");
+    expect(prompt).toContain("镜面/反射视角");
+    expect(prompt).toContain("每个15S段落最多选择1-2种高级视角");
+    expect(prompt).toContain("如果高级视角会破坏人物关系、手机朝向、站位连续或动作清晰度");
     expect(prompt).toContain("情绪导演增强");
     expect(prompt).toContain("角色音色与对白节奏锁定");
     expect(prompt).toContain("【角色音色锁定表】");
