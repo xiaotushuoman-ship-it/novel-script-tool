@@ -12,6 +12,8 @@ describe("template catalog", () => {
       "asset-library",
       "storyboard-15s",
       "gpt-image2-storyboard",
+      "xiaotu-skill",
+      "seedance-video",
     ]);
   });
 });
@@ -287,6 +289,32 @@ describe("buildPrompt", () => {
     expect(fieldKeys).not.toContain("characterAssets");
     expect(fieldKeys).not.toContain("sceneAssets");
     expect(fieldKeys).not.toContain("propAssets");
+  });
+
+  it("builds the Xiaotu skill prompt with Seedance safety and free timestamps", () => {
+    const template = getTemplate("xiaotu-skill");
+    const fields = Object.fromEntries(template.fields.map((field) => [field.key, field]));
+    const prompt = buildPrompt(template, {
+      sourceText: "夜市摊前，许明舟端起第一碗葱油面，围观客人停下脚步。",
+      mode: "多机位分镜",
+      segmentSeconds: "12",
+      visualStyle: "影视写实现代",
+      audioRule: "保留环境声和原文对白",
+    });
+
+    expect(template.name).toBe("小兔skill");
+    expect(fields.mode.options).toEqual(["一镜到底", "多机位分镜"]);
+    expect(fields.segmentSeconds.control).toBe("number");
+    expect(fields.segmentSeconds.min).toBe(1);
+    expect(fields.segmentSeconds.max).toBe(600);
+    expect(prompt).toContain("SEEDAN2.0视频生成审核规避规则");
+    expect(prompt).toContain("不要输出血腥、断肢、爆头、喷血、肢解");
+    expect(prompt).toContain("必须自动替换为可拍摄、可过审、可生成的同等戏剧功能画面");
+    expect(prompt).toContain("必须先从原文抽取真实角色名");
+    expect(prompt).toContain("规则条例优化版");
+    expect(prompt).toContain("时间戳必须按故事动作、对白长度、情绪停顿和镜头复杂度自由划分");
+    expect(prompt).toContain("不要默认0-3s、3-6s、6-9s");
+    expect(prompt).toContain("实际输出必须根据当前剧情自由增减镜头和调整时间戳");
   });
 
   it("builds a GPT-image2 director storyboard prompt with image and video sections", () => {

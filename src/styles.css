@@ -41,6 +41,24 @@ button:disabled {
   color: #24211d;
 }
 
+.inline-field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.text-link-button {
+  border: 0;
+  background: transparent;
+  color: #2d5c52;
+  min-height: auto;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
 .ghost-button {
   border-color: transparent;
   background: transparent;
@@ -306,6 +324,126 @@ textarea {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
   margin: 10px 0;
+}
+
+.seedance-parameter-panel {
+  border: 1px solid #ded6c9;
+  border-radius: 8px;
+  background: #fffdf8;
+  margin: 10px 0 12px;
+  padding: 10px;
+}
+
+.seedance-parameter-panel .compact-heading {
+  margin-bottom: 4px;
+}
+
+.seedance-generation-settings {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin-bottom: 8px;
+}
+
+.seedance-advanced-settings {
+  border: 1px solid #ded6c9;
+  border-radius: 6px;
+  background: #fffdf8;
+  margin: 10px 0;
+  padding: 8px 10px;
+}
+
+.seedance-advanced-settings summary {
+  cursor: pointer;
+  color: #4d453d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.seedance-api-settings {
+  background: #fbf7ef;
+  margin: 6px 0 0;
+}
+
+.seedance-material-panel {
+  border-style: dashed;
+}
+
+.seedance-mention-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  border: 1px solid #d6ccbd;
+  border-radius: 6px;
+  background: #fffdf8;
+  margin-top: 8px;
+  padding: 8px;
+}
+
+.seedance-mention-picker button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-color: #b8ad9e;
+  background: #fffaf1;
+  color: #24211d;
+  min-width: 0;
+}
+
+.seedance-mention-picker span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seedance-mention-picker small {
+  flex: 0 0 auto;
+  color: #6b6258;
+}
+
+.seedance-material-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.seedance-material-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d6ccbd;
+  border-radius: 6px;
+  background: #fffdf8;
+  padding: 8px;
+  min-width: 0;
+}
+
+.seedance-material-card img,
+.seedance-material-card video,
+.seedance-audio-card {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 4px;
+  background: #eee6da;
+  object-fit: cover;
+}
+
+.seedance-audio-card {
+  display: grid;
+  place-items: center;
+  color: #6b6258;
+  font-weight: 700;
+}
+
+.seedance-material-card strong,
+.seedance-material-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seedance-material-card span {
+  color: #6b6258;
+  font-size: 12px;
 }
 
 .safety-panel {
@@ -889,6 +1027,50 @@ textarea {
   border-radius: inherit;
   background: linear-gradient(90deg, #2d5c52, #7a9f66);
   transition: width 220ms ease;
+}
+
+.seedance-job-panel {
+  border: 1px solid #ded6c9;
+  border-radius: 8px;
+  background: #fffaf1;
+  margin-top: 10px;
+  padding: 10px;
+}
+
+.seedance-job-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.seedance-job-card {
+  border: 1px solid #d6ccbd;
+  border-radius: 6px;
+  background: #fffdf8;
+  padding: 10px;
+}
+
+.seedance-job-card-failed {
+  border-color: #d59b92;
+  background: #fff6f4;
+}
+
+.seedance-job-card-completed {
+  border-color: #98b48c;
+}
+
+.error-text {
+  margin: 8px 0 0;
+  color: #9f2f2f;
+  font-size: 13px;
+}
+
+.success-text {
+  margin: 8px 0 0;
+  color: #2d5c52;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .task-center {

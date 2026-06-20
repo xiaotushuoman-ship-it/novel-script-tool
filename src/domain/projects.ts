@@ -36,6 +36,8 @@ const STEP_IDS: TemplateId[] = [
   "asset-library",
   "storyboard-15s",
   "gpt-image2-storyboard",
+  "xiaotu-skill",
+  "seedance-video",
 ];
 
 function createEmptyStep(): StepState {

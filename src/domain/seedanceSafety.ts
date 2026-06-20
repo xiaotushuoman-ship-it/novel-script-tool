@@ -9,6 +9,7 @@ export type SeedanceSafetyReport = {
   hasIssues: boolean;
   issues: SeedanceSafetyIssue[];
   summary: string;
+  optimizedText: string;
 };
 
 type SeedanceSafetyRule = {
@@ -89,5 +90,47 @@ export function checkSeedanceSafety(text: string): SeedanceSafetyReport {
       issues.length > 0
         ? `发现 ${issues.length} 类 SEEDAN2.0 视频生成风险，请按建议替换后再送入视频模型。`
         : "未发现明显 SEEDAN2.0 视频生成违禁词风险。",
+    optimizedText: optimizeSeedanceText(text, issues),
   };
+}
+
+function optimizeSeedanceText(text: string, issues: SeedanceSafetyIssue[]): string {
+  let optimized = text;
+  for (const issue of issues) {
+    for (const match of issue.matches) {
+      optimized = optimized.replace(new RegExp(escapeRegExp(match), "gi"), getReplacementForCategory(issue.category));
+    }
+  }
+  return optimizeSeedanceStructure(optimized);
+}
+
+function getReplacementForCategory(category: string): string {
+  const replacements: Record<string, string> = {
+    暴力血腥: "受力反馈",
+    色情低俗: "情绪张力",
+    未成年人风险: "正向保护",
+    危险违法: "危机暗示",
+    极端政治与仇恨: "抽象冲突",
+    封建迷信: "民俗氛围",
+    平台与版权: "无标识道具",
+    模型规避词: "合规表达",
+  };
+  return replacements[category] || "合规表达";
+}
+
+function optimizeSeedanceStructure(text: string): string {
+  return text
+    .replace(/角色掏枪开枪/g, "角色做出危机反应")
+    .replace(/水印logo/g, "无标识道具")
+    .replace(/血腥伤口/g, "受力反馈")
+    .replace(/血腥/g, "受力反馈")
+    .replace(/断肢|肢解|爆头|喷血|尸体特写/g, "冲击反馈")
+    .replace(/诈骗教程|制毒|吸毒|贩毒|赌博|自杀|跳楼|割腕|爆炸物制作/g, "危机处理")
+    .replace(/裸体|裸露|情色|性暗示|床戏|挑逗|露点|走光|内衣特写|低俗擦边/g, "情绪张力")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

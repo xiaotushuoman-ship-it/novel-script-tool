@@ -287,6 +287,21 @@ function delay(milliseconds: number): Promise<void> {
 }
 
 function splitStoryboardSegments(text: string): string[] {
+  const xiaotuSkillMatches = [
+    ...text.matchAll(
+      /(?:^|\n)(?=(?:#{1,6}\s*)?[【\[]?\s*(?:段落\s*\d+|第\s*\d+\s*段)[^\n]*(?:一镜到底|多机位分镜)[】\]]?)/g,
+    ),
+  ];
+  if (xiaotuSkillMatches.length > 1) {
+    return xiaotuSkillMatches
+      .map((match, index) => {
+        const start = match.index ?? 0;
+        const end = xiaotuSkillMatches[index + 1]?.index ?? text.length;
+        return text.slice(start, end).trim();
+      })
+      .filter(Boolean);
+  }
+
   const segmentMatches = [
     ...text.matchAll(
       /(?:^|\n)(?=(?:#{1,6}\s*)?(?:[【\[]?\s*第\s*\d+\s*(?:段|组|幕|个\s*15S|个15S)(?:\s*单元)?|[【\[]?\s*(?:15S\s*)?(?:段落|单元|段落单元|分镜单元)\s*\d+|[【\[]?\s*单元段落\s*\d+|[【\[]?\s*Segment\s*\d+))/gi,

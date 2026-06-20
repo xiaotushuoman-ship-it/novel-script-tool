@@ -142,6 +142,24 @@ describe("zzdhClient", () => {
     expect(panels[1].paperwork).toContain("shot 1 reaction");
   });
 
+  it("parses xiaotu skill segment headings into separate ZZDH panels", () => {
+    const panels = parseStoryboardPanels(
+      [
+        "【段落1｜15秒｜多机位分镜】",
+        "【基础设定】角色：许明舟，站在夜市摊前。",
+        "【画面内容】[0-4s] 许明舟抬头看向来人。",
+        "",
+        "【段落2｜12秒｜一镜到底】",
+        "【基础设定】角色：许明舟、万金宝，夜市摊前对峙。",
+        "【画面内容】[0-5s] 万金宝把账单拍在桌上。",
+      ].join("\n"),
+    );
+
+    expect(panels).toHaveLength(2);
+    expect(panels[0].paperwork).toContain("许明舟抬头看向来人");
+    expect(panels[1].paperwork).toContain("万金宝把账单拍在桌上");
+  });
+
   it("parses Chinese 15S unit headings into ordered ZZDH panels", () => {
     const panels = parseStoryboardPanels(
       [

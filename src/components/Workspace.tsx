@@ -2,6 +2,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { callAi, callAiStream, callImageGeneration, type AiSettings } from "../domain/aiClient";
 import {
+  createAistarsLabVideoTask,
+  fetchAistarsLabCredits,
+  fetchAistarsLabVideoConfig,
+  fetchAistarsLabVideoTask,
+  getSeedanceModelsForChannel,
+  normalizeSeedanceVideoCount,
+  normalizeAistarsLabEndpoint,
+  resolveSeedanceModelSelection,
+  uploadAistarsLabMaterial,
+  type AistarsLabVideoConfig,
+  type AistarsLabVideoTask,
+} from "../domain/aistarslabVideo";
+import {
   addAssetLibraryItem,
   deleteAssetLibraryItem,
   loadAssetLibrary,
@@ -73,6 +86,36 @@ type TopicRecommendationState = {
   message: string;
 };
 
+type SeedanceVideoResult = {
+  id: string;
+  taskId: string;
+  url: string;
+  prompt: string;
+  model: string;
+  channel: string;
+  seconds: number;
+  size: string;
+  costCredits?: number;
+};
+
+type SeedanceVideoJob = {
+  id: string;
+  index: number;
+  taskId?: string;
+  status: "creating" | "queued" | "generating" | "completed" | "failed";
+  label: string;
+  percent: number;
+  error?: string;
+  result?: SeedanceVideoResult;
+};
+
+type SeedanceMaterialItem = {
+  id: string;
+  type: "image" | "video" | "audio";
+  name: string;
+  url: string;
+};
+
 type Props = {
   project: Project;
   aiSettings: AiSettings;
@@ -91,9 +134,12 @@ const STEP_NAME_BY_ID: Record<TemplateId, string> = {
   "asset-library": "资产库",
   "storyboard-15s": "15S 分镜脚本（只支持单集剧本拆分）",
   "gpt-image2-storyboard": "GPT-image2 六宫格故事板",
+  "xiaotu-skill": "小兔skill",
+  "seedance-video": "SEEDANCE2.0 视频生成",
 };
 
 const NO_PREVIEWABLE_IMAGE_MESSAGE = "模型已响应，但没有返回可预览图片。请换生图模型或检查该模型是否支持图片输出。";
+const SEEDANCE_VIDEO_MAX_POLL_ATTEMPTS = 240;
 const DEFAULT_CUSTOM_IMAGE_PREFIX = [
   "布局标准：横向专业角色设定表",
   "左侧区域：正面面部高清特写（重点展示妆容细节）",
@@ -123,6 +169,19 @@ export function Workspace({
   const [storyboardImageResults, setStoryboardImageResults] = useState<ImageResult[]>([]);
   const [storyboardImageProgress, setStoryboardImageProgress] = useState<GenerationProgress | null>(null);
   const [storyboardImageStatus, setStoryboardImageStatus] = useState("");
+  const [seedanceVideoConfig, setSeedanceVideoConfig] = useState<AistarsLabVideoConfig | null>(null);
+  const [seedanceCredits, setSeedanceCredits] = useState<number | null>(null);
+  const [seedanceConnectionStatus, setSeedanceConnectionStatus] = useState("");
+  const [seedanceVideoStatus, setSeedanceVideoStatus] = useState("");
+  const [seedanceVideoProgress, setSeedanceVideoProgress] = useState<GenerationProgress | null>(null);
+  const [seedanceVideoTask, setSeedanceVideoTask] = useState<AistarsLabVideoTask | null>(null);
+  const [seedanceVideoJobs, setSeedanceVideoJobs] = useState<SeedanceVideoJob[]>([]);
+  const [seedanceVideoResults, setSeedanceVideoResults] = useState<SeedanceVideoResult[]>([]);
+  const [seedanceMaterials, setSeedanceMaterials] = useState<SeedanceMaterialItem[]>([]);
+  const [seedanceMentionQuery, setSeedanceMentionQuery] = useState<string | null>(null);
+  const [isLoadingSeedanceConfig, setIsLoadingSeedanceConfig] = useState(false);
+  const [isGeneratingSeedanceVideo, setIsGeneratingSeedanceVideo] = useState(false);
+  const [isUploadingSeedanceMaterial, setIsUploadingSeedanceMaterial] = useState(false);
   const [seedanceSafetyReport, setSeedanceSafetyReport] = useState<SeedanceSafetyReport | null>(null);
   const [customImagePrefix, setCustomImagePrefix] = useState(DEFAULT_CUSTOM_IMAGE_PREFIX);
   const [customImagePrompt, setCustomImagePrompt] = useState("");
@@ -152,6 +211,7 @@ export function Workspace({
   const storyboardImageProgressTimerRef = useRef<number | null>(null);
   const textProgressTimerRefs = useRef<Partial<Record<TemplateId, number>>>({});
   const imageResultIdRef = useRef(0);
+  const seedancePromptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const currentGeneration = generationByStep[project.currentStep] ?? {
     isCalling: false,
     status: "",
@@ -190,6 +250,32 @@ export function Workspace({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [previewImage]);
 
+  useEffect(() => {
+    if (project.currentStep !== "seedance-video" || !seedanceVideoConfig) return;
+    const selection = resolveSeedanceModelSelection(seedanceVideoConfig, step.inputs.seedanceChannel, step.inputs.seedanceModel);
+    if (
+      selection.channel !== step.inputs.seedanceChannel ||
+      selection.model !== step.inputs.seedanceModel ||
+      selection.resolution !== step.inputs.seedanceResolution
+    ) {
+      onProjectChange({
+        ...project,
+        steps: {
+          ...project.steps,
+          [project.currentStep]: {
+            ...step,
+            inputs: {
+              ...step.inputs,
+              seedanceChannel: selection.channel,
+              seedanceModel: selection.model,
+              seedanceResolution: selection.resolution,
+            },
+          },
+        },
+      });
+    }
+  }, [onProjectChange, project, seedanceVideoConfig, step]);
+
   const prompt = useMemo(() => {
     try {
       return buildPrompt(template, step.inputs);
@@ -221,6 +307,43 @@ export function Workspace({
       return extracted ?? { number: chapterNumber, title: `第${chapterNumber}章`, outline: `第${chapterNumber}章` };
     });
   }, [project.currentStep, step.draft, step.inputs.totalChapters]);
+  const visibleSeedanceMaterials = useMemo(() => {
+    if (project.currentStep !== "seedance-video") return [];
+    const uploadedByUrl = new Map(seedanceMaterials.map((item) => [item.url, item]));
+    const fromInputs: SeedanceMaterialItem[] = [
+      ...parseReferenceUrls(step.inputs.seedanceImageUrls).map((url, index) => ({
+        id: `input-image-${index}-${url}`,
+        type: "image" as const,
+        name: `参考图片 ${index + 1}`,
+        url,
+      })),
+      ...parseReferenceUrls(step.inputs.seedanceVideoUrls).map((url, index) => ({
+        id: `input-video-${index}-${url}`,
+        type: "video" as const,
+        name: `参考视频 ${index + 1}`,
+        url,
+      })),
+      ...parseReferenceUrls(step.inputs.seedanceAudioUrls).map((url, index) => ({
+        id: `input-audio-${index}-${url}`,
+        type: "audio" as const,
+        name: `参考音频 ${index + 1}`,
+        url,
+      })),
+    ];
+    return fromInputs.map((item) => uploadedByUrl.get(item.url) ?? item);
+  }, [project.currentStep, seedanceMaterials, step.inputs.seedanceAudioUrls, step.inputs.seedanceImageUrls, step.inputs.seedanceVideoUrls]);
+  const seedanceAvailableModels = useMemo(
+    () => getSeedanceModelsForChannel(seedanceVideoConfig, step.inputs.seedanceChannel),
+    [seedanceVideoConfig, step.inputs.seedanceChannel],
+  );
+  const seedanceMentionOptions = useMemo(() => {
+    if (seedanceMentionQuery === null) return [];
+    const query = normalizeSeedanceMention(seedanceMentionQuery);
+    return visibleSeedanceMaterials.filter((item) => {
+      if (!query) return true;
+      return normalizeSeedanceMention(item.name).includes(query);
+    });
+  }, [seedanceMentionQuery, visibleSeedanceMaterials]);
   const assetLibraryGroups = useMemo(
     () => ({
       人物: assetLibraryItems.filter((item) => item.type === "人物"),
@@ -254,6 +377,44 @@ export function Workspace({
         [project.currentStep]: {
           ...step,
           inputs: { ...step.inputs, [key]: value },
+        },
+      },
+    });
+  }
+
+  function updateSeedanceChannel(channelValue: string) {
+    const selection = resolveSeedanceModelSelection(seedanceVideoConfig, channelValue);
+    onProjectChange({
+      ...project,
+      steps: {
+        ...project.steps,
+        [project.currentStep]: {
+          ...step,
+          inputs: {
+            ...step.inputs,
+            seedanceChannel: channelValue,
+            seedanceModel: selection.model,
+            seedanceResolution: selection.resolution,
+          },
+        },
+      },
+    });
+  }
+
+  function updateSeedanceModel(modelValue: string) {
+    const models = getSeedanceModelsForChannel(seedanceVideoConfig, step.inputs.seedanceChannel);
+    const model = models.find((item) => item.model === modelValue);
+    onProjectChange({
+      ...project,
+      steps: {
+        ...project.steps,
+        [project.currentStep]: {
+          ...step,
+          inputs: {
+            ...step.inputs,
+            seedanceModel: modelValue,
+            seedanceResolution: model?.resolutions?.[0] ?? step.inputs.seedanceResolution ?? "720p",
+          },
         },
       },
     });
@@ -550,6 +711,12 @@ export function Workspace({
     updateDraft("");
     if (project.currentStep === "asset-extraction") setAssetImageResults([]);
     if (project.currentStep === "gpt-image2-storyboard") setStoryboardImageResults([]);
+    if (project.currentStep === "seedance-video") {
+      setSeedanceVideoTask(null);
+      setSeedanceVideoResults([]);
+      setSeedanceVideoProgress(null);
+      setSeedanceVideoStatus("");
+    }
     setStatus("已清空当前结果区");
   }
 
@@ -795,8 +962,318 @@ export function Workspace({
   function runSeedanceSafetyCheck() {
     const checkedText = step.draft.trim() || prompt;
     const report = checkSeedanceSafety(checkedText);
-    setSeedanceSafetyReport(report);
-    setStatus(report.summary);
+    setSeedanceSafetyReport(null);
+    if (report.optimizedText.trim()) {
+      updateDraft(report.optimizedText);
+      setStatus(report.hasIssues ? "已检测并自动优化 SEEDAN2.0 风险内容" : report.summary);
+    } else {
+      setStatus(report.summary);
+    }
+  }
+
+  function getSeedanceVideoSettings() {
+    return {
+      endpoint: normalizeAistarsLabEndpoint(step.inputs.seedanceEndpoint || "/api/aistarslab/openapi"),
+      apiKey: step.inputs.seedanceApiKey?.trim() || aiSettings.apiKey,
+    };
+  }
+
+  function parseReferenceUrls(value: string | undefined) {
+    return String(value || "")
+      .split(/\r?\n|,/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function normalizeSeedanceMention(value: string) {
+    return value.replace(/^@/, "").replace(/\s+/g, "").trim().toLowerCase();
+  }
+
+  function getActiveSeedanceMentionRange(value: string, cursorPosition: number) {
+    const beforeCursor = value.slice(0, cursorPosition);
+    const atIndex = beforeCursor.lastIndexOf("@");
+    if (atIndex < 0) return null;
+    const fragment = beforeCursor.slice(atIndex + 1);
+    if (/[\n\r，,。；;、]/.test(fragment)) return null;
+    return { start: atIndex, end: cursorPosition, query: fragment };
+  }
+
+  function refreshSeedanceMentionPicker(textarea: HTMLTextAreaElement) {
+    const activeMention = getActiveSeedanceMentionRange(textarea.value, textarea.selectionStart);
+    setSeedanceMentionQuery(activeMention?.query ?? null);
+  }
+
+  function getPromptSelectedMaterials(type: SeedanceMaterialItem["type"], sourceText: string) {
+    const typedMaterials = visibleSeedanceMaterials.filter((item) => item.type === type);
+    const mentionTokens = [
+      ...Array.from(sourceText.matchAll(/@(参考图片|参考视频|参考音频)\s*(\d+)/g)).map((match) => normalizeSeedanceMention(`${match[1]}${match[2]}`)),
+      ...Array.from(sourceText.matchAll(/@([^\n\r，,。；;、]+)/g)).map((match) => normalizeSeedanceMention(match[1])),
+    ];
+    if (mentionTokens.length === 0) return typedMaterials;
+
+    return typedMaterials.filter((item) => {
+      const normalizedName = normalizeSeedanceMention(item.name);
+      const compactGenericName = normalizeSeedanceMention(
+        `${item.type === "image" ? "参考图片" : item.type === "video" ? "参考视频" : "参考音频"} ${typedMaterials.indexOf(item) + 1}`,
+      );
+      return mentionTokens.some((token) => normalizedName.includes(token) || token.includes(normalizedName) || compactGenericName.includes(token) || token.includes(compactGenericName));
+    });
+  }
+
+  async function loadSeedanceVideoConfig() {
+    setIsLoadingSeedanceConfig(true);
+    setSeedanceConnectionStatus("正在测试连接...");
+    setSeedanceVideoStatus("正在测试 AIStartLab 连接...");
+    try {
+      const settings = getSeedanceVideoSettings();
+      const [config, credits] = await Promise.all([
+        fetchAistarsLabVideoConfig(settings),
+        fetchAistarsLabCredits(settings).catch(() => null),
+      ]);
+      setSeedanceVideoConfig(config);
+      setSeedanceCredits(credits);
+      const defaultChannel = config.channels.find((channel) => channel.defaultOption) ?? config.channels[0];
+      const defaultModel = defaultChannel?.models.find((model) => model.defaultOption) ?? defaultChannel?.models[0];
+      if (defaultChannel && !step.inputs.seedanceChannel) updateInput("seedanceChannel", defaultChannel.channel);
+      if (defaultModel && !step.inputs.seedanceModel) updateInput("seedanceModel", defaultModel.model);
+      if (defaultModel?.resolutions?.[0] && !step.inputs.seedanceResolution) updateInput("seedanceResolution", defaultModel.resolutions[0]);
+      const message = `连接成功，已读取 ${config.channels.length} 条线路${credits === null ? "" : `，当前积分 ${credits}`}`;
+      setSeedanceConnectionStatus(message);
+      setSeedanceVideoStatus(message);
+    } catch (error) {
+      const message = error instanceof Error ? `连接失败：${error.message}` : "连接失败";
+      setSeedanceConnectionStatus(message);
+      setSeedanceVideoStatus(message);
+    } finally {
+      setIsLoadingSeedanceConfig(false);
+    }
+  }
+
+  async function uploadSeedanceMaterial(file: File | undefined) {
+    if (!file) return;
+    setIsUploadingSeedanceMaterial(true);
+    setSeedanceVideoStatus(`正在上传素材：${file.name}`);
+    try {
+      const material = await uploadAistarsLabMaterial(getSeedanceVideoSettings(), file);
+      const materialType: SeedanceMaterialItem["type"] = file.type.startsWith("video/")
+        ? "video"
+        : file.type.startsWith("audio/")
+          ? "audio"
+          : "image";
+      const targetKey = file.type.startsWith("video/")
+        ? "seedanceVideoUrls"
+        : file.type.startsWith("audio/")
+          ? "seedanceAudioUrls"
+          : "seedanceImageUrls";
+      const currentUrls = parseReferenceUrls(step.inputs[targetKey]);
+      updateInput(targetKey, [...currentUrls, material.url].join("\n"));
+      setSeedanceMaterials((current) => [
+        {
+          id: `material-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: materialType,
+          name: file.name,
+          url: material.url,
+        },
+        ...current,
+      ]);
+      setSeedanceVideoStatus(`素材上传完成，已加入参考列表：${file.name}`);
+    } catch (error) {
+      setSeedanceVideoStatus(error instanceof Error ? `素材上传失败：${error.message}` : "素材上传失败");
+    } finally {
+      setIsUploadingSeedanceMaterial(false);
+    }
+  }
+
+  async function uploadSeedanceMaterials(files: FileList | File[]) {
+    for (const file of Array.from(files)) {
+      await uploadSeedanceMaterial(file);
+    }
+  }
+
+  function removeSeedanceMaterial(item: SeedanceMaterialItem) {
+    const targetKey = item.type === "video" ? "seedanceVideoUrls" : item.type === "audio" ? "seedanceAudioUrls" : "seedanceImageUrls";
+    const nextUrls = parseReferenceUrls(step.inputs[targetKey]).filter((url) => url !== item.url);
+    updateInput(targetKey, nextUrls.join("\n"));
+    setSeedanceMaterials((current) => current.filter((material) => material.id !== item.id));
+    setSeedanceVideoStatus(`已移除参考素材：${item.name}`);
+  }
+
+  function insertSeedanceMaterialMention(item: SeedanceMaterialItem) {
+    const mention = `@${item.name}`;
+    const current = step.inputs.videoPromptSource ?? "";
+    const textarea = seedancePromptTextareaRef.current;
+    const activeMention = textarea ? getActiveSeedanceMentionRange(current, textarea.selectionStart) : null;
+
+    if (!activeMention && current.includes(mention)) {
+      setSeedanceVideoStatus(`提示词里已包含参考素材：${mention}`);
+      return;
+    }
+
+    const canInsertAtCursor = textarea && document.activeElement === textarea;
+    const start = activeMention?.start ?? (canInsertAtCursor ? textarea.selectionStart : current.length);
+    const end = activeMention?.end ?? (canInsertAtCursor ? textarea.selectionEnd : current.length);
+    const prefix = current.slice(0, start);
+    const suffix = current.slice(end);
+    const needsLeadingBreak = prefix.length > 0 && !prefix.endsWith("\n") && !prefix.endsWith(" ");
+    const needsTrailingBreak = suffix.length > 0 && !suffix.startsWith("\n") && !suffix.startsWith(" ");
+    const insertedText = activeMention ? mention : `${needsLeadingBreak ? "\n" : ""}${mention}${needsTrailingBreak ? "\n" : ""}`;
+    const next = `${prefix}${insertedText}${suffix}`;
+    updateInput("videoPromptSource", next);
+    setSeedanceMentionQuery(null);
+    window.setTimeout(() => {
+      const nextPosition = prefix.length + insertedText.length;
+      seedancePromptTextareaRef.current?.focus();
+      seedancePromptTextareaRef.current?.setSelectionRange(nextPosition, nextPosition);
+    }, 0);
+    setSeedanceVideoStatus(`已插入参考素材：${mention}`);
+  }
+
+  function updateSeedanceVideoJob(jobId: string, patch: Partial<SeedanceVideoJob>) {
+    setSeedanceVideoJobs((current) => current.map((job) => (job.id === jobId ? { ...job, ...patch } : job)));
+  }
+
+  async function runSeedanceVideoGeneration() {
+    const videoPrompt = (step.inputs.videoPromptSource || "").trim();
+    if (!videoPrompt) {
+      setSeedanceVideoStatus("请先填写或生成视频提示词。");
+      return;
+    }
+
+    const selectedImageMaterials = getPromptSelectedMaterials("image", videoPrompt);
+    const selectedVideoMaterials = getPromptSelectedMaterials("video", videoPrompt);
+    const selectedAudioMaterials = getPromptSelectedMaterials("audio", videoPrompt);
+    const imageUrls = selectedImageMaterials.map((item) => item.url);
+    const videoUrls = selectedVideoMaterials.map((item) => item.url);
+    const audioUrls = selectedAudioMaterials.map((item) => item.url);
+    if (/@参考图片\s*\d+/.test(videoPrompt) && imageUrls.length === 0) {
+      setSeedanceVideoStatus("提示词里写了 @参考图片，但没有匹配到对应参考图片。请先上传素材，或点击素材卡片的 @调用。");
+      return;
+    }
+    const requestedModeType = step.inputs.modeType || "text2video";
+    const modeType = imageUrls.length === 2 && requestedModeType === "frames2video"
+      ? "frames2video"
+      : imageUrls.length > 0 || videoUrls.length > 0 || audioUrls.length > 0
+        ? "image2video"
+        : "text2video";
+    if (requestedModeType === "frames2video" && imageUrls.length !== 2) {
+      setSeedanceVideoStatus("首尾帧模式需要正好 2 张参考图片 URL。");
+      return;
+    }
+
+    const seconds = Number.parseInt(step.inputs.seconds || "5", 10) || 5;
+    const selection = resolveSeedanceModelSelection(seedanceVideoConfig, step.inputs.seedanceChannel, step.inputs.seedanceModel);
+    const channel = selection.channel;
+    const model = selection.model;
+    const size = step.inputs.size || "9:16";
+    const resolution = selection.resolution;
+    const videoCount = normalizeSeedanceVideoCount(step.inputs.seedanceVideoCount, 6);
+    const settings = getSeedanceVideoSettings();
+
+    setIsGeneratingSeedanceVideo(true);
+    setSeedanceVideoTask(null);
+    setSeedanceVideoProgress({ label: `创建 ${videoCount} 条视频任务`, percent: 5 });
+    setSeedanceVideoStatus(`正在并发创建 ${videoCount} 条 SEEDANCE2.0 视频任务，已调用参考图片 ${imageUrls.length} 张、参考视频 ${videoUrls.length} 条、参考音频 ${audioUrls.length} 条。`);
+    const jobs: SeedanceVideoJob[] = Array.from({ length: videoCount }, (_, index) => ({
+      id: `seedance-job-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+      index: index + 1,
+      status: "creating",
+      label: "创建任务",
+      percent: 5,
+    }));
+    setSeedanceVideoJobs((current) => [...jobs, ...current]);
+
+    try {
+      await Promise.allSettled(
+        jobs.map(async (job) => {
+          try {
+            const created = await createAistarsLabVideoTask(settings, {
+              channel,
+              model,
+              resolution,
+              prompt: videoPrompt,
+              seconds,
+              size,
+              modeType,
+              images: imageUrls,
+              videos: videoUrls,
+              audios: audioUrls,
+            });
+
+            updateSeedanceVideoJob(job.id, {
+              taskId: created.taskId,
+              status: "queued",
+              label: "任务排队中",
+              percent: 15,
+            });
+            setSeedanceVideoStatus(`已创建任务 ${job.index}/${videoCount}：${created.taskId}`);
+
+            const startedAt = Date.now();
+            let latestTask: AistarsLabVideoTask = {
+              taskId: created.taskId,
+              status: created.status,
+              progress: 0,
+              costCredits: created.costCredits,
+            };
+
+            for (let attempt = 0; attempt < SEEDANCE_VIDEO_MAX_POLL_ATTEMPTS; attempt += 1) {
+              await wait(attempt < 4 ? 1500 : 3000);
+              latestTask = await fetchAistarsLabVideoTask(settings, created.taskId);
+              setSeedanceVideoTask(latestTask);
+              const fallbackPercent = Math.min(92, 15 + Math.floor((Date.now() - startedAt) / 1000));
+              const reportedPercent = typeof latestTask.progress === "number" ? latestTask.progress : fallbackPercent;
+              const percent = latestTask.status === 3 ? 100 : Math.min(98, Math.max(15, reportedPercent));
+              const label = latestTask.status === 1 ? "任务排队中" : latestTask.status === 2 ? "视频生成中" : latestTask.status === 3 ? "生成完成" : "生成失败";
+              updateSeedanceVideoJob(job.id, {
+                taskId: latestTask.taskId,
+                status: latestTask.status === 1 ? "queued" : latestTask.status === 2 ? "generating" : latestTask.status === 3 ? "completed" : "failed",
+                label,
+                percent,
+              });
+
+              if (latestTask.status === 3) {
+                if (!latestTask.outputUrl) throw new Error("任务完成但没有返回视频地址");
+                const result: SeedanceVideoResult = {
+                  id: `seedance-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                  taskId: latestTask.taskId,
+                  url: latestTask.outputUrl,
+                  prompt: videoPrompt,
+                  model,
+                  channel,
+                  seconds,
+                  size,
+                  costCredits: latestTask.costCredits ?? created.costCredits,
+                };
+                updateSeedanceVideoJob(job.id, { result, status: "completed", label: "生成完成", percent: 100 });
+                setSeedanceVideoResults((current) => [result, ...current]);
+                return;
+              }
+
+              if (latestTask.status === 4) {
+                throw new Error(latestTask.errorMessage || latestTask.errorCode || "视频任务生成失败");
+              }
+            }
+
+            throw new Error("等待超时：平台可能仍在后台生成，请稍后到平台后台查看，或重新提交同一提示词。");
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "视频生成失败";
+            updateSeedanceVideoJob(job.id, {
+              status: "failed",
+              label: message.startsWith("等待超时") ? "等待超时" : "生成失败",
+              percent: 100,
+              error: message,
+            });
+          }
+        }),
+      );
+
+      setSeedanceVideoProgress({ label: "批量任务已结束", percent: 100 });
+      setSeedanceVideoStatus("批量视频生成已结束，请查看每条任务的完成状态或失败原因。");
+    } catch (error) {
+      setSeedanceVideoProgress({ label: "生成失败", percent: 100 });
+      setSeedanceVideoStatus(error instanceof Error ? `视频生成失败：${error.message}` : "视频生成失败");
+    } finally {
+      setIsGeneratingSeedanceVideo(false);
+    }
   }
 
   function prepareImageDrag(event: React.DragEvent<HTMLImageElement>, image: ImageResult, filename: string) {
@@ -1110,9 +1587,14 @@ export function Workspace({
   }
 
   async function sendCurrentStoryboardToZzdh() {
-    if (project.currentStep !== "storyboard-15s") return;
+    const canSendToZzdh = project.currentStep === "storyboard-15s" || project.currentStep === "xiaotu-skill";
+    if (!canSendToZzdh) return;
     if (!step.draft.trim()) {
-      setStatus("请先生成或粘贴15S分镜脚本，再发送到字字动画。");
+      setStatus(
+        project.currentStep === "xiaotu-skill"
+          ? "请先生成或粘贴小兔skill结果，再发送到字字动画。"
+          : "请先生成或粘贴15S分镜脚本，再发送到字字动画。",
+      );
       return;
     }
 
@@ -1846,6 +2328,8 @@ export function Workspace({
       (project.currentStep === "novel-to-script" && field.key === "sourceScene") ||
       (project.currentStep === "storyboard-15s" && field.key === "scriptText") ||
       (project.currentStep === "gpt-image2-storyboard" && field.key === "sourceText") ||
+      (project.currentStep === "xiaotu-skill" && field.key === "sourceText") ||
+      (project.currentStep === "seedance-video" && field.key === "videoPromptSource") ||
       (project.currentStep === "asset-extraction" && field.key === "sourceText");
 
     if (canImportText) {
@@ -2143,6 +2627,360 @@ export function Workspace({
     );
   }
 
+  if (project.currentStep === "seedance-video") {
+    return (
+      <section className="workspace">
+        <div className="workspace-header">
+          <div>
+            <p className="eyebrow">当前步骤</p>
+            <h2>{template.name}</h2>
+            <p>{template.description}</p>
+          </div>
+        </div>
+
+        <div aria-label="SEEDANCE2.0 视频生成区" className="asset-generation-panel">
+          <div className="section-heading">
+            <h3>SEEDANCE2.0 视频生成区</h3>
+            <div className="heading-actions">
+              <button className="secondary-button" disabled={currentGeneration.isCalling} onClick={runAi}>
+                <Bot size={16} />
+                {currentGeneration.isCalling ? "生成中" : "整理提示词"}
+              </button>
+              <button className="secondary-button" onClick={clearResults}>
+                <Trash2 size={16} />
+                一键清除
+              </button>
+            </div>
+          </div>
+
+          <div className="seedance-parameter-panel">
+            <div className="section-heading compact-heading">
+              <h3>生成参数</h3>
+            </div>
+            <div className="storyboard-image-settings seedance-generation-settings">
+              {renderTemplateSelectControl("modeType")}
+              <label>
+                <span>视频时长（秒）</span>
+                <input
+                  aria-label="视频时长（秒）"
+                  max={15}
+                  min={1}
+                  type="number"
+                  value={step.inputs.seconds ?? "5"}
+                  onChange={(event) => updateInput("seconds", event.target.value)}
+                />
+              </label>
+              <label>
+                <span>生成数量</span>
+                <input
+                  aria-label="视频生成数量"
+                  max={6}
+                  min={1}
+                  type="number"
+                  value={step.inputs.seedanceVideoCount ?? "1"}
+                  onChange={(event) => updateInput("seedanceVideoCount", event.target.value)}
+                />
+              </label>
+              {renderTemplateSelectControl("size")}
+              {renderTemplateSelectControl("visualStyle")}
+              <label>
+                <span>线路 Channel</span>
+                <select aria-label="线路 Channel" value={step.inputs.seedanceChannel ?? "test"} onChange={(event) => updateSeedanceChannel(event.target.value)}>
+                  <option value="test">test（测试线路）</option>
+                  {(seedanceVideoConfig?.channels ?? []).map((channel) => (
+                    <option key={channel.channel} value={channel.channel}>
+                      {channel.channel}｜{channel.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>模型 Model</span>
+                <select aria-label="模型 Model" value={step.inputs.seedanceModel ?? "test-video"} onChange={(event) => updateSeedanceModel(event.target.value)}>
+                  {seedanceAvailableModels.length === 0 ? <option value="test-video">test-video（测试模型）</option> : null}
+                  {seedanceAvailableModels.map((model) => (
+                    <option key={`${model.model}-${model.label}`} value={model.model}>
+                      {model.model}｜{model.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <details className="seedance-advanced-settings seedance-api-settings">
+              <summary>API 地址与 KEY</summary>
+              <div className="storyboard-image-settings">
+                <label>
+                  <span className="inline-field-heading">
+                    API 地址
+                    <button
+                      className="text-link-button"
+                      type="button"
+                      onClick={() => window.open("https://video.aistarslab.com/signup?invite_code=jWZhc", "_blank", "noopener,noreferrer")}
+                    >
+                      注册
+                    </button>
+                  </span>
+                  <input aria-label="AIStartLab API 地址" value={step.inputs.seedanceEndpoint ?? "/api/aistarslab/openapi"} onChange={(event) => updateInput("seedanceEndpoint", event.target.value)} />
+                </label>
+                <label>
+                  <span className="inline-field-heading">
+                    API KEY
+                    <button className="text-link-button" disabled={isLoadingSeedanceConfig} type="button" onClick={loadSeedanceVideoConfig}>
+                      {isLoadingSeedanceConfig ? "测试中" : "测试连接"}
+                    </button>
+                  </span>
+                  <input aria-label="AIStartLab API KEY" placeholder="默认复用弹窗 API KEY，也可单独填写" type="password" value={step.inputs.seedanceApiKey ?? ""} onChange={(event) => updateInput("seedanceApiKey", event.target.value)} />
+                </label>
+              </div>
+              {seedanceConnectionStatus ? (
+                <p className={seedanceConnectionStatus.startsWith("连接失败") ? "error-text" : "success-text"}>
+                  {seedanceConnectionStatus}
+                </p>
+              ) : null}
+            </details>
+          </div>
+
+          <label className="wide-field seedance-prompt-field">
+            <span>
+              小说/剧本/分镜/视频提示词
+              <b>必填</b>
+            </span>
+            <div
+              className="import-dropzone"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                const files = Array.from(event.dataTransfer.files);
+                const textFile = files.find((file) => /^text\/|json|markdown|csv|srt|vtt/i.test(file.type) || /\.(txt|md|csv|json|srt|vtt|log)$/i.test(file.name));
+                const mediaFiles = files.filter((file) => file !== textFile);
+                if (textFile) void importTextFile(textFile, "videoPromptSource");
+                if (mediaFiles.length > 0) void uploadSeedanceMaterials(mediaFiles);
+              }}
+            >
+              <textarea
+                aria-label="小说/剧本/分镜/视频提示词"
+                ref={seedancePromptTextareaRef}
+                value={step.inputs.videoPromptSource ?? ""}
+                onChange={(event) => {
+                  updateInput("videoPromptSource", event.target.value);
+                  refreshSeedanceMentionPicker(event.currentTarget);
+                }}
+                onClick={(event) => refreshSeedanceMentionPicker(event.currentTarget)}
+                onKeyUp={(event) => refreshSeedanceMentionPicker(event.currentTarget)}
+              />
+              {seedanceMentionQuery !== null ? (
+                <div className="seedance-mention-picker" aria-label="参考素材选择">
+                  {seedanceMentionOptions.length > 0 ? (
+                    seedanceMentionOptions.map((item) => (
+                      <button key={item.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => insertSeedanceMaterialMention(item)}>
+                        <span>{item.name}</span>
+                        <small>{item.type === "image" ? "图片" : item.type === "video" ? "视频" : "音频"}</small>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="muted">没有匹配的参考素材，请先上传或换个关键词。</p>
+                  )}
+                </div>
+              ) : null}
+              <div className="import-tools">
+                <label className="file-import-button">
+                  <FileUp size={16} />
+                  导入文档
+                  <input
+                    accept=".txt,.md,.csv,.json,.srt,.vtt,.log,.text"
+                    aria-label="导入文档"
+                    type="file"
+                    onChange={(event) => {
+                      void importTextFile(event.target.files?.[0], "videoPromptSource");
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+                <label className="file-import-button">
+                  <FileUp size={16} />
+                  {isUploadingSeedanceMaterial ? "上传中" : "上传素材"}
+                  <input
+                    accept="image/*,video/*,audio/*"
+                    aria-label="上传 SEEDANCE 参考素材"
+                    multiple
+                    type="file"
+                    onChange={(event) => {
+                      void uploadSeedanceMaterials(event.target.files ?? []);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+                <button className="secondary-button" type="button" onClick={() => updateInput("videoPromptSource", "")}>
+                  <Trash2 size={16} />
+                  清除文案
+                </button>
+                <button className="secondary-button" type="button" onClick={runSeedanceVideoGeneration}>
+                  <Play size={16} />
+                  生成视频
+                </button>
+                <span>支持导入文本，也可以拖入图片、视频、音频作为参考素材。</span>
+              </div>
+            </div>
+          </label>
+
+          <div
+            className="custom-image-panel seedance-material-panel"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              void uploadSeedanceMaterials(event.dataTransfer.files);
+            }}
+          >
+            <div className="section-heading">
+              <h3>参考素材</h3>
+            </div>
+            <p className="muted">拖入或导入图片、视频、音频即可作为参考素材；无素材时自动按文生视频，有素材时自动按参考生视频。</p>
+            <div className="seedance-material-grid">
+              {visibleSeedanceMaterials.length > 0 ? (
+                visibleSeedanceMaterials.map((item) => (
+                  <article className="seedance-material-card" key={item.id}>
+                    {item.type === "image" ? <img alt={item.name} src={item.url} /> : item.type === "video" ? <video src={item.url} /> : <div className="seedance-audio-card">音频</div>}
+                    <div>
+                      <strong>{item.name}</strong>
+                      <span>{item.type === "image" ? "图片参考" : item.type === "video" ? "视频参考" : "音频参考"}</span>
+                    </div>
+                    <div className="heading-actions">
+                      <button className="secondary-button" onClick={() => insertSeedanceMaterialMention(item)}>
+                        @调用
+                      </button>
+                      <button className="danger-button" onClick={() => removeSeedanceMaterial(item)}>
+                        删除
+                      </button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">暂无参考素材。可以直接文生视频，也可以拖入素材进行图生/参考生视频。</p>
+              )}
+            </div>
+          </div>
+
+          {seedanceVideoStatus ? <div className="status-line">{seedanceVideoStatus}</div> : null}
+          {seedanceCredits !== null ? <p className="muted">当前账号积分：{seedanceCredits}</p> : null}
+          {seedanceVideoTask ? (
+            <p className="muted">
+              当前任务：{seedanceVideoTask.taskId} ｜ 状态 {seedanceVideoTask.status}
+              {typeof seedanceVideoTask.costCredits === "number" ? ` ｜ 消耗 ${seedanceVideoTask.costCredits} 积分` : ""}
+            </p>
+          ) : null}
+          {seedanceVideoProgress ? (
+            <div className="generation-progress" aria-label="SEEDANCE视频生成进度" aria-live="polite">
+              <div className="progress-header">
+                <strong>视频生成进度</strong>
+                <span>{seedanceVideoProgress.label}</span>
+                <b>{seedanceVideoProgress.percent}%</b>
+              </div>
+              <div aria-label="SEEDANCE视频生成进度" aria-valuemax={100} aria-valuemin={0} aria-valuenow={seedanceVideoProgress.percent} className="progress-track" role="progressbar">
+                <div className="progress-fill" style={{ width: `${seedanceVideoProgress.percent}%` }} />
+              </div>
+            </div>
+          ) : null}
+
+          {seedanceVideoJobs.length > 0 ? (
+            <div className="seedance-job-panel" aria-label="SEEDANCE视频任务进度">
+              <div className="section-heading compact-heading">
+                <h3>视频任务列表</h3>
+                <div className="heading-actions">
+                  <button className="secondary-button" onClick={() => setSeedanceVideoJobs([])}>
+                    <Trash2 size={16} />
+                    一键清除
+                  </button>
+                </div>
+              </div>
+              <div className="seedance-job-list">
+                {seedanceVideoJobs.map((job) => (
+                  <article className={`seedance-job-card seedance-job-card-${job.status}`} key={job.id}>
+                    <div className="progress-header">
+                      <strong>视频 {job.index}</strong>
+                      <span>{job.taskId ? `任务 ${job.taskId}` : job.label}</span>
+                      <b>{job.percent}%</b>
+                    </div>
+                    <div aria-label={`视频${job.index}生成进度`} aria-valuemax={100} aria-valuemin={0} aria-valuenow={job.percent} className="progress-track" role="progressbar">
+                      <div className="progress-fill" style={{ width: `${job.percent}%` }} />
+                    </div>
+                    <p className={job.status === "failed" ? "error-text" : "muted"}>
+                      {job.error ?? job.label}
+                    </p>
+                    <div className="heading-actions">
+                      {job.result ? (
+                        <>
+                          <button className="secondary-button" onClick={() => window.open(job.result?.url, "_blank", "noopener,noreferrer")}>
+                            <Download size={16} />
+                            打开下载
+                          </button>
+                          <button className="secondary-button" onClick={() => copyText(job.result?.url ?? "", "视频链接")}>
+                            <Clipboard size={16} />
+                            复制链接
+                          </button>
+                        </>
+                      ) : null}
+                      <button className="danger-button" onClick={() => setSeedanceVideoJobs((current) => current.filter((item) => item.id !== job.id))}>
+                        <Trash2 size={16} />
+                        删除
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {seedanceVideoResults.length > 0 ? (
+            <div className="image-results" aria-label="视频生成结果预览">
+              <div className="section-heading">
+                <h3>视频生成结果预览</h3>
+              </div>
+              <div className="image-result-grid">
+                {seedanceVideoResults.map((result, index) => (
+                  <figure className="image-result-card" key={result.id}>
+                    <video className="image-result-thumbnail" controls src={result.url} />
+                    <figcaption>
+                      <span>
+                        视频 {index + 1} ｜ {result.model} ｜ {result.seconds}s ｜ {result.size}
+                      </span>
+                      <button className="secondary-button image-download-link" onClick={() => window.open(result.url, "_blank", "noopener,noreferrer")}>
+                        <Download size={16} />
+                        打开下载
+                      </button>
+                      <button className="secondary-button image-save-link" onClick={() => copyText(result.url, "视频链接")}>
+                        <Clipboard size={16} />
+                        复制链接
+                      </button>
+                      <button className="danger-button image-delete-button" onClick={() => setSeedanceVideoResults((current) => current.filter((item) => item.id !== result.id))}>
+                        <Trash2 size={16} />
+                        删除
+                      </button>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="section-heading">
+          <h3>生成结果 / 外部粘贴区</h3>
+          <div className="heading-actions">
+            <button className="secondary-button" onClick={() => copyText(step.draft, "结果")}>
+              <Clipboard size={16} />
+              复制
+            </button>
+            <button className="secondary-button" onClick={() => downloadTextFile(step.draft, "结果")}>
+              <Download size={16} />
+              导出 TXT
+            </button>
+          </div>
+        </div>
+        <textarea className="result-editor" placeholder="整理后的视频提示词会显示在这里，也可以手动粘贴。" value={step.draft} onChange={(event) => updateDraft(event.target.value)} />
+      </section>
+    );
+  }
+
   return (
     <section className="workspace">
       <div className="workspace-header">
@@ -2220,10 +3058,10 @@ export function Workspace({
           <Bot size={16} />
           {currentGeneration.isCalling ? "生成中" : "调用 AI 生成"}
         </button>
-        {project.currentStep === "storyboard-15s" ? (
+        {project.currentStep === "storyboard-15s" || project.currentStep === "xiaotu-skill" ? (
           <button className="secondary-button" disabled={isSendingToZzdh || !step.draft.trim()} onClick={sendCurrentStoryboardToZzdh}>
             <Play size={16} />
-            {isSendingToZzdh ? "发送中" : "发送分镜到字字动画"}
+            {isSendingToZzdh ? "发送中" : project.currentStep === "xiaotu-skill" ? "发送到字字动画" : "发送分镜到字字动画"}
           </button>
         ) : null}
         {project.currentStep === "storyboard-15s" ? (
@@ -2242,32 +3080,6 @@ export function Workspace({
       </div>
 
       {visibleStatus ? <div className="status-line">{visibleStatus}</div> : null}
-
-      {project.currentStep === "storyboard-15s" && seedanceSafetyReport ? (
-        <div className={`safety-panel ${seedanceSafetyReport.hasIssues ? "has-issues" : "is-clean"}`}>
-          <div className="section-heading">
-            <h3>SEEDAN2.0 视频生成违禁词检测</h3>
-            <button className="ghost-button" onClick={() => setSeedanceSafetyReport(null)}>
-              关闭
-            </button>
-          </div>
-          <p>{seedanceSafetyReport.summary}</p>
-          {seedanceSafetyReport.hasIssues ? (
-            <div className="safety-issue-list">
-              {seedanceSafetyReport.issues.map((issue) => (
-                <article className="safety-issue" key={issue.category}>
-                  <div>
-                    <strong>{issue.category}</strong>
-                    <span>{issue.severity}风险</span>
-                  </div>
-                  <p>命中词：{issue.matches.join("、")}</p>
-                  <p>替换建议：{issue.suggestion}</p>
-                </article>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
 
       {visibleProgress ? (
         <div className="generation-progress" aria-label="当前步骤生成进度" aria-live="polite">
@@ -2622,3 +3434,4 @@ export function Workspace({
     </section>
   );
 }
+

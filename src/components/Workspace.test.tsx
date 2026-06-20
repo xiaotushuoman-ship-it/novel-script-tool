@@ -1056,25 +1056,26 @@ describe("Workspace storyboard controls", () => {
     project.steps["storyboard-15s"].inputs.scriptText = "夜市摊前，许明舟阻止对方。";
     project.steps["storyboard-15s"].draft = "分镜1：角色掏枪开枪，画面出现血腥伤口和水印logo。";
 
-    render(
-      <Workspace
-        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
-        project={project}
-        onAiSettingsChange={() => undefined}
-        onProjectChange={() => undefined}
-        onSaveVersion={() => undefined}
-      />,
-    );
+    function Shell() {
+      const [currentProject, setCurrentProject] = useState(project);
+      return (
+        <Workspace
+          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+          project={currentProject}
+          onAiSettingsChange={() => undefined}
+          onProjectChange={setCurrentProject}
+          onSaveVersion={() => undefined}
+        />
+      );
+    }
+
+    render(<Shell />);
 
     fireEvent.click(screen.getByRole("button", { name: "SEEDAN2.0违禁词检测" }));
 
-    const safetyPanel = screen.getByText("SEEDAN2.0 视频生成违禁词检测").closest(".safety-panel");
-    expect(safetyPanel).not.toBeNull();
-    expect(within(safetyPanel as HTMLElement).getByText("发现 3 类 SEEDAN2.0 视频生成风险，请按建议替换后再送入视频模型。")).toBeInTheDocument();
-    expect(within(safetyPanel as HTMLElement).getByText("暴力血腥")).toBeInTheDocument();
-    expect(within(safetyPanel as HTMLElement).getByText("危险违法")).toBeInTheDocument();
-    expect(within(safetyPanel as HTMLElement).getByText("平台与版权")).toBeInTheDocument();
-    expect(within(safetyPanel as HTMLElement).getByText(/改成非血腥受伤反馈/)).toBeInTheDocument();
+    expect(screen.getByText("已检测并自动优化 SEEDAN2.0 风险内容")).toBeInTheDocument();
+    expect(screen.getByDisplayValue(/受力反馈|危机暗示|无标识道具/)).toBeInTheDocument();
+    expect(screen.queryByText("暴力血腥")).not.toBeInTheDocument();
   });
 
   it("sends storyboard draft to ZZDH from the 15s storyboard step", async () => {
@@ -1105,6 +1106,35 @@ describe("Workspace storyboard controls", () => {
       "字字动画联动测试",
       project.steps["storyboard-15s"].draft,
     );
+    expect(await screen.findByText("已发送到字字动画，并自动创建/打开项目")).toBeInTheDocument();
+  });
+
+  it("sends xiaotu skill draft to ZZDH", async () => {
+    sendStoryboardToZzdhMock.mockResolvedValue({ success: true });
+    const project = createProject("小兔skill联动测试");
+    project.currentStep = "xiaotu-skill";
+    project.steps["xiaotu-skill"].draft = [
+      "【段落1｜15秒｜多机位分镜】",
+      "【画面内容】[0-4s] 许明舟站在夜市摊前。",
+      "",
+      "【段落2｜12秒｜一镜到底】",
+      "【画面内容】[0-5s] 万金宝走到摊前。",
+    ].join("\n");
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "发送到字字动画" }));
+
+    await waitFor(() => expect(sendStoryboardToZzdhMock).toHaveBeenCalledTimes(1));
+    expect(sendStoryboardToZzdhMock).toHaveBeenCalledWith("小兔skill联动测试", project.steps["xiaotu-skill"].draft);
     expect(await screen.findByText("已发送到字字动画，并自动创建/打开项目")).toBeInTheDocument();
   });
 

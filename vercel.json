@@ -3,6 +3,10 @@
     {
       "source": "/api/timeai/:path*",
       "destination": "/api/timeai?path=:path*"
+    },
+    {
+      "source": "/api/aistarslab/:path*",
+      "destination": "/api/aistarslab?path=:path*"
     }
   ]
 }

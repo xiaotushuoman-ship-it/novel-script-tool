@@ -20,6 +20,8 @@ const PRIMARY_STEP_IDS: TemplateId[] = [
   "asset-library",
   "storyboard-15s",
   "gpt-image2-storyboard",
+  "xiaotu-skill",
+  "seedance-video",
 ];
 
 export function FlowNav({
