@@ -314,7 +314,13 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("规则条例优化版");
     expect(prompt).toContain("时间戳必须按故事动作、对白长度、情绪停顿和镜头复杂度自由划分");
     expect(prompt).toContain("不要默认0-3s、3-6s、6-9s");
-    expect(prompt).toContain("实际输出必须根据当前剧情自由增减镜头和调整时间戳");
+    expect(prompt).toContain("实际输出必须根据当前剧情自由增减分镜数量、分镜标题和时间戳");
+    expect(prompt).toContain("参考图统一写成“角色名：{@图1}角色描述”");
+    expect(prompt).toContain("【基础设定】");
+    expect(prompt).toContain("角色名：{@图1}外貌/状态/手持道具/站位。");
+    expect(prompt).toContain("声音：保留环境声和原文对白。");
+    expect(prompt).toContain("分镜1丨分镜标题丨0-2.5s丨");
+    expect(prompt).toContain("不要输出[0-3s]这种方括号时间码");
   });
 
   it("builds a GPT-image2 director storyboard prompt with image and video sections", () => {
