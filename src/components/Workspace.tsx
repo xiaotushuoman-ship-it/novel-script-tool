@@ -330,7 +330,10 @@ export function Workspace({
         url,
       })),
     ];
-    return fromInputs.map((item) => uploadedByUrl.get(item.url) ?? item);
+    return fromInputs.map((item) => {
+      const uploaded = uploadedByUrl.get(item.url);
+      return uploaded ? { ...uploaded, type: item.type, name: item.name, url: item.url } : item;
+    });
   }, [project.currentStep, seedanceMaterials, step.inputs.seedanceAudioUrls, step.inputs.seedanceImageUrls, step.inputs.seedanceVideoUrls]);
   const seedanceAvailableModels = useMemo(
     () => getSeedanceModelsForChannel(seedanceVideoConfig, step.inputs.seedanceChannel),
@@ -1055,16 +1058,7 @@ export function Workspace({
     setSeedanceVideoStatus(`正在上传素材：${file.name}`);
     try {
       const material = await uploadAistarsLabMaterial(getSeedanceVideoSettings(), file);
-      const materialType: SeedanceMaterialItem["type"] = file.type.startsWith("video/")
-        ? "video"
-        : file.type.startsWith("audio/")
-          ? "audio"
-          : "image";
-      const targetKey = file.type.startsWith("video/")
-        ? "seedanceVideoUrls"
-        : file.type.startsWith("audio/")
-          ? "seedanceAudioUrls"
-          : "seedanceImageUrls";
+      const { materialType, targetKey } = getSeedanceMaterialTarget(file);
       const currentUrls = parseReferenceUrls(step.inputs[targetKey]);
       updateInput(targetKey, [...currentUrls, material.url].join("\n"));
       setSeedanceMaterials((current) => [
@@ -1085,9 +1079,67 @@ export function Workspace({
   }
 
   async function uploadSeedanceMaterials(files: FileList | File[]) {
-    for (const file of Array.from(files)) {
-      await uploadSeedanceMaterial(file);
+    const fileItems = Array.from(files);
+    if (fileItems.length <= 1) {
+      await uploadSeedanceMaterial(fileItems[0]);
+      return;
     }
+
+    setIsUploadingSeedanceMaterial(true);
+    const nextUrlsByKey = {
+      seedanceImageUrls: parseReferenceUrls(step.inputs.seedanceImageUrls),
+      seedanceVideoUrls: parseReferenceUrls(step.inputs.seedanceVideoUrls),
+      seedanceAudioUrls: parseReferenceUrls(step.inputs.seedanceAudioUrls),
+    };
+    const uploadedItems: SeedanceMaterialItem[] = [];
+    try {
+      for (const file of fileItems) {
+        setSeedanceVideoStatus(`正在上传素材：${file.name}`);
+        const material = await uploadAistarsLabMaterial(getSeedanceVideoSettings(), file);
+        const { materialType, targetKey } = getSeedanceMaterialTarget(file);
+        nextUrlsByKey[targetKey].push(material.url);
+        uploadedItems.push({
+          id: `material-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: materialType,
+          name: file.name,
+          url: material.url,
+        });
+      }
+      onProjectChange({
+        ...project,
+        steps: {
+          ...project.steps,
+          [project.currentStep]: {
+            ...step,
+            inputs: {
+              ...step.inputs,
+              seedanceImageUrls: nextUrlsByKey.seedanceImageUrls.join("\n"),
+              seedanceVideoUrls: nextUrlsByKey.seedanceVideoUrls.join("\n"),
+              seedanceAudioUrls: nextUrlsByKey.seedanceAudioUrls.join("\n"),
+            },
+          },
+        },
+      });
+      setSeedanceMaterials((current) => [...uploadedItems, ...current]);
+      setSeedanceVideoStatus(`素材上传完成，已加入参考列表：${fileItems.length} 个文件`);
+    } catch (error) {
+      setSeedanceVideoStatus(error instanceof Error ? `素材上传失败：${error.message}` : "素材上传失败");
+    } finally {
+      setIsUploadingSeedanceMaterial(false);
+    }
+  }
+
+  function getSeedanceMaterialTarget(file: File): {
+    materialType: SeedanceMaterialItem["type"];
+    targetKey: "seedanceImageUrls" | "seedanceVideoUrls" | "seedanceAudioUrls";
+  } {
+    if (file.type.startsWith("video/")) {
+      return { materialType: "video", targetKey: "seedanceVideoUrls" };
+    }
+    if (file.type.startsWith("audio/")) {
+      return { materialType: "audio", targetKey: "seedanceAudioUrls" };
+    }
+    return { materialType: "image", targetKey: "seedanceImageUrls" };
   }
 
   function removeSeedanceMaterial(item: SeedanceMaterialItem) {
@@ -1098,11 +1150,11 @@ export function Workspace({
     setSeedanceVideoStatus(`已移除参考素材：${item.name}`);
   }
 
-  function insertSeedanceMaterialMention(item: SeedanceMaterialItem) {
+  function insertSeedanceMaterialMention(item: SeedanceMaterialItem, replaceActiveMention = false) {
     const mention = `@${item.name}`;
     const current = step.inputs.videoPromptSource ?? "";
     const textarea = seedancePromptTextareaRef.current;
-    const activeMention = textarea ? getActiveSeedanceMentionRange(current, textarea.selectionStart) : null;
+    const activeMention = replaceActiveMention && textarea ? getActiveSeedanceMentionRange(current, textarea.selectionStart) : null;
 
     if (!activeMention && current.includes(mention)) {
       setSeedanceVideoStatus(`提示词里已包含参考素材：${mention}`);
@@ -2772,7 +2824,7 @@ export function Workspace({
                 <div className="seedance-mention-picker" aria-label="参考素材选择">
                   {seedanceMentionOptions.length > 0 ? (
                     seedanceMentionOptions.map((item) => (
-                      <button key={item.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => insertSeedanceMaterialMention(item)}>
+                      <button key={item.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => insertSeedanceMaterialMention(item, true)}>
                         <span>{item.name}</span>
                         <small>{item.type === "image" ? "图片" : item.type === "video" ? "视频" : "音频"}</small>
                       </button>

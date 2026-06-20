@@ -10,6 +10,7 @@ const callAiStreamMock = vi.fn();
 const callImageGenerationMock = vi.fn();
 const sendStoryboardToZzdhMock = vi.fn();
 const sendAssetsToZzdhMock = vi.fn();
+const uploadAistarsLabMaterialMock = vi.fn();
 
 function mockStreamTextOnce(text: string) {
   callAiStreamMock.mockImplementationOnce(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
@@ -32,6 +33,14 @@ vi.mock("../domain/zzdhClient", () => ({
   sendStoryboardToZzdh: (...args: unknown[]) => sendStoryboardToZzdhMock(...args),
   sendAssetsToZzdh: (...args: unknown[]) => sendAssetsToZzdhMock(...args),
 }));
+
+vi.mock("../domain/aistarslabVideo", async () => {
+  const actual = await vi.importActual<typeof import("../domain/aistarslabVideo")>("../domain/aistarslabVideo");
+  return {
+    ...actual,
+    uploadAistarsLabMaterial: (...args: unknown[]) => uploadAistarsLabMaterialMock(...args),
+  };
+});
 
 afterEach(() => {
   vi.useRealTimers();
@@ -773,6 +782,62 @@ describe("Workspace storyboard controls", () => {
 
     expect(await screen.findByText("模型已响应，但没有返回可预览图片。请换生图模型或检查该模型是否支持图片输出。")).toBeInTheDocument();
     expect(screen.queryByLabelText("生图结果预览")).not.toBeInTheDocument();
+  });
+
+  it("keeps uploaded Seedance materials on stable reference names and appends @ mentions", async () => {
+    uploadAistarsLabMaterialMock
+      .mockResolvedValueOnce({
+        fileKey: "materials/entity_3.png",
+        url: "https://cdn.example.com/entity_3.png",
+        size: 100,
+        contentType: "image/png",
+      })
+      .mockResolvedValueOnce({
+        fileKey: "materials/entity_5.png",
+        url: "https://cdn.example.com/entity_5.png",
+        size: 100,
+        contentType: "image/png",
+      });
+    const project = createProject("Seedance 参考素材别名测试");
+    project.currentStep = "seedance-video";
+
+    function StatefulWorkspace() {
+      const [currentProject, setCurrentProject] = useState(project);
+      return (
+        <Workspace
+          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+          project={currentProject}
+          onAiSettingsChange={() => undefined}
+          onProjectChange={setCurrentProject}
+          onSaveVersion={() => undefined}
+        />
+      );
+    }
+
+    render(<StatefulWorkspace />);
+
+    const input = screen.getByLabelText("上传 SEEDANCE 参考素材");
+    fireEvent.change(input, {
+      target: {
+        files: [
+          new File(["image-1"], "entity_3.png", { type: "image/png" }),
+          new File(["image-2"], "entity_5.png", { type: "image/png" }),
+        ],
+      },
+    });
+
+    expect(await screen.findByText("参考图片 1")).toBeInTheDocument();
+    expect(await screen.findByText("参考图片 2")).toBeInTheDocument();
+    expect(screen.queryByText("entity_3.png")).not.toBeInTheDocument();
+    expect(screen.queryByText("entity_5.png")).not.toBeInTheDocument();
+
+    const callButtons = screen.getAllByRole("button", { name: "@调用" });
+    fireEvent.click(callButtons[0]);
+    fireEvent.click(callButtons[1]);
+
+    const promptTextarea = screen.getByLabelText("小说/剧本/分镜/视频提示词") as HTMLTextAreaElement;
+    expect(promptTextarea.value).toContain("@参考图片 1");
+    expect(promptTextarea.value).toContain("@参考图片 2");
   });
 
   it("shows storyboard image progress and failure feedback inside the storyboard image panel", async () => {
