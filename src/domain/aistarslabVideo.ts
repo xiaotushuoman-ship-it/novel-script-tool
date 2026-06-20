@@ -155,27 +155,54 @@ export async function fetchAistarsLabVideoTask(settings: AistarsLabVideoSettings
 }
 
 export async function uploadAistarsLabMaterial(settings: AistarsLabVideoSettings, file: File, fetchImpl = fetch) {
-  const base64 = await fileToBase64(file);
-  const response = await fetchImpl("/api/aistarslab-upload", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.apiKey.trim()}`,
+  const presign = await requestOpenApi(
+    settings,
+    "/uploads/presign",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        filename: file.name,
+        contentType: file.type || "application/octet-stream",
+        size: file.size,
+      }),
     },
-    body: JSON.stringify({
-      filename: file.name,
-      contentType: file.type || "application/octet-stream",
-      size: file.size,
-      base64,
-    }),
-  });
-  const text = await response.text();
-  const json = text ? JSON.parse(text) : {};
-  if (!response.ok) throw new Error(`HTTP ${response.status}: ${extractErrorMessage(json)}`);
-  if (typeof json.code === "number" && json.code !== 0) {
-    throw new Error(json.msg || `AIStartLab 素材上传失败：${json.code}`);
+    fetchImpl,
+  );
+  const presignData = presign.data as {
+    uploadUrl?: string;
+    method?: string;
+    headers?: Record<string, string>;
+    fileKey?: string;
+  };
+  if (!presignData.uploadUrl || !presignData.fileKey) {
+    throw new Error("素材上传失败：平台没有返回上传地址");
   }
-  return json.data as UploadedMaterial;
+
+  const uploadResponse = await fetchImpl(presignData.uploadUrl, {
+    method: presignData.method || "PUT",
+    headers: presignData.headers || {},
+    body: file,
+  });
+  if (!uploadResponse.ok) {
+    const detail = await uploadResponse.text().catch(() => "");
+    throw new Error(`素材直传失败：HTTP ${uploadResponse.status}${detail ? `：${detail.slice(0, 160)}` : ""}`);
+  }
+
+  const completed = await requestOpenApi(
+    settings,
+    "/uploads/complete",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        fileKey: presignData.fileKey,
+        filename: file.name,
+        contentType: file.type || "application/octet-stream",
+        size: file.size,
+      }),
+    },
+    fetchImpl,
+  );
+  return completed.data as UploadedMaterial;
 }
 
 async function requestOpenApi(
@@ -196,7 +223,7 @@ async function requestOpenApi(
     },
   });
   const text = await response.text();
-  const json = text ? JSON.parse(text) : {};
+  const json = parseJsonResponse(text);
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${extractErrorMessage(json)}`);
   }
@@ -213,19 +240,17 @@ function buildOpenApiUrl(endpoint: string, path: string) {
 
 function extractErrorMessage(json: unknown) {
   if (json && typeof json === "object") {
-    const value = json as { msg?: string; error?: { message?: string } };
-    return value.error?.message || value.msg || JSON.stringify(json);
+    const value = json as { msg?: string; text?: string; error?: { message?: string } };
+    return value.error?.message || value.msg || value.text || JSON.stringify(json);
   }
   return "请求失败";
 }
 
-async function fileToBase64(file: File) {
-  const buffer = await file.arrayBuffer();
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+function parseJsonResponse(text: string) {
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { text };
   }
-  return btoa(binary);
 }

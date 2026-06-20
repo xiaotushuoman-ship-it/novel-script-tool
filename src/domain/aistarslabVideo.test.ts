@@ -6,6 +6,7 @@ import {
   normalizeSeedanceVideoCount,
   normalizeAistarsLabEndpoint,
   resolveSeedanceModelSelection,
+  uploadAistarsLabMaterial,
   type AistarsLabVideoConfig,
 } from "./aistarslabVideo";
 
@@ -97,5 +98,59 @@ describe("aistarsLabVideo", () => {
     expect(normalizeSeedanceVideoCount("0")).toBe(1);
     expect(normalizeSeedanceVideoCount("20")).toBe(6);
     expect(normalizeSeedanceVideoCount("abc")).toBe(1);
+  });
+
+  it("uploads materials through presigned object storage instead of posting base64 to Vercel", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            code: 0,
+            msg: "success",
+            data: {
+              uploadUrl: "https://storage.example/upload",
+              method: "PUT",
+              headers: { "x-upload-token": "token" },
+              fileKey: "materials/test.png",
+            },
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () => "",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            code: 0,
+            msg: "success",
+            data: {
+              fileKey: "materials/test.png",
+              url: "https://cdn.example/test.png",
+              size: 4,
+              contentType: "image/png",
+            },
+          }),
+      });
+
+    const file = new File(["test"], "test.png", { type: "image/png" });
+    const material = await uploadAistarsLabMaterial(
+      { endpoint: "https://api.video.aistarslab.com/openapi", apiKey: "sk-test" },
+      file,
+      fetchMock as unknown as typeof fetch,
+    );
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/aistarslab/openapi/uploads/presign");
+    expect(fetchMock.mock.calls[1][0]).toBe("https://storage.example/upload");
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({
+      method: "PUT",
+      headers: { "x-upload-token": "token" },
+      body: file,
+    });
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/aistarslab/openapi/uploads/complete");
+    expect(material.url).toBe("https://cdn.example/test.png");
   });
 });
