@@ -1,5 +1,13 @@
 const AISTARSLAB_OPENAPI_BASE_URL = "https://api.video.aistarslab.com/openapi";
 
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "50mb",
+    },
+  },
+};
+
 export default async function handler(request, response) {
   if (request.method === "OPTIONS") {
     response.setHeader("Access-Control-Allow-Origin", "*");

@@ -153,4 +153,53 @@ describe("aistarsLabVideo", () => {
     expect(fetchMock.mock.calls[2][0]).toBe("/api/aistarslab/openapi/uploads/complete");
     expect(material.url).toBe("https://cdn.example/test.png");
   });
+
+  it("falls back to the upload proxy when browser direct upload is blocked", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            code: 0,
+            msg: "success",
+            data: {
+              uploadUrl: "https://storage.example/upload",
+              method: "PUT",
+              fileKey: "materials/test.png",
+            },
+          }),
+      })
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            code: 0,
+            msg: "success",
+            data: {
+              fileKey: "materials/test.png",
+              url: "https://cdn.example/proxy-test.png",
+              size: 4,
+              contentType: "image/png",
+            },
+          }),
+      });
+
+    const file = new File(["test"], "test.png", { type: "image/png" });
+    const material = await uploadAistarsLabMaterial(
+      { endpoint: "https://api.video.aistarslab.com/openapi", apiKey: "sk-test" },
+      file,
+      fetchMock as unknown as typeof fetch,
+    );
+
+    expect(fetchMock.mock.calls[1][0]).toBe("https://storage.example/upload");
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/aistarslab-upload");
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body as string)).toMatchObject({
+      filename: "test.png",
+      contentType: "image/png",
+      base64: "dGVzdA==",
+    });
+    expect(material.url).toBe("https://cdn.example/proxy-test.png");
+  });
 });

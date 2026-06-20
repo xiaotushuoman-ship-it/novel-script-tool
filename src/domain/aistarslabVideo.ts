@@ -178,11 +178,16 @@ export async function uploadAistarsLabMaterial(settings: AistarsLabVideoSettings
     throw new Error("素材上传失败：平台没有返回上传地址");
   }
 
-  const uploadResponse = await fetchImpl(presignData.uploadUrl, {
-    method: presignData.method || "PUT",
-    headers: presignData.headers || {},
-    body: file,
-  });
+  let uploadResponse: Response;
+  try {
+    uploadResponse = await fetchImpl(presignData.uploadUrl, {
+      method: presignData.method || "PUT",
+      headers: presignData.headers || {},
+      body: file,
+    });
+  } catch {
+    return uploadAistarsLabMaterialThroughProxy(settings, file, fetchImpl);
+  }
   if (!uploadResponse.ok) {
     const detail = await uploadResponse.text().catch(() => "");
     throw new Error(`素材直传失败：HTTP ${uploadResponse.status}${detail ? `：${detail.slice(0, 160)}` : ""}`);
@@ -203,6 +208,32 @@ export async function uploadAistarsLabMaterial(settings: AistarsLabVideoSettings
     fetchImpl,
   );
   return completed.data as UploadedMaterial;
+}
+
+async function uploadAistarsLabMaterialThroughProxy(settings: AistarsLabVideoSettings, file: File, fetchImpl: typeof fetch) {
+  const base64 = await fileToBase64(file);
+  const response = await fetchImpl("/api/aistarslab-upload", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${settings.apiKey.trim()}`,
+    },
+    body: JSON.stringify({
+      filename: file.name,
+      contentType: file.type || "application/octet-stream",
+      size: file.size,
+      base64,
+    }),
+  });
+  const text = await response.text();
+  const json = parseJsonResponse(text);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${extractErrorMessage(json)}`);
+  }
+  if (typeof json.code === "number" && json.code !== 0) {
+    throw new Error(json.msg || `AIStartLab 素材上传失败：${json.code}`);
+  }
+  return json.data as UploadedMaterial;
 }
 
 async function requestOpenApi(
@@ -253,4 +284,30 @@ function parseJsonResponse(text: string) {
   } catch {
     return { text };
   }
+}
+
+async function fileToBase64(file: File) {
+  if (typeof file.arrayBuffer !== "function") {
+    return fileToBase64WithReader(file);
+  }
+  const buffer = await file.arrayBuffer();
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function fileToBase64WithReader(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result || "");
+      resolve(value.includes(",") ? value.split(",").pop() || "" : value);
+    };
+    reader.onerror = () => reject(reader.error || new Error("文件读取失败"));
+    reader.readAsDataURL(file);
+  });
 }
