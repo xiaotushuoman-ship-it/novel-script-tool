@@ -112,7 +112,7 @@ describe("aistarsLabVideo", () => {
             data: {
               uploadUrl: "https://storage.example/upload",
               method: "PUT",
-              headers: { "x-upload-token": "token" },
+              headers: { "Content-Type": "image/png", "Content-Length": "4", "x-upload-token": "token" },
               fileKey: "materials/test.png",
             },
           }),
@@ -147,9 +147,10 @@ describe("aistarsLabVideo", () => {
     expect(fetchMock.mock.calls[1][0]).toBe("https://storage.example/upload");
     expect(fetchMock.mock.calls[1][1]).toMatchObject({
       method: "PUT",
-      headers: { "x-upload-token": "token" },
+      headers: { "Content-Type": "image/png", "x-upload-token": "token" },
       body: file,
     });
+    expect(fetchMock.mock.calls[1][1].headers).not.toHaveProperty("Content-Length");
     expect(fetchMock.mock.calls[2][0]).toBe("/api/aistarslab/openapi/uploads/complete");
     expect(material.url).toBe("https://cdn.example/test.png");
   });

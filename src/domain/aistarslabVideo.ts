@@ -66,6 +66,7 @@ export type UploadedMaterial = {
 const DEFAULT_PROXY_ENDPOINT = "/api/aistarslab/openapi";
 const DEFAULT_TEST_MODEL = "test-video";
 const DEFAULT_TEST_RESOLUTION = "720p";
+const PROXY_UPLOAD_MAX_BYTES = 1.5 * 1024 * 1024;
 
 export function getSeedanceChannel(config: AistarsLabVideoConfig | null, channelValue?: string) {
   const channels = config?.channels ?? [];
@@ -182,15 +183,14 @@ export async function uploadAistarsLabMaterial(settings: AistarsLabVideoSettings
   try {
     uploadResponse = await fetchImpl(presignData.uploadUrl, {
       method: presignData.method || "PUT",
-      headers: presignData.headers || {},
+      headers: sanitizeBrowserUploadHeaders(presignData.headers),
       body: file,
     });
   } catch {
     return uploadAistarsLabMaterialThroughProxy(settings, file, fetchImpl);
   }
   if (!uploadResponse.ok) {
-    const detail = await uploadResponse.text().catch(() => "");
-    throw new Error(`素材直传失败：HTTP ${uploadResponse.status}${detail ? `：${detail.slice(0, 160)}` : ""}`);
+    return uploadAistarsLabMaterialThroughProxy(settings, file, fetchImpl);
   }
 
   const completed = await requestOpenApi(
@@ -211,7 +211,8 @@ export async function uploadAistarsLabMaterial(settings: AistarsLabVideoSettings
 }
 
 async function uploadAistarsLabMaterialThroughProxy(settings: AistarsLabVideoSettings, file: File, fetchImpl: typeof fetch) {
-  const base64 = await fileToBase64(file);
+  const uploadFile = await prepareFileForProxyUpload(file);
+  const base64 = await fileToBase64(uploadFile);
   const response = await fetchImpl("/api/aistarslab-upload", {
     method: "POST",
     headers: {
@@ -219,9 +220,9 @@ async function uploadAistarsLabMaterialThroughProxy(settings: AistarsLabVideoSet
       Authorization: `Bearer ${settings.apiKey.trim()}`,
     },
     body: JSON.stringify({
-      filename: file.name,
-      contentType: file.type || "application/octet-stream",
-      size: file.size,
+      filename: uploadFile.name,
+      contentType: uploadFile.type || "application/octet-stream",
+      size: uploadFile.size,
       base64,
     }),
   });
@@ -234,6 +235,28 @@ async function uploadAistarsLabMaterialThroughProxy(settings: AistarsLabVideoSet
     throw new Error(json.msg || `AIStartLab 素材上传失败：${json.code}`);
   }
   return json.data as UploadedMaterial;
+}
+
+function sanitizeBrowserUploadHeaders(headers: Record<string, string> | undefined) {
+  const nextHeaders: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers || {})) {
+    const normalizedKey = key.toLowerCase();
+    if (["content-length", "host", "authorization"].includes(normalizedKey)) continue;
+    nextHeaders[key] = value;
+  }
+  return nextHeaders;
+}
+
+async function prepareFileForProxyUpload(file: File) {
+  if (file.size <= PROXY_UPLOAD_MAX_BYTES) return file;
+  if (!file.type.startsWith("image/")) {
+    throw new Error("素材过大且浏览器直传失败。请压缩素材后再上传，或使用公网素材 URL。");
+  }
+  const compressed = await compressImageFile(file, PROXY_UPLOAD_MAX_BYTES);
+  if (compressed.size > PROXY_UPLOAD_MAX_BYTES) {
+    throw new Error("图片仍然超过网页端代理上传限制。请压缩到 1.5MB 以内后再上传。");
+  }
+  return compressed;
 }
 
 async function requestOpenApi(
@@ -309,5 +332,67 @@ function fileToBase64WithReader(file: File) {
     };
     reader.onerror = () => reject(reader.error || new Error("文件读取失败"));
     reader.readAsDataURL(file);
+  });
+}
+
+async function compressImageFile(file: File, maxBytes: number) {
+  const dataUrl = await readFileAsDataUrl(file);
+  const image = await loadImage(dataUrl);
+  const canvas = document.createElement("canvas");
+  let width = image.naturalWidth || image.width;
+  let height = image.naturalHeight || image.height;
+  let quality = 0.86;
+  let blob = await drawImageToBlob(canvas, image, width, height, quality);
+
+  while (blob.size > maxBytes && (quality > 0.52 || width > 1280 || height > 1280)) {
+    if (quality > 0.52) {
+      quality = Math.max(0.52, quality - 0.08);
+    } else {
+      width = Math.max(960, Math.floor(width * 0.86));
+      height = Math.max(960, Math.floor(height * 0.86));
+      quality = 0.72;
+    }
+    blob = await drawImageToBlob(canvas, image, width, height, quality);
+  }
+
+  const baseName = file.name.replace(/\.[^.]+$/, "") || "reference";
+  return new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("图片读取失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("图片压缩失败：无法读取图片"));
+    image.src = src;
+  });
+}
+
+function drawImageToBlob(
+  canvas: HTMLCanvasElement,
+  image: HTMLImageElement,
+  width: number,
+  height: number,
+  quality: number,
+) {
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("图片压缩失败：浏览器不支持 Canvas");
+  context.drawImage(image, 0, 0, width, height);
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("图片压缩失败：无法生成压缩图片"));
+    }, "image/jpeg", quality);
   });
 }
