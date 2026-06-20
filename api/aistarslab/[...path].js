@@ -1,6 +1,6 @@
 const AISTARSLAB_BASE_URL = "https://api.video.aistarslab.com";
 
-export function buildAistarsLabTargetUrl(path) {
+export function buildAistarsLabTargetUrl(path, query = {}) {
   const rawPath = Array.isArray(path) ? path.join("/") : String(path || "");
   const normalizedPath = rawPath
     .replace(/^\/+/, "")
@@ -8,7 +8,16 @@ export function buildAistarsLabTargetUrl(path) {
     .filter(Boolean)
     .map((part) => encodeURIComponent(part).replace(/%3A/gi, ":"))
     .join("/");
-  return `${AISTARSLAB_BASE_URL}/${normalizedPath}`;
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(query || {})) {
+    if (key === "path" || value === undefined || value === null) continue;
+    const values = Array.isArray(value) ? value : [value];
+    for (const item of values) {
+      searchParams.append(key, String(item));
+    }
+  }
+  const queryString = searchParams.toString();
+  return `${AISTARSLAB_BASE_URL}/${normalizedPath}${queryString ? `?${queryString}` : ""}`;
 }
 
 export async function forwardAistarsLabRequest(request, response, path = request.query.path) {
@@ -31,7 +40,7 @@ export async function forwardAistarsLabRequest(request, response, path = request
     return;
   }
 
-  const targetUrl = buildAistarsLabTargetUrl(path);
+  const targetUrl = buildAistarsLabTargetUrl(path, request.query);
 
   try {
     const upstream = await fetch(targetUrl, {
