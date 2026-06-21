@@ -316,9 +316,15 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("不要默认0-3s、3-6s、6-9s");
     expect(prompt).toContain("实际输出必须根据当前剧情自由增减分镜数量、分镜标题和时间戳");
     expect(prompt).toContain("参考图统一写成“角色名：{@图1}角色描述”");
+    expect(prompt).toContain("【段落1｜12秒｜多机位分镜】");
+    expect(prompt).toContain("长内容继续输出【段落2】【段落3】");
     expect(prompt).toContain("【基础设定】");
     expect(prompt).toContain("角色名：{@图1}外貌/状态/手持道具/站位。");
     expect(prompt).toContain("声音：保留环境声和原文对白。");
+    expect(prompt).toContain("视觉基调：必须写成不少于80字的完整段落");
+    expect(prompt).toContain("色彩与影调：必须写成不少于80字的完整段落");
+    expect(prompt).toContain("ARRI Alexa 65");
+    expect(prompt).toContain("Cooke Anamorphic/i");
     expect(prompt).toContain("分镜1丨分镜标题丨0-2.5s丨");
     expect(prompt).toContain("不要输出[0-3s]这种方括号时间码");
   });
