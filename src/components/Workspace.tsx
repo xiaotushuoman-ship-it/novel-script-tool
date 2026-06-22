@@ -2983,14 +2983,16 @@ export function Workspace({
           ) : null}
 
           {seedanceVideoResults.length > 0 ? (
-            <div className="image-results" aria-label="视频生成结果预览">
+            <div className="image-results seedance-video-results" aria-label="视频生成结果预览">
               <div className="section-heading">
                 <h3>视频生成结果预览</h3>
               </div>
-              <div className="image-result-grid">
+              <div className="image-result-grid seedance-video-result-grid">
                 {seedanceVideoResults.map((result, index) => (
-                  <figure className="image-result-card" key={result.id}>
-                    <video className="image-result-thumbnail" controls src={result.url} />
+                  <figure className="image-result-card seedance-video-result-card" key={result.id}>
+                    <div className="seedance-video-frame">
+                      <video aria-label={`视频 ${index + 1} 预览`} className="seedance-video-thumbnail" controls src={result.url} />
+                    </div>
                     <figcaption>
                       <span>
                         视频 {index + 1} ｜ {result.model} ｜ {result.seconds}s ｜ {result.size}

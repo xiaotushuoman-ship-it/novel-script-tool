@@ -808,6 +808,33 @@ textarea {
   cursor: zoom-in;
 }
 
+.seedance-video-result-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 320px));
+  align-items: start;
+}
+
+.seedance-video-result-card {
+  max-width: 320px;
+}
+
+.seedance-video-frame {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  max-height: 420px;
+  background: #201d19;
+  overflow: hidden;
+}
+
+.seedance-video-thumbnail {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #201d19;
+}
+
 .image-result-card figcaption {
   display: flex;
   align-items: center;
@@ -821,6 +848,20 @@ textarea {
 
 .image-result-card figcaption span {
   margin-right: auto;
+}
+
+@media (max-width: 640px) {
+  .seedance-video-result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .seedance-video-result-card {
+    max-width: none;
+  }
+
+  .seedance-video-frame {
+    max-height: 70vh;
+  }
 }
 
 .image-download-link {

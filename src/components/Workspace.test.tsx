@@ -11,6 +11,8 @@ const callImageGenerationMock = vi.fn();
 const sendStoryboardToZzdhMock = vi.fn();
 const sendAssetsToZzdhMock = vi.fn();
 const uploadAistarsLabMaterialMock = vi.fn();
+const createAistarsLabVideoTaskMock = vi.fn();
+const fetchAistarsLabVideoTaskMock = vi.fn();
 
 function mockStreamTextOnce(text: string) {
   callAiStreamMock.mockImplementationOnce(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
@@ -38,6 +40,8 @@ vi.mock("../domain/aistarslabVideo", async () => {
   const actual = await vi.importActual<typeof import("../domain/aistarslabVideo")>("../domain/aistarslabVideo");
   return {
     ...actual,
+    createAistarsLabVideoTask: (...args: unknown[]) => createAistarsLabVideoTaskMock(...args),
+    fetchAistarsLabVideoTask: (...args: unknown[]) => fetchAistarsLabVideoTaskMock(...args),
     uploadAistarsLabMaterial: (...args: unknown[]) => uploadAistarsLabMaterialMock(...args),
   };
 });
@@ -838,6 +842,51 @@ describe("Workspace storyboard controls", () => {
     const promptTextarea = screen.getByLabelText("小说/剧本/分镜/视频提示词") as HTMLTextAreaElement;
     expect(promptTextarea.value).toContain("@参考图片 1");
     expect(promptTextarea.value).toContain("@参考图片 2");
+  });
+
+  it("uses a fixed Seedance video preview card layout for completed videos", async () => {
+    vi.useFakeTimers();
+    createAistarsLabVideoTaskMock.mockResolvedValue({
+      taskId: "task_123",
+      status: 3,
+      outputUrl: "https://cdn.example.com/video.mp4",
+      costCredits: 1,
+    });
+    fetchAistarsLabVideoTaskMock.mockResolvedValue({
+      taskId: "task_123",
+      status: 3,
+      progress: 100,
+      outputUrl: "https://cdn.example.com/video.mp4",
+      costCredits: 1,
+    });
+    const project = createProject("Seedance 视频预览布局测试");
+    project.currentStep = "seedance-video";
+    project.steps["seedance-video"].inputs.videoPromptSource = "许明舟端起葱油面。";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "生成视频" }));
+    });
+    expect(createAistarsLabVideoTaskMock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      vi.advanceTimersByTime(1500);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const previewPanel = screen.getByLabelText("视频生成结果预览");
+    const video = within(previewPanel).getByLabelText("视频 1 预览");
+    expect(video).toHaveClass("seedance-video-thumbnail");
+    expect(video.closest("figure")).toHaveClass("seedance-video-result-card");
   });
 
   it("shows storyboard image progress and failure feedback inside the storyboard image panel", async () => {
