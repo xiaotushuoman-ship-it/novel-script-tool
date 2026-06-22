@@ -889,6 +889,45 @@ describe("Workspace storyboard controls", () => {
     expect(video.closest("figure")).toHaveClass("seedance-video-result-card");
   });
 
+  it("keeps Seedance video polling active for twenty minutes before timing out", async () => {
+    vi.useFakeTimers();
+    createAistarsLabVideoTaskMock.mockResolvedValue({ taskId: "task_slow", status: 1, costCredits: 1 });
+    fetchAistarsLabVideoTaskMock.mockResolvedValue({
+      taskId: "task_slow",
+      status: 2,
+      progress: 55,
+      costCredits: 1,
+    });
+    const project = createProject("Seedance 视频轮询时长测试");
+    project.currentStep = "seedance-video";
+    project.steps["seedance-video"].inputs.videoPromptSource = "许明舟把夜市摊位灯打开。";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "生成视频" }));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(12 * 60 * 1000);
+    });
+
+    expect(screen.queryByText(/等待超时/)).not.toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8 * 60 * 1000 + 3000);
+    });
+
+    expect(screen.getByText(/等待超时/)).toBeInTheDocument();
+  });
+
   it("shows storyboard image progress and failure feedback inside the storyboard image panel", async () => {
     callImageGenerationMock.mockReturnValue(new Promise((_, reject) => window.setTimeout(() => reject(new Error("故事板图片接口失败")), 20)));
     const project = createProject("故事板独立进度测试");

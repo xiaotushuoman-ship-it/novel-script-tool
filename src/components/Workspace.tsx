@@ -139,7 +139,7 @@ const STEP_NAME_BY_ID: Record<TemplateId, string> = {
 };
 
 const NO_PREVIEWABLE_IMAGE_MESSAGE = "模型已响应，但没有返回可预览图片。请换生图模型或检查该模型是否支持图片输出。";
-const SEEDANCE_VIDEO_MAX_POLL_ATTEMPTS = 240;
+const SEEDANCE_VIDEO_MAX_POLL_ATTEMPTS = 402;
 const DEFAULT_CUSTOM_IMAGE_PREFIX = [
   "布局标准：横向专业角色设定表",
   "左侧区域：正面面部高清特写（重点展示妆容细节）",
