@@ -3099,6 +3099,58 @@ describe("Workspace asset extraction image generation", () => {
     }
   });
 
+  it("uses a blob url for large data-url image previews and releases it on close", async () => {
+    const imageSrc = `data:image/png;base64,${"A".repeat(1_100_000)}`;
+    callImageGenerationMock.mockResolvedValue(imageSrc);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(new Blob(["image-bytes"], { type: "image/png" })));
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const originalRevokeObjectUrl = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn(() => "blob:large-preview-url");
+    URL.revokeObjectURL = vi.fn();
+    const project = createProject("大图预览不卡测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，站在夜市摊前。";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚站在夜市摊前。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    try {
+      render(
+        <Workspace
+          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+          project={project}
+          onAiSettingsChange={() => undefined}
+          onProjectChange={() => undefined}
+          onSaveVersion={() => undefined}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+      const image = await screen.findByRole("img", { name: "林晚 生图结果 1" });
+      fireEvent.click(image);
+
+      expect(await screen.findByRole("dialog", { name: "图片高清预览" })).toBeInTheDocument();
+      const previewImage = await screen.findByRole("img", { name: "高清预览：林晚 生图结果 1" });
+      expect(previewImage).toHaveAttribute("src", "blob:large-preview-url");
+      expect(fetchMock).toHaveBeenCalledWith(imageSrc);
+
+      fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "图片高清预览" })).not.toBeInTheDocument());
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:large-preview-url");
+    } finally {
+      fetchMock.mockRestore();
+      if (originalCreateObjectUrl) URL.createObjectURL = originalCreateObjectUrl;
+      else delete (URL as Partial<typeof URL>).createObjectURL;
+      if (originalRevokeObjectUrl) URL.revokeObjectURL = originalRevokeObjectUrl;
+      else delete (URL as Partial<typeof URL>).revokeObjectURL;
+    }
+  });
+
   it("sends edited extracted assets to ZZDH entity managers", async () => {
     sendAssetsToZzdhMock.mockResolvedValue({
       created: [{ name: "林晚", type: "人物", description: "女性，黑色风衣", entityType: "character", entityId: "char-1" }],

@@ -60,6 +60,7 @@ type ImageResult = {
 
 type PreviewImage = {
   src: string;
+  previewSrc: string;
   alt: string;
   filename: string;
   image?: ImageResult;
@@ -80,6 +81,7 @@ type ChapterOption = {
 };
 
 const MAX_SYNC_DRAG_DATA_URL_LENGTH = 2_000_000;
+const MAX_INLINE_PREVIEW_DATA_URL_LENGTH = 1_000_000;
 
 type TopicRecommendationState = {
   isLoading: boolean;
@@ -213,6 +215,7 @@ export function Workspace({
   const storyboardImageProgressTimerRef = useRef<number | null>(null);
   const textProgressTimerRefs = useRef<Partial<Record<TemplateId, number>>>({});
   const imageResultIdRef = useRef(0);
+  const previewObjectUrlRef = useRef<string | null>(null);
   const seedancePromptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const currentGeneration = generationByStep[project.currentStep] ?? {
     isCalling: false,
@@ -244,13 +247,15 @@ export function Workspace({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setPreviewImage(null);
+        closeImagePreview();
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [previewImage]);
+
+  useEffect(() => () => revokePreviewObjectUrl(), []);
 
   useEffect(() => {
     if (project.currentStep !== "seedance-video" || !seedanceVideoConfig) return;
@@ -960,8 +965,51 @@ export function Workspace({
   }
 
   function openImagePreview(src: string, alt: string, filename: string, image?: ImageResult) {
-    setPreviewImage({ src, alt, filename, image });
+    revokePreviewObjectUrl();
     setPreviewScale(1);
+    if (!shouldUseObjectUrlPreview(src)) {
+      setPreviewImage({ src, previewSrc: src, alt, filename, image });
+      return;
+    }
+
+    setPreviewImage({ src, previewSrc: "", alt, filename, image });
+    void createPreviewObjectUrl(src)
+      .then((objectUrl) => {
+        setPreviewImage((current) => {
+          if (!current || current.src !== src) {
+            if (objectUrl.startsWith("blob:")) URL.revokeObjectURL?.(objectUrl);
+            return current;
+          }
+          if (objectUrl.startsWith("blob:")) previewObjectUrlRef.current = objectUrl;
+          return { ...current, previewSrc: objectUrl };
+        });
+      })
+      .catch(() => {
+        setPreviewImage((current) => (current?.src === src ? { ...current, previewSrc: src } : current));
+      });
+  }
+
+  function closeImagePreview() {
+    revokePreviewObjectUrl();
+    setPreviewImage(null);
+    setPreviewScale(1);
+  }
+
+  function revokePreviewObjectUrl() {
+    if (!previewObjectUrlRef.current) return;
+    URL.revokeObjectURL?.(previewObjectUrlRef.current);
+    previewObjectUrlRef.current = null;
+  }
+
+  function shouldUseObjectUrlPreview(src: string) {
+    return /^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(src) && src.length > MAX_INLINE_PREVIEW_DATA_URL_LENGTH;
+  }
+
+  async function createPreviewObjectUrl(src: string) {
+    const response = await fetch(src);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    return URL.createObjectURL?.(blob) ?? src;
   }
 
   function runSeedanceSafetyCheck() {
@@ -2671,7 +2719,7 @@ export function Workspace({
             aria-label="图片高清预览"
             onClick={(event) => {
               if (event.target === event.currentTarget) {
-                setPreviewImage(null);
+                closeImagePreview();
               }
             }}
           >
@@ -2689,17 +2737,21 @@ export function Workspace({
                     <Download size={16} />
                     下载原图
                   </button>
-                  <button className="ghost-button" type="button" onClick={() => setPreviewImage(null)}>
+                  <button className="ghost-button" type="button" onClick={closeImagePreview}>
                     关闭
                   </button>
                 </div>
               </div>
               <div className="image-preview-stage">
-                <img
-                  alt={`高清预览：${previewImage.alt}`}
-                  src={previewImage.src}
-                  style={{ transform: `scale(${previewScale})` }}
-                />
+                {previewImage.previewSrc ? (
+                  <img
+                    alt={`高清预览：${previewImage.alt}`}
+                    src={previewImage.previewSrc}
+                    style={{ transform: `scale(${previewScale})` }}
+                  />
+                ) : (
+                  <p className="muted">正在准备高清预览...</p>
+                )}
               </div>
             </div>
           </div>
@@ -3477,7 +3529,7 @@ export function Workspace({
           aria-label="图片高清预览"
           onClick={(event) => {
             if (event.target === event.currentTarget) {
-              setPreviewImage(null);
+              closeImagePreview();
             }
           }}
         >
@@ -3499,17 +3551,21 @@ export function Workspace({
                   <Download size={16} />
                   下载原图
                 </button>
-                <button className="ghost-button" type="button" onClick={() => setPreviewImage(null)}>
+                <button className="ghost-button" type="button" onClick={closeImagePreview}>
                   关闭
                 </button>
               </div>
             </div>
             <div className="image-preview-stage">
-              <img
-                alt={`高清预览：${previewImage.alt}`}
-                src={previewImage.src}
-                style={{ transform: `scale(${previewScale})` }}
-              />
+              {previewImage.previewSrc ? (
+                <img
+                  alt={`高清预览：${previewImage.alt}`}
+                  src={previewImage.previewSrc}
+                  style={{ transform: `scale(${previewScale})` }}
+                />
+              ) : (
+                <p className="muted">正在准备高清预览...</p>
+              )}
             </div>
           </div>
         </div>
