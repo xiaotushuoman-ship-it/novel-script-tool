@@ -3018,6 +3018,54 @@ describe("Workspace asset extraction image generation", () => {
     expect(dataTransfer.items.add).toHaveBeenCalledWith(expect.any(File));
   });
 
+  it("keeps large data-url image drags lightweight so previews remain clickable", async () => {
+    const imageSrc = `data:image/png;base64,${"A".repeat(2_100_000)}`;
+    callImageGenerationMock.mockResolvedValue(imageSrc);
+    const project = createProject("大图拖拽预览测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，站在夜市摊前。";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚站在夜市摊前。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+    const originalAtob = globalThis.atob;
+    globalThis.atob = vi.fn(() => {
+      throw new Error("large data url should not be decoded during drag");
+    });
+
+    try {
+      render(
+        <Workspace
+          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+          project={project}
+          onAiSettingsChange={() => undefined}
+          onProjectChange={() => undefined}
+          onSaveVersion={() => undefined}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+      const image = await screen.findByRole("img", { name: "林晚 生图结果 1" });
+      const dataTransfer = {
+        effectAllowed: "",
+        items: { add: vi.fn() },
+        setData: vi.fn(),
+      };
+      fireEvent.dragStart(image, { dataTransfer });
+
+      expect(globalThis.atob).not.toHaveBeenCalled();
+      expect(dataTransfer.items.add).not.toHaveBeenCalled();
+      fireEvent.click(image);
+      expect(screen.getByRole("dialog", { name: "图片高清预览" })).toBeInTheDocument();
+    } finally {
+      globalThis.atob = originalAtob;
+    }
+  });
+
   it("sends edited extracted assets to ZZDH entity managers", async () => {
     sendAssetsToZzdhMock.mockResolvedValue({
       created: [{ name: "林晚", type: "人物", description: "女性，黑色风衣", entityType: "character", entityId: "char-1" }],

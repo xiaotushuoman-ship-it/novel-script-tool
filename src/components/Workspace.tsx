@@ -79,6 +79,8 @@ type ChapterOption = {
   outline: string;
 };
 
+const MAX_SYNC_DRAG_DATA_URL_LENGTH = 2_000_000;
+
 type TopicRecommendationState = {
   isLoading: boolean;
   source: "local" | "ai";
@@ -1335,10 +1337,16 @@ export function Workspace({
     event.dataTransfer.setData("application/x-xiaotu-asset-image", JSON.stringify({ ...image, filename }));
     event.dataTransfer.setData("DownloadURL", `image/png:${filename}:${image.src}`);
 
-    const file = createFileFromDataUrl(image.src, filename);
-    if (file) {
-      event.dataTransfer.items.add(file);
+    if (canAttachImageFileDuringDrag(image.src)) {
+      const file = createFileFromDataUrl(image.src, filename);
+      if (file) {
+        event.dataTransfer.items.add(file);
+      }
     }
+  }
+
+  function canAttachImageFileDuringDrag(src: string) {
+    return !/^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(src) || src.length <= MAX_SYNC_DRAG_DATA_URL_LENGTH;
   }
 
   function createFileFromDataUrl(src: string, filename: string): File | null {
