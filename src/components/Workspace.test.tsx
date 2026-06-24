@@ -2689,10 +2689,14 @@ describe("Workspace asset extraction image generation", () => {
 
     expect(screen.getByLabelText("前置提示词")).toHaveValue(
       [
-        "布局标准：横向专业角色设定表",
-        "左侧区域：正面面部高清特写（重点展示妆容细节）",
-        "右侧区域：全身三视图（包含正面/侧面/背面）",
-        "不要出现任何字幕",
+        "人物结构：正脸特写+侧脸特写+脖子以下全身(脸裁出)+背面全身 + 四格同一人",
+        "Hyperrealistic photographic 35mm film + NOT Caucasian + NOT 3D + 左下格不露脸",
+        "【Layout】2x2 grid",
+        "Top-left: FRONT FACE CLOSE-UP（正脸特写）",
+        "Top-right: SIDE FACE CLOSE-UP（侧脸特写）",
+        "Bottom-left: FULL BODY NECK DOWN, NO FACE（脖子以下全身，脸裁出画面）",
+        "Bottom-right: FULL BODY BACK VIEW（背面全身）",
+        "不要出现任何字幕、水印、logo、编号或多余文字",
       ].join("\n"),
     );
     expect(screen.getByLabelText("主提示词")).toHaveValue("");
@@ -2717,10 +2721,14 @@ describe("Workspace asset extraction image generation", () => {
 
     expect(screen.getByLabelText("前置提示词")).toHaveValue(
       [
-        "布局标准：横向专业角色设定表",
-        "左侧区域：正面面部高清特写（重点展示妆容细节）",
-        "右侧区域：全身三视图（包含正面/侧面/背面）",
-        "不要出现任何字幕",
+        "人物结构：正脸特写+侧脸特写+脖子以下全身(脸裁出)+背面全身 + 四格同一人",
+        "Hyperrealistic photographic 35mm film + NOT Caucasian + NOT 3D + 左下格不露脸",
+        "【Layout】2x2 grid",
+        "Top-left: FRONT FACE CLOSE-UP（正脸特写）",
+        "Top-right: SIDE FACE CLOSE-UP（侧脸特写）",
+        "Bottom-left: FULL BODY NECK DOWN, NO FACE（脖子以下全身，脸裁出画面）",
+        "Bottom-right: FULL BODY BACK VIEW（背面全身）",
+        "不要出现任何字幕、水印、logo、编号或多余文字",
       ].join("\n"),
     );
 
@@ -2961,9 +2969,9 @@ describe("Workspace asset extraction image generation", () => {
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
     const prompt = callImageGenerationMock.mock.calls[0][1] as string;
     expect(prompt).toContain("女性，黑色风衣");
-    expect(prompt).toContain("人物统一后缀：横向专业角色设定表。");
-    expect(prompt).toContain("布局标准：左侧区域为正面面部高清特写");
-    expect(prompt).toContain("不要出现任何字幕、水印、logo、编号或额外说明");
+    expect(prompt).toContain("人物统一后缀：2x2同一人角色设定图。");
+    expect(prompt).toContain("FULL BODY NECK DOWN, NO FACE");
+    expect(prompt).toContain("优先遵循“该资产的提取内容”中的人物外貌、整体风格、人物身份和图片结构");
     expect(await screen.findByRole("img", { name: "林晚 生图结果 1" })).toHaveAttribute(
       "src",
       "https://img.example.com/edited-asset.png",

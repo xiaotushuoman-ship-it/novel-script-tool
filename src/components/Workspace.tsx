@@ -145,10 +145,14 @@ const STEP_NAME_BY_ID: Record<TemplateId, string> = {
 const NO_PREVIEWABLE_IMAGE_MESSAGE = "模型已响应，但没有返回可预览图片。请换生图模型或检查该模型是否支持图片输出。";
 const SEEDANCE_VIDEO_MAX_POLL_ATTEMPTS = 402;
 const DEFAULT_CUSTOM_IMAGE_PREFIX = [
-  "布局标准：横向专业角色设定表",
-  "左侧区域：正面面部高清特写（重点展示妆容细节）",
-  "右侧区域：全身三视图（包含正面/侧面/背面）",
-  "不要出现任何字幕",
+  "人物结构：正脸特写+侧脸特写+脖子以下全身(脸裁出)+背面全身 + 四格同一人",
+  "Hyperrealistic photographic 35mm film + NOT Caucasian + NOT 3D + 左下格不露脸",
+  "【Layout】2x2 grid",
+  "Top-left: FRONT FACE CLOSE-UP（正脸特写）",
+  "Top-right: SIDE FACE CLOSE-UP（侧脸特写）",
+  "Bottom-left: FULL BODY NECK DOWN, NO FACE（脖子以下全身，脸裁出画面）",
+  "Bottom-right: FULL BODY BACK VIEW（背面全身）",
+  "不要出现任何字幕、水印、logo、编号或多余文字",
 ].join("\n");
 
 export function Workspace({
@@ -2287,9 +2291,10 @@ export function Workspace({
       inputs.sourceText ? `完整原文背景：${inputs.sourceText}` : "",
       ...(assetType === "人物"
         ? [
-            "人物统一后缀：横向专业角色设定表。",
-            "布局标准：左侧区域为正面面部高清特写，重点展示妆容细节；右侧区域为全身三视图，包含正面、侧面、背面。",
-            "人物要求：根据剧情自动补全，但只描述性别和服装，不要出现任何字幕、水印、logo、编号或额外说明。",
+            "人物统一后缀：2x2同一人角色设定图。",
+            "图片结构强制：正脸特写+侧脸特写+脖子以下全身(脸裁出)+背面全身 + 四格同一人 + Hyperrealistic photographic 35mm film + NOT Caucasian + NOT 3D + 左下格不露脸。",
+            "【Layout】2x2 grid：Top-left: FRONT FACE CLOSE-UP（正脸特写）；Top-right: SIDE FACE CLOSE-UP（侧脸特写）；Bottom-left: FULL BODY NECK DOWN, NO FACE（脖子以下全身，脸裁出画面）；Bottom-right: FULL BODY BACK VIEW（背面全身）。",
+            "人物要求：四格必须是同一人、同一服装、同一风格、同一光影；优先遵循“该资产的提取内容”中的人物外貌、整体风格、人物身份和图片结构；不要字幕、水印、logo、编号或额外说明。",
           ]
         : []),
       ...(assetType === "场景"
