@@ -44,10 +44,17 @@ export async function forwardTimeAiRequest(request, response, path = request.que
     });
 
     const contentType = upstream.headers.get("content-type") || "application/json";
+    const isStreamingResponse = /text\/event-stream|application\/x-ndjson/i.test(contentType);
     response.status(upstream.status);
     response.setHeader("Content-Type", contentType);
     response.setHeader("Cache-Control", "no-cache, no-transform");
     response.setHeader("X-Accel-Buffering", "no");
+    if (isStreamingResponse) {
+      response.setHeader("Connection", "keep-alive");
+      response.flushHeaders?.();
+      response.write?.(": stream-open\n\n");
+      response.flush?.();
+    }
 
     await pipeUpstreamToResponse(upstream, response);
   } catch (error) {
@@ -70,7 +77,10 @@ async function pipeUpstreamToResponse(upstream, response) {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      if (value) response.write(Buffer.from(value));
+      if (value) {
+        response.write(Buffer.from(value));
+        response.flush?.();
+      }
     }
   } finally {
     response.end();
