@@ -2854,6 +2854,35 @@ describe("Workspace asset extraction image generation", () => {
     expect(callImageGenerationMock.mock.calls[0][2]).toBe("gemini-3-pro-image-preview");
   });
 
+  it("explains that gpt-image asset generation does not support 4K instead of sending a doomed request", async () => {
+    const project = createProject("资产4K保护测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = "【人物】顾玄：黑色战斗长衣，右手持长刀，站在破碎祭坛中央。";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "顾玄站在破碎祭坛中央，右手持长刀。",
+      assetType: "人物",
+      visualStyle: "影视写实现代",
+      imageModel: "gpt-image-2-all",
+      imageRatio: "16:9",
+      imageResolution: "4K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成 顾玄" }));
+
+    expect(callImageGenerationMock).not.toHaveBeenCalled();
+    expect(screen.getByText("gpt-image-2-all 暂不支持 4K 资产出图，请改选 1K/2K，或切换 Gemini 生图模型。")).toBeInTheDocument();
+  });
+
   it("lets the user edit extracted character info before image generation", async () => {
     callImageGenerationMock.mockResolvedValue("https://img.example.com/edited-asset.png");
     const project = createProject("人物信息可编辑测试");

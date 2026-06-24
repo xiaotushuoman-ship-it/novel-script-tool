@@ -1383,6 +1383,15 @@ export function Workspace({
     return error instanceof Error && /HTTP 429|限流|额度限制/.test(error.message);
   }
 
+  function getUnsupportedAssetImageMessage(imageModel: string, imageResolution: string) {
+    const model = imageModel.trim();
+    const resolution = imageResolution.trim().toUpperCase();
+    if (resolution === "4K" && model.startsWith("gpt-image")) {
+      return `${model} 暂不支持 4K 资产出图，请改选 1K/2K，或切换 Gemini 生图模型。`;
+    }
+    return "";
+  }
+
   function wait(milliseconds: number) {
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   }
@@ -1705,6 +1714,13 @@ export function Workspace({
       const imageModel = step.inputs.imageModel ?? "gpt-image-2";
       const imageRatio = step.inputs.imageRatio ?? "16:9";
       const imageResolution = step.inputs.imageResolution ?? "1K";
+      const unsupportedMessage = getUnsupportedAssetImageMessage(imageModel, imageResolution);
+      if (unsupportedMessage) {
+        stopImageProgressTimer();
+        setProgress({ label: "生图失败", percent: 100 });
+        setStatus(unsupportedMessage);
+        return;
+      }
       const imagePrompt = buildImageGenerationPrompt(step.inputs, generationAsset);
       const imageCall = resolveImageCallSettings(imageModel);
       setProgress({ label: "发送生图请求", percent: 18 });
