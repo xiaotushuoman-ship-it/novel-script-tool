@@ -1039,7 +1039,7 @@ describe("Workspace storyboard controls", () => {
       sourceText: "【人物】林晚：白衬衫，夜市摊主。",
       assetType: "人物",
       visualStyle: "3D国漫风格",
-      imageModel: "gpt-image-2-all",
+      imageModel: "gpt-image-2",
       imageRatio: "16:9",
       imageResolution: "1K",
     };
@@ -1073,7 +1073,7 @@ describe("Workspace storyboard controls", () => {
       sourceText: "夜市霓虹灯牌亮起，雨后地面反光。",
       assetType: "场景",
       visualStyle: "影视写实现代",
-      imageModel: "gpt-image-2-all",
+      imageModel: "gpt-image-2",
       imageRatio: "16:9",
       imageResolution: "1K",
     };
@@ -1105,7 +1105,7 @@ describe("Workspace storyboard controls", () => {
       sourceText: "【人物】陈伯：老厨子，灰色围裙。",
       assetType: "人物",
       visualStyle: "3D国漫风格",
-      imageModel: "gpt-image-2-all",
+      imageModel: "gpt-image-2",
       imageRatio: "16:9",
       imageResolution: "1K",
     };
@@ -1134,7 +1134,7 @@ describe("Workspace storyboard controls", () => {
       sourceText: "夜市霓虹灯牌亮起。",
       assetType: "场景",
       visualStyle: "影视写实现代",
-      imageModel: "gpt-image-2-all",
+      imageModel: "gpt-image-2",
       imageRatio: "16:9",
       imageResolution: "1K",
     };
@@ -1796,7 +1796,7 @@ describe("Workspace asset extraction image generation", () => {
       sourceText: "顾玄站在破碎祭坛中央。",
       assetType: "人物",
       visualStyle: "3D国漫风格",
-      imageModel: "gpt-image-2-all",
+      imageModel: "gpt-image-2",
       imageRatio: "16:9",
       imageResolution: "1K",
     };
@@ -2889,6 +2889,39 @@ describe("Workspace asset extraction image generation", () => {
     expect(callImageGenerationMock.mock.calls[0][4]).toBe("4K");
   });
 
+  it("normalizes removed gpt-image-2-all asset settings before image generation", async () => {
+    callImageGenerationMock.mockResolvedValue("https://img.example.com/gpt-image.png");
+    const project = createProject("资产旧模型清理测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，站在夜市摊前。";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚站在夜市摊前。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2-all",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    const imageModelSelect = screen.getByRole("combobox", { name: "生图模型" }) as HTMLSelectElement;
+    expect(imageModelSelect.value).toBe("gpt-image-2");
+
+    fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
+    expect(callImageGenerationMock.mock.calls[0][2]).toBe("gpt-image-2");
+  });
+
   it("lets the user edit extracted character info before image generation", async () => {
     callImageGenerationMock.mockResolvedValue("https://img.example.com/edited-asset.png");
     const project = createProject("人物信息可编辑测试");
@@ -3234,4 +3267,5 @@ describe("Workspace asset extraction image generation", () => {
     expect(callImageGenerationMock.mock.calls[1][1]).toContain("不要场景环境");
   });
 });
+
 

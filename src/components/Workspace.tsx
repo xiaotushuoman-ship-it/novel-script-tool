@@ -1395,6 +1395,11 @@ export function Workspace({
     return IMAGE_RESOLUTION_OPTIONS;
   }
 
+  function normalizeImageModelSelection(imageModel: string | undefined, defaultModel = "gpt-image-2") {
+    const selected = imageModel?.trim() || defaultModel;
+    return IMAGE_MODEL_OPTIONS.includes(selected) ? selected : defaultModel;
+  }
+
   function normalizeAssetImageResolution(imageModel: string, imageResolution: string) {
     const options = getAssetImageResolutionOptions(imageModel);
     return options.includes(imageResolution) ? imageResolution : options[0];
@@ -1719,7 +1724,7 @@ export function Workspace({
     stopImageProgressTimer();
     setProgress({ label: "准备生图参数", percent: 8 });
     try {
-      const imageModel = step.inputs.imageModel ?? "gpt-image-2";
+      const imageModel = normalizeImageModelSelection(step.inputs.imageModel);
       const imageRatio = step.inputs.imageRatio ?? "16:9";
       const imageResolution = normalizeAssetImageResolution(imageModel, step.inputs.imageResolution ?? "1K");
       const imagePrompt = buildImageGenerationPrompt(step.inputs, generationAsset);
@@ -1785,7 +1790,7 @@ export function Workspace({
     setProgress({ label: "准备批量生图参数", percent: 8 });
 
     try {
-      const imageModel = step.inputs.imageModel ?? "gpt-image-2";
+      const imageModel = normalizeImageModelSelection(step.inputs.imageModel);
       const imageRatio = step.inputs.imageRatio ?? "16:9";
       const imageResolution = normalizeAssetImageResolution(imageModel, step.inputs.imageResolution ?? "1K");
       const imageCall = resolveImageCallSettings(imageModel);
@@ -1881,7 +1886,7 @@ export function Workspace({
     setProgress({ label: "准备自定义生图参数", percent: 8 });
 
     try {
-      const imageModel = step.inputs.imageModel ?? "gpt-image-2";
+      const imageModel = normalizeImageModelSelection(step.inputs.imageModel);
       const imageRatio = step.inputs.imageRatio ?? "16:9";
       const imageResolution = step.inputs.imageResolution ?? "1K";
       const imageCall = resolveImageCallSettings(imageModel);
@@ -1961,7 +1966,7 @@ export function Workspace({
     try {
       const imageRatio = step.inputs.imageRatio ?? "16:9";
       const imageResolution = step.inputs.imageResolution ?? "1K";
-      const imageModel = step.inputs.imageModel ?? "gpt-image-2";
+      const imageModel = normalizeImageModelSelection(step.inputs.imageModel);
       const imageCall = resolveImageCallSettings(imageModel);
       setStoryboardImageProgress({ label: "发送故事板生图请求", percent: 18 });
       setStoryboardImageProgress({ label: "模型生图中", percent: 28 });
@@ -2365,12 +2370,14 @@ export function Workspace({
   }
 
   function renderSelectControl(label: string, inputKey: string, options: string[], defaultValue: string) {
+    const rawValue = step.inputs[inputKey] ?? defaultValue;
+    const value = options.includes(rawValue) ? rawValue : defaultValue && options.includes(defaultValue) ? defaultValue : options[0] ?? "";
     return (
       <label>
         <span>{label}</span>
         <select
           aria-label={label}
-          value={step.inputs[inputKey] ?? defaultValue}
+          value={value}
           onChange={(event) => updateInput(inputKey, event.target.value)}
         >
           {options.map((option) => (
