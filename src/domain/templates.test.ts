@@ -416,7 +416,10 @@ describe("buildPrompt", () => {
     expect(template.body).toContain("服装");
     expect(template.body).toContain("人物外貌：");
     expect(template.body).toContain("整体风格：根据画风锚点{{visualStyle}}");
-    expect(template.body).toContain("不要固定套用真人质感");
+    expect(template.body).toContain("Hyperrealistic photographic 35mm film");
+    expect(template.body).toContain("【Layout】2x2 grid");
+    expect(template.body).toContain("FULL BODY NECK DOWN, NO FACE");
+    expect(template.body).toContain("左下格不露脸");
     expect(template.body).toContain("人物的身份：");
     expect(template.body).toContain("图片的结构：");
     expect(template.body).not.toContain("绝对注意事项：");
