@@ -2092,6 +2092,9 @@ describe("Workspace asset extraction image generation", () => {
     expect(prompt).toContain("人物外貌：女性");
     expect(prompt).toContain("整体风格：3D国漫风格");
     expect(prompt).toContain("图片的结构：左边人物正面近景肖像");
+    expect(prompt).toContain("不是信息图、不是表格、不是PPT、不是教学海报、不是英文语法图");
+    expect(prompt).toContain("绝对不要把这些英文或中文说明画进图片里");
+    expect(prompt).not.toContain("完整原文背景：林晚在夜市摊前抬头");
     expect(await screen.findByRole("img", { name: "林晚 生图结果 1" })).toHaveAttribute(
       "src",
       "https://img.example.com/lin-wan-card.png",
@@ -2788,7 +2791,8 @@ describe("Workspace asset extraction image generation", () => {
 
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalled());
     const imagePrompt = callImageGenerationMock.mock.calls[0][1] as string;
-    expect(imagePrompt).toContain("林晚穿白衬衫站在夜市摊前");
+    expect(imagePrompt).toContain("白衬衫，站在夜市摊前");
+    expect(imagePrompt).not.toContain("完整原文背景：林晚穿白衬衫站在夜市摊前");
     expect(imagePrompt).toContain("林晚");
     expect(imagePrompt).toContain("人物");
     expect(imagePrompt).toContain("3D国漫风格");
@@ -2972,6 +2976,7 @@ describe("Workspace asset extraction image generation", () => {
     expect(prompt).toContain("人物统一后缀：2x2同一人角色设定图。");
     expect(prompt).toContain("FULL BODY NECK DOWN, NO FACE");
     expect(prompt).toContain("优先遵循“该资产的提取内容”中的人物外貌、整体风格、人物身份和图片结构");
+    expect(prompt).toContain("不要表格，不要信息图，不要教育海报，不要英文单词排版");
     expect(await screen.findByRole("img", { name: "林晚 生图结果 1" })).toHaveAttribute(
       "src",
       "https://img.example.com/edited-asset.png",

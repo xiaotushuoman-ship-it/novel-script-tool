@@ -2272,7 +2272,8 @@ export function Workspace({
   }
 
   function buildImageGenerationPrompt(inputs: Record<string, string>, asset?: ExtractedAsset) {
-    const sourceText = (asset?.description || inputs.sourceText || "").trim();
+    const assetDescription = asset?.description?.trim() || "";
+    const sourceText = (assetDescription || inputs.sourceText || "").trim();
     const assetType = (asset?.type || inputs.assetType || "人物").trim();
     const assetTarget = (asset?.name || assetType).trim();
     const visualStyle = (inputs.visualStyle ?? "3D国漫风格").trim();
@@ -2281,6 +2282,7 @@ export function Workspace({
 
     return [
       "请严格按照以下内容生成单张图片，不要改写为其他题材，不要忽略风格。",
+      "最终画面必须是角色/场景/物品资产设定图，不是信息图、不是表格、不是PPT、不是教学海报、不是英文语法图、不是流程图。",
       `画面主体：${assetTarget}`,
       `资产类型：${assetType}`,
       `指定画风：${visualStyle}`,
@@ -2288,12 +2290,13 @@ export function Workspace({
       `目标清晰度：${imageResolution}`,
       "该资产的提取内容：",
       sourceText,
-      inputs.sourceText ? `完整原文背景：${inputs.sourceText}` : "",
+      !assetDescription && inputs.sourceText ? `完整原文背景：${inputs.sourceText}` : "",
       ...(assetType === "人物"
         ? [
             "人物统一后缀：2x2同一人角色设定图。",
             "图片结构强制：正脸特写+侧脸特写+脖子以下全身(脸裁出)+背面全身 + 四格同一人 + Hyperrealistic photographic 35mm film + NOT Caucasian + NOT 3D + 左下格不露脸。",
             "【Layout】2x2 grid：Top-left: FRONT FACE CLOSE-UP（正脸特写）；Top-right: SIDE FACE CLOSE-UP（侧脸特写）；Bottom-left: FULL BODY NECK DOWN, NO FACE（脖子以下全身，脸裁出画面）；Bottom-right: FULL BODY BACK VIEW（背面全身）。",
+            "Layout、Top-left、Top-right、Bottom-left、Bottom-right 只是内部构图指令，绝对不要把这些英文或中文说明画进图片里，不要生成任何文字栏、标题栏、表格线或说明卡片。",
             "人物要求：四格必须是同一人、同一服装、同一风格、同一光影；优先遵循“该资产的提取内容”中的人物外貌、整体风格、人物身份和图片结构；不要字幕、水印、logo、编号或额外说明。",
           ]
         : []),
@@ -2318,7 +2321,7 @@ export function Workspace({
       "生成要求：主体必须来自原文和资产提取内容；外貌、服装、场景、道具只从原文提取，原文缺失时保持简洁合理，不要新增无关角色和无关背景。",
       `风格要求：整张图必须统一为${visualStyle}，包括材质、光影、色彩、镜头质感和人物造型。`,
       "构图要求：主体清晰，重点突出，适合直接作为剧本资产图或分镜参考图。",
-      "负面限制：不要随机换脸，不要多余文字，不要字幕，不要水印，不要logo，不要畸形手指，不要低清模糊，不要偏离原文内容。",
+      "负面限制：不要随机换脸，不要多余文字，不要字幕，不要水印，不要logo，不要编号，不要表格，不要信息图，不要教育海报，不要英文单词排版，不要标题文字，不要畸形手指，不要低清模糊，不要偏离原文内容。",
     ]
       .filter(Boolean)
       .join("\n");
