@@ -1383,14 +1383,6 @@ export function Workspace({
     return error instanceof Error && /HTTP 429|限流|额度限制/.test(error.message);
   }
 
-  function isTemporaryImageServiceError(error: unknown) {
-    return error instanceof Error && /HTTP 502|HTTP 503|HTTP 524|响应超时|不可用/.test(error.message);
-  }
-
-  function shouldFallbackToGeminiImage(model: string, error: unknown) {
-    return model.trim().startsWith("gpt-image") && isTemporaryImageServiceError(error);
-  }
-
   function getUnsupportedAssetImageMessage(imageModel: string, imageResolution: string) {
     const model = imageModel.trim();
     const resolution = imageResolution.trim().toUpperCase();
@@ -1424,28 +1416,6 @@ export function Workspace({
       }
     }
     throw new Error("生图调用失败");
-  }
-
-  async function callAssetImageGenerationWithFallback(
-    prompt: string,
-    imageModel: string,
-    ratio: string,
-    resolution: string,
-    onRetry?: (attempt: number, delaySeconds: number) => void,
-    onFallback?: (fallbackModel: string) => void,
-  ) {
-    const primaryCall = resolveImageCallSettings(imageModel);
-    try {
-      const result = await callImageGenerationWithRetry(primaryCall.settings, prompt, primaryCall.model, ratio, resolution, onRetry);
-      return { result, model: primaryCall.model };
-    } catch (error) {
-      if (!shouldFallbackToGeminiImage(primaryCall.model, error)) throw error;
-      const fallbackModel = aiSettings.geminiImageModel?.trim() || "gemini-3.1-flash-preview";
-      const fallbackCall = resolveImageCallSettings(fallbackModel);
-      onFallback?.(fallbackCall.model);
-      const result = await callImageGenerationWithRetry(fallbackCall.settings, prompt, fallbackCall.model, ratio, resolution, onRetry);
-      return { result, model: fallbackCall.model };
-    }
   }
 
   function readTextFile(file: File) {
@@ -1752,21 +1722,19 @@ export function Workspace({
         return;
       }
       const imagePrompt = buildImageGenerationPrompt(step.inputs, generationAsset);
+      const imageCall = resolveImageCallSettings(imageModel);
       setProgress({ label: "发送生图请求", percent: 18 });
       setProgress({ label: "模型生图中", percent: 28 });
       startImageProgressTimer();
-      const { result, model: usedImageModel } = await callAssetImageGenerationWithFallback(
+      const result = await callImageGenerationWithRetry(
+        imageCall.settings,
         imagePrompt,
-        imageModel,
+        imageCall.model,
         imageRatio,
         imageResolution,
         (attempt, delaySeconds) => {
           setStatus(`触发生图限流，${delaySeconds}秒后自动重试第${attempt}次...`);
           setProgress({ label: `限流等待重试 ${attempt}`, percent: 42 });
-        },
-        (fallbackModel) => {
-          setStatus(`GPT-image 当前不可用，已自动切换 Gemini 生图备用：${fallbackModel}`);
-          setProgress({ label: "切换备用模型", percent: 48 });
         },
       );
       stopImageProgressTimer();
@@ -1774,7 +1742,7 @@ export function Workspace({
       const images = parseImageResults(result, generationAsset?.name ?? "资产", {
         assetType: (generationAsset?.type ?? step.inputs.assetType ?? "人物") as AssetLibraryType,
         prompt: imagePrompt,
-        model: usedImageModel,
+        model: imageCall.model,
         ratio: imageRatio,
         resolution: imageResolution,
       });
@@ -1819,6 +1787,7 @@ export function Workspace({
       const imageModel = step.inputs.imageModel ?? "gpt-image-2";
       const imageRatio = step.inputs.imageRatio ?? "16:9";
       const imageResolution = step.inputs.imageResolution ?? "1K";
+      const imageCall = resolveImageCallSettings(imageModel);
       setProgress({ label: "排队发送生图请求", percent: 18 });
       setProgress({ label: "模型生图中", percent: 28 });
       startImageProgressTimer();
@@ -1834,9 +1803,10 @@ export function Workspace({
             percent: Math.min(88, 28 + Math.floor((assetIndex / assets.length) * 55)),
           });
           const imagePrompt = buildImageGenerationPrompt(step.inputs, asset);
-          const { result, model: usedImageModel } = await callAssetImageGenerationWithFallback(
+          const result = await callImageGenerationWithRetry(
+            imageCall.settings,
             imagePrompt,
-            imageModel,
+            imageCall.model,
             imageRatio,
             imageResolution,
             (attempt, delaySeconds) => {
@@ -1846,18 +1816,11 @@ export function Workspace({
                 percent: Math.min(88, 32 + Math.floor((assetIndex / assets.length) * 55)),
               });
             },
-            (fallbackModel) => {
-              setStatus(`资产“${asset.name}”的 GPT-image 当前不可用，已自动切换 Gemini 生图备用：${fallbackModel}`);
-              setProgress({
-                label: `备用模型 ${assetIndex + 1}/${assets.length}`,
-                percent: Math.min(88, 38 + Math.floor((assetIndex / assets.length) * 55)),
-              });
-            },
           );
           const images = parseImageResults(result, asset.name, {
             assetType: asset.type as AssetLibraryType,
             prompt: imagePrompt,
-            model: usedImageModel,
+            model: imageCall.model,
             ratio: imageRatio,
             resolution: imageResolution,
           });

@@ -191,7 +191,7 @@ export async function callImageGeneration(
         body: JSON.stringify({
           model: resolveImageModel(imageModel, imageResolution),
           prompt,
-          size: resolveImageSize(imageRatio, imageResolution),
+          size: resolveImageSize(imageRatio, imageResolution, imageModel),
         }),
       }),
     runtimeEndpoint,
@@ -693,9 +693,20 @@ function extractImageReferencesFromText(text: string): string[] {
   return [...references];
 }
 
-function resolveImageSize(imageRatio: string, imageResolution: string): string {
+function resolveImageSize(imageRatio: string, imageResolution: string, imageModel = ""): string {
   const normalized = normalizeImageRatio(imageRatio);
   const normalizedResolution = imageResolution.trim().toUpperCase();
+  if (imageModel.trim().startsWith("gpt-image")) {
+    const gptImageSizes: Record<string, string> = {
+      "1:1": "1024x1024",
+      "16:9": "1536x1024",
+      "9:16": "1024x1536",
+      "21:9": "1536x1024",
+      "4:3": "1536x1024",
+      "3:4": "1024x1536",
+    };
+    return gptImageSizes[normalized] ?? gptImageSizes["16:9"];
+  }
   const oneKSizes: Record<string, string> = {
     "1:1": "1024x1024",
     "16:9": "1792x1024",

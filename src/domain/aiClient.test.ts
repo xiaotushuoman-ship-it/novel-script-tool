@@ -315,7 +315,7 @@ describe("callImageGeneration", () => {
       }),
     );
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body as string)).toMatchObject({
-      size: "1792x1024",
+      size: "1536x1024",
     });
   });
 
@@ -430,7 +430,7 @@ describe("callImageGeneration", () => {
     ).rejects.toThrow("请求内容过大");
   });
 
-  it("switches to a 2K-capable model and size when high resolution is selected", async () => {
+  it("uses gpt-image compatible sizes when high resolution is selected", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ data: [{ url: "https://img.example.com/2k.png" }] }),
@@ -447,11 +447,11 @@ describe("callImageGeneration", () => {
 
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body as string)).toMatchObject({
       model: "gpt-image-2",
-      size: "2560x1440",
+      size: "1536x1024",
     });
   });
 
-  it("uses 4K image sizes when 4K upscaling is requested", async () => {
+  it("keeps gpt-image requests on compatible sizes when 4K is requested", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ data: [{ url: "https://img.example.com/4k.png" }] }),
@@ -468,7 +468,7 @@ describe("callImageGeneration", () => {
 
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body as string)).toMatchObject({
       model: "gpt-image-2",
-      size: "3840x2160",
+      size: "1536x1024",
     });
   });
 

@@ -2883,57 +2883,6 @@ describe("Workspace asset extraction image generation", () => {
     expect(screen.getByText("gpt-image-2 暂不支持 4K 资产出图，请改选 1K/2K，或切换 Gemini 生图模型。")).toBeInTheDocument();
   });
 
-  it("falls back to the Gemini image model when gpt-image asset generation is temporarily unavailable", async () => {
-    callImageGenerationMock
-      .mockRejectedValueOnce(new Error("生图调用失败：HTTP 503。中转站或模型当前响应超时/不可用，请稍后重试或切换模型。"))
-      .mockResolvedValueOnce("https://img.example.com/gemini-fallback.png");
-    const project = createProject("资产生图备用模型测试");
-    project.currentStep = "asset-extraction";
-    project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，站在夜市摊前，神情警觉。";
-    project.steps["asset-extraction"].inputs = {
-      sourceText: "林晚站在夜市摊前，神情警觉。",
-      assetType: "人物",
-      visualStyle: "影视写实现代",
-      imageModel: "gpt-image-2",
-      imageRatio: "16:9",
-      imageResolution: "1K",
-    };
-
-    render(
-      <Workspace
-        aiSettings={{
-          endpoint: "https://timeai.chat/v1",
-          apiKey: "sk-test",
-          model: "gpt-5.5",
-          geminiImageEndpoint: "https://gemini.example/v1",
-          geminiImageApiKey: "sk-gemini",
-          geminiImageModel: "gemini-3.1-flash-preview",
-        }}
-        project={project}
-        onAiSettingsChange={() => undefined}
-        onProjectChange={() => undefined}
-        onSaveVersion={() => undefined}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
-
-    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(2));
-    expect(callImageGenerationMock.mock.calls[0][2]).toBe("gpt-image-2");
-    expect(callImageGenerationMock.mock.calls[1][0]).toEqual(
-      expect.objectContaining({
-        endpoint: "https://gemini.example/v1",
-        apiKey: "sk-gemini",
-        model: "gemini-3.1-flash-preview",
-      }),
-    );
-    expect(callImageGenerationMock.mock.calls[1][2]).toBe("gemini-3.1-flash-preview");
-    expect(await screen.findByRole("img", { name: "林晚 生图结果 1" })).toHaveAttribute(
-      "src",
-      "https://img.example.com/gemini-fallback.png",
-    );
-  });
-
   it("lets the user edit extracted character info before image generation", async () => {
     callImageGenerationMock.mockResolvedValue("https://img.example.com/edited-asset.png");
     const project = createProject("人物信息可编辑测试");
