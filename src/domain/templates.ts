@@ -121,7 +121,6 @@ export const STORYBOARD_STYLE_OPTIONS = [
 
 export const IMAGE_MODEL_OPTIONS = [
   "gpt-image-2",
-  "gpt-image-2-all",
   "gemini-3.1-flash-preview",
   "gemini-3-pro-image-preview",
 ];

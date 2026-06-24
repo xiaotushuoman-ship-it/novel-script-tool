@@ -378,7 +378,7 @@ describe("buildPrompt", () => {
     expect(fields.panelLayout.options).toEqual(["六宫格3x2"]);
     expect(fields.imageModel.control).toBe("select");
     expect(fields.imageModel.options).toContain("gpt-image-2");
-    expect(fields.imageModel.options).toContain("gpt-image-2-all");
+    expect(fields.imageModel.options).not.toContain("gpt-image-2-all");
     expect(fields.imageModel.options).toContain("gemini-3.1-flash-preview");
     expect(fields.imageResolution.control).toBe("select");
     expect(fields.imageResolution.options).toEqual(["1K", "2K", "4K"]);
@@ -400,7 +400,7 @@ describe("buildPrompt", () => {
     expect(fields.visualStyle.options).toContain("复古欧美原子朋克风格");
     expect(fields.imageModel.control).toBe("select");
     expect(fields.imageModel.options).toContain("gpt-image-2");
-    expect(fields.imageModel.options).toContain("gpt-image-2-all");
+    expect(fields.imageModel.options).not.toContain("gpt-image-2-all");
     expect(fields.imageModel.options).toContain("gemini-3.1-flash-preview");
     expect(fields.imageModel.options).toContain("gemini-3-pro-image-preview");
     expect(fields.imageModel.options).not.toContain("banana-2");
