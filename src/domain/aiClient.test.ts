@@ -315,6 +315,7 @@ describe("callImageGeneration", () => {
       }),
     );
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body as string)).toMatchObject({
+      response_format: "url",
       size: "1536x1024",
     });
   });

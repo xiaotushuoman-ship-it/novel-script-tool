@@ -192,6 +192,7 @@ export async function callImageGeneration(
           model: resolveImageModel(imageModel, imageResolution),
           prompt,
           size: resolveImageSize(imageRatio, imageResolution, imageModel),
+          response_format: "url",
         }),
       }),
     runtimeEndpoint,
