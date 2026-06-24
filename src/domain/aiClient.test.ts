@@ -430,6 +430,25 @@ describe("callImageGeneration", () => {
     ).rejects.toThrow("请求内容过大");
   });
 
+  it("includes upstream image error details when the gateway returns 503", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ error: { message: "model gpt-image-2 is not available for this API group" } }),
+    });
+
+    await expect(
+      callImageGeneration(
+        { endpoint: "https://timeai.chat/v1", apiKey: "key", model: "gpt-5.5" },
+        "asset prompt",
+        "gpt-image-2",
+        "16:9",
+        "1K",
+        fetchImpl,
+      ),
+    ).rejects.toThrow("model gpt-image-2 is not available for this API group");
+  });
+
   it("uses gpt-image compatible sizes when high resolution is selected", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,

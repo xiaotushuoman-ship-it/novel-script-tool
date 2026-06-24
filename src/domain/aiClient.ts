@@ -209,7 +209,7 @@ export async function callImageGeneration(
         fetchImpl,
       );
     }
-    throw new Error(buildHttpErrorMessage("生图调用", response.status));
+    throw new Error(await buildHttpErrorMessageFromResponse("生图调用", response));
   }
 
   const data = await response.json();
@@ -299,7 +299,7 @@ async function callThirdPartyGeminiGenerateContent(
   );
 
   if (!response.ok) {
-    throw new Error(buildHttpErrorMessage("生图调用", response.status));
+    throw new Error(await buildHttpErrorMessageFromResponse("生图调用", response));
   }
 
   const data = await response.json();
@@ -342,7 +342,7 @@ async function callGeminiImageGeneration(
   );
 
   if (!response.ok) {
-    throw new Error(buildHttpErrorMessage("生图调用", response.status));
+    throw new Error(await buildHttpErrorMessageFromResponse("生图调用", response));
   }
 
   const data = await response.json();
@@ -421,6 +421,72 @@ function buildHttpErrorMessage(operation: string, status: number): string {
     return `${operation}失败：HTTP 502。本地/网页代理转发到中转站失败，通常是中转站连接被断开、模型响应过慢或请求过长。请稍后重试；如果只在第6项出现，请减少输入长度或切换文本模型。`;
   }
   return `${operation}失败：HTTP ${status}`;
+}
+
+async function buildHttpErrorMessageFromResponse(operation: string, response: Response): Promise<string> {
+  const baseMessage = buildHttpErrorMessage(operation, response.status);
+  const upstreamDetail = await readUpstreamErrorDetail(response);
+  return upstreamDetail ? `${baseMessage} 上游返回：${upstreamDetail}` : baseMessage;
+}
+
+async function readUpstreamErrorDetail(response: Response): Promise<string> {
+  try {
+    const responseWithClone = response as Response & { clone?: () => Response };
+    const readableResponse = typeof responseWithClone.clone === "function" ? responseWithClone.clone() : response;
+    const text = typeof readableResponse.text === "function" ? await readableResponse.text() : "";
+    if (text.trim()) return formatUpstreamErrorDetail(text);
+  } catch {
+    // Some mocked or proxied responses only expose json().
+  }
+
+  try {
+    const json = await response.json();
+    return formatUpstreamErrorDetail(json);
+  } catch {
+    return "";
+  }
+}
+
+function formatUpstreamErrorDetail(value: unknown): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    try {
+      return formatUpstreamErrorDetail(JSON.parse(trimmed));
+    } catch {
+      return limitText(trimmed);
+    }
+  }
+
+  if (value && typeof value === "object") {
+    const item = value as {
+      error?: unknown;
+      message?: unknown;
+      msg?: unknown;
+      detail?: unknown;
+      code?: unknown;
+      type?: unknown;
+    };
+    const nested = item.error;
+    if (nested) {
+      const nestedDetail = formatUpstreamErrorDetail(nested);
+      if (nestedDetail) return nestedDetail;
+    }
+    for (const key of ["message", "msg", "detail", "code", "type"] as const) {
+      if (typeof item[key] === "string" && item[key].trim()) return limitText(item[key].trim());
+    }
+    try {
+      return limitText(JSON.stringify(value));
+    } catch {
+      return "";
+    }
+  }
+
+  return "";
+}
+
+function limitText(text: string, maxLength = 500): string {
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
 
 function isGeminiImageModel(imageModel: string): boolean {
