@@ -1392,6 +1392,15 @@ export function Workspace({
     return "";
   }
 
+  function getAssetImageResolutionOptions(imageModel: string) {
+    return imageModel.trim().startsWith("gpt-image") ? ["1K"] : IMAGE_RESOLUTION_OPTIONS;
+  }
+
+  function normalizeAssetImageResolution(imageModel: string, imageResolution: string) {
+    const options = getAssetImageResolutionOptions(imageModel);
+    return options.includes(imageResolution) ? imageResolution : options[0];
+  }
+
   function wait(milliseconds: number) {
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   }
@@ -1713,7 +1722,7 @@ export function Workspace({
     try {
       const imageModel = step.inputs.imageModel ?? "gpt-image-2";
       const imageRatio = step.inputs.imageRatio ?? "16:9";
-      const imageResolution = step.inputs.imageResolution ?? "1K";
+      const imageResolution = normalizeAssetImageResolution(imageModel, step.inputs.imageResolution ?? "1K");
       const unsupportedMessage = getUnsupportedAssetImageMessage(imageModel, imageResolution);
       if (unsupportedMessage) {
         stopImageProgressTimer();
@@ -1786,7 +1795,7 @@ export function Workspace({
     try {
       const imageModel = step.inputs.imageModel ?? "gpt-image-2";
       const imageRatio = step.inputs.imageRatio ?? "16:9";
-      const imageResolution = step.inputs.imageResolution ?? "1K";
+      const imageResolution = normalizeAssetImageResolution(imageModel, step.inputs.imageResolution ?? "1K");
       const imageCall = resolveImageCallSettings(imageModel);
       setProgress({ label: "排队发送生图请求", percent: 18 });
       setProgress({ label: "模型生图中", percent: 28 });
@@ -2436,13 +2445,18 @@ export function Workspace({
     }
 
     if (field.control === "select") {
+      const options =
+        project.currentStep === "asset-extraction" && field.key === "imageResolution"
+          ? getAssetImageResolutionOptions(step.inputs.imageModel ?? "gpt-image-2")
+          : field.options ?? [];
+      const selectValue = options.includes(value) ? value : field.defaultValue && options.includes(field.defaultValue) ? field.defaultValue : options[0] ?? "";
       return (
         <select
           aria-label={field.label}
-          value={value}
+          value={selectValue}
           onChange={(event) => updateInput(field.key, event.target.value)}
         >
-          {(field.options ?? []).map((option) => (
+          {options.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
