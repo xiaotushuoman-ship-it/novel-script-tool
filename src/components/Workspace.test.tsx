@@ -2854,7 +2854,7 @@ describe("Workspace asset extraction image generation", () => {
     expect(callImageGenerationMock.mock.calls[0][2]).toBe("gemini-3-pro-image-preview");
   });
 
-  it("normalizes stale 4K asset image settings to 1K for gpt-image-2", async () => {
+  it("keeps user-selected 4K asset image settings for gpt-image-2", async () => {
     callImageGenerationMock.mockResolvedValue("https://img.example.com/gpt-image.png");
     const project = createProject("资产gpt-image分辨率保护测试");
     project.currentStep = "asset-extraction";
@@ -2879,13 +2879,14 @@ describe("Workspace asset extraction image generation", () => {
     );
 
     const resolutionSelect = screen.getByRole("combobox", { name: "分辨率" }) as HTMLSelectElement;
-    expect(resolutionSelect.value).toBe("1K");
-    expect(within(resolutionSelect).queryByRole("option", { name: "4K" })).not.toBeInTheDocument();
+    expect(resolutionSelect.value).toBe("4K");
+    expect(within(resolutionSelect).getByRole("option", { name: "2K" })).toBeInTheDocument();
+    expect(within(resolutionSelect).getByRole("option", { name: "4K" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
 
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
-    expect(callImageGenerationMock.mock.calls[0][4]).toBe("1K");
+    expect(callImageGenerationMock.mock.calls[0][4]).toBe("4K");
   });
 
   it("lets the user edit extracted character info before image generation", async () => {

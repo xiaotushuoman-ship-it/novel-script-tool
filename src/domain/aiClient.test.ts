@@ -449,7 +449,7 @@ describe("callImageGeneration", () => {
     ).rejects.toThrow("model gpt-image-2 is not available for this API group");
   });
 
-  it("uses gpt-image compatible sizes when high resolution is selected", async () => {
+  it("sends 2K gpt-image requests when high resolution is selected", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ data: [{ url: "https://img.example.com/2k.png" }] }),
@@ -466,11 +466,11 @@ describe("callImageGeneration", () => {
 
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body as string)).toMatchObject({
       model: "gpt-image-2",
-      size: "1536x1024",
+      size: "2560x1440",
     });
   });
 
-  it("keeps gpt-image requests on compatible sizes when 4K is requested", async () => {
+  it("sends 4K gpt-image requests when 4K is requested", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ data: [{ url: "https://img.example.com/4k.png" }] }),
@@ -487,7 +487,7 @@ describe("callImageGeneration", () => {
 
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body as string)).toMatchObject({
       model: "gpt-image-2",
-      size: "1536x1024",
+      size: "3840x2160",
     });
   });
 

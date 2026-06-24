@@ -763,7 +763,7 @@ function resolveImageSize(imageRatio: string, imageResolution: string, imageMode
   const normalized = normalizeImageRatio(imageRatio);
   const normalizedResolution = imageResolution.trim().toUpperCase();
   if (imageModel.trim().startsWith("gpt-image")) {
-    const gptImageSizes: Record<string, string> = {
+    const oneKGptImageSizes: Record<string, string> = {
       "1:1": "1024x1024",
       "16:9": "1536x1024",
       "9:16": "1024x1536",
@@ -771,6 +771,23 @@ function resolveImageSize(imageRatio: string, imageResolution: string, imageMode
       "4:3": "1536x1024",
       "3:4": "1024x1536",
     };
+    const twoKGptImageSizes: Record<string, string> = {
+      "1:1": "2048x2048",
+      "16:9": "2560x1440",
+      "9:16": "1440x2560",
+      "21:9": "2560x1080",
+      "4:3": "2048x1536",
+      "3:4": "1536x2048",
+    };
+    const fourKGptImageSizes: Record<string, string> = {
+      "1:1": "4096x4096",
+      "16:9": "3840x2160",
+      "9:16": "2160x3840",
+      "21:9": "4096x1755",
+      "4:3": "4096x3072",
+      "3:4": "3072x4096",
+    };
+    const gptImageSizes = normalizedResolution === "4K" ? fourKGptImageSizes : normalizedResolution === "2K" ? twoKGptImageSizes : oneKGptImageSizes;
     return gptImageSizes[normalized] ?? gptImageSizes["16:9"];
   }
   const oneKSizes: Record<string, string> = {
