@@ -3545,9 +3545,9 @@ export function Workspace({
             <div className="image-preview-toolbar">
               <strong>图片高清预览</strong>
               <div className="image-preview-actions">
-                  <button className="secondary-button" type="button" onClick={zoomPreviewImage}>
-                    预览放大
-                  </button>
+                <button className="secondary-button" type="button" onClick={zoomPreviewImage}>
+                  预览放大
+                </button>
                 <button className="secondary-button" type="button" onClick={() => setPreviewScale(1)}>
                   原始比例
                 </button>
