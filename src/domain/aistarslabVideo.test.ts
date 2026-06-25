@@ -13,6 +13,8 @@ import {
 describe("aistarsLabVideo", () => {
   it("normalizes the public OpenAPI endpoint to the local proxy", () => {
     expect(normalizeAistarsLabEndpoint("https://api.video.aistarslab.com/openapi")).toBe("/api/aistarslab/openapi");
+    expect(normalizeAistarsLabEndpoint("https://api.video.aistarslab.com/openapi/v1")).toBe("/api/aistarslab/openapi");
+    expect(normalizeAistarsLabEndpoint("https://api.video.aistarslab.com")).toBe("/api/aistarslab/openapi");
   });
 
   it("creates and polls video tasks through the proxy", async () => {

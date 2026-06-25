@@ -108,8 +108,8 @@ export function normalizeSeedanceVideoCount(value: string | number | undefined, 
 
 export function normalizeAistarsLabEndpoint(endpoint = DEFAULT_PROXY_ENDPOINT) {
   const trimmed = endpoint.trim().replace(/\/+$/, "");
-  if (!trimmed || trimmed === "https://api.video.aistarslab.com/openapi") return DEFAULT_PROXY_ENDPOINT;
-  if (trimmed === "https://api.video.aistarslab.com") return DEFAULT_PROXY_ENDPOINT;
+  if (!trimmed) return DEFAULT_PROXY_ENDPOINT;
+  if (/^https?:\/\/api\.video\.aistarslab\.com(?:\/|$)/i.test(trimmed)) return DEFAULT_PROXY_ENDPOINT;
   return trimmed;
 }
 

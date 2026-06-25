@@ -2861,7 +2861,7 @@ export function Workspace({
                       注册
                     </button>
                   </span>
-                  <input aria-label="AIStartLab API 地址" value={step.inputs.seedanceEndpoint ?? "/api/aistarslab/openapi"} onChange={(event) => updateInput("seedanceEndpoint", event.target.value)} />
+                  <input aria-label="AIStartLab API 地址" value={step.inputs.seedanceEndpoint ?? "/api/aistarslab/openapi"} placeholder="/api/aistarslab/openapi" onChange={(event) => updateInput("seedanceEndpoint", event.target.value)} />
                 </label>
                 <label>
                   <span className="inline-field-heading">
