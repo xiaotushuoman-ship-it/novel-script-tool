@@ -6,5 +6,6 @@ dist/
 *.tsbuildinfo
 .tmp-video-frames/
 .vercel/
+.superpowers/
 
 .vercel
