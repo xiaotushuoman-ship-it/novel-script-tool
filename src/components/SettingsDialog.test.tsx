@@ -29,4 +29,20 @@ describe("SettingsDialog", () => {
 
     openMock.mockRestore();
   });
+
+  it("keeps the gemini fallback channel visible while collapsing extra API keys into advanced settings", () => {
+    render(
+      <SettingsDialog
+        open
+        settings={DEFAULT_AI_SETTINGS}
+        onChange={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("Gemini 生图备用通道")).toBeInTheDocument();
+    expect(screen.getByText("高级设置").closest("details")).not.toHaveAttribute("open");
+    expect(screen.getByText("主 API Key")).toBeInTheDocument();
+    expect(screen.getByText("当前模型分组")).toBeInTheDocument();
+  });
 });

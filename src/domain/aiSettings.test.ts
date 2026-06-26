@@ -18,6 +18,7 @@ describe("AI settings", () => {
     expect(settings.model).toBe("gpt-5.5");
     expect(settings.apiKeySource).toBe("primary");
     expect(settings.apiKeySecondary).toBe("");
+    expect(settings.claudeApiKey).toBe("");
     expect(settings.modelApiKeySources).toEqual({});
     expect(settings.geminiImageEndpoint).toBe("https://timeai.chat/v1");
     expect(settings.geminiImageModel).toBe("gemini-3.1-flash-preview");
@@ -32,6 +33,7 @@ describe("AI settings", () => {
         endpoint: "",
         apiKey: "",
         apiKeySecondary: "",
+        claudeApiKey: "",
         apiKeySource: "",
         modelApiKeySources: {},
         model: "",
@@ -87,6 +89,7 @@ describe("AI settings", () => {
       normalizeAiSettings({
         apiKey: "sk-primary",
         apiKeySecondary: "sk-secondary",
+        claudeApiKey: "sk-claude",
         apiKeySource: "secondary",
         modelApiKeySources: {
           "deepseek-v4-pro": "secondary",
@@ -95,9 +98,30 @@ describe("AI settings", () => {
     ).toMatchObject({
       apiKey: "sk-primary",
       apiKeySecondary: "sk-secondary",
+      claudeApiKey: "sk-claude",
       apiKeySource: "secondary",
       modelApiKeySources: {
         "deepseek-v4-pro": "secondary",
+      },
+    });
+  });
+
+  it("filters unsupported model key sources while preserving valid ones", () => {
+    expect(
+      normalizeAiSettings({
+        apiKey: "sk-primary",
+        modelApiKeySources: {
+          "gpt-5.5": "primary",
+          "deepseek-v4-pro": "secondary",
+          "claude-opus-4-8": "claude",
+          broken: "unknown" as never,
+        },
+      }),
+    ).toMatchObject({
+      modelApiKeySources: {
+        "gpt-5.5": "primary",
+        "deepseek-v4-pro": "secondary",
+        "claude-opus-4-8": "claude",
       },
     });
   });

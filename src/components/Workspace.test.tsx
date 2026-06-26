@@ -844,6 +844,90 @@ describe("Workspace storyboard controls", () => {
     expect(promptTextarea.value).toContain("@参考图片 2");
   });
 
+  it("opens a reference image picker when typing @ in custom-image prompt", async () => {
+    const project = createProject("第9项@参考图选择测试");
+    project.currentStep = "custom-image";
+
+    function StatefulWorkspace() {
+      const [currentProject, setCurrentProject] = useState(project);
+      return (
+        <Workspace
+          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+          project={currentProject}
+          onAiSettingsChange={() => undefined}
+          onProjectChange={setCurrentProject}
+          onSaveVersion={() => undefined}
+        />
+      );
+    }
+
+    render(<StatefulWorkspace />);
+
+    const input = screen.getByLabelText("上传参考图片");
+    fireEvent.change(input, {
+      target: {
+        files: [
+          new File(["image-1"], "person.png", { type: "image/png" }),
+          new File(["image-2"], "scene.png", { type: "image/png" }),
+        ],
+      },
+    });
+
+    expect(await screen.findByText("参考图片 1")).toBeInTheDocument();
+    expect(await screen.findByText("参考图片 2")).toBeInTheDocument();
+
+    const promptTextarea = screen.getByLabelText("主提示词") as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: "请修改 @" } });
+
+    expect(await screen.findByLabelText("第9项参考图片选择")).toBeInTheDocument();
+    const picker = screen.getByLabelText("第9项参考图片选择");
+    fireEvent.click(within(picker).getByRole("button", { name: /参考图片 2/ }));
+
+    expect(promptTextarea.value).toContain("@参考图片 2");
+  });
+
+  it("does not inline uploaded reference image base64 into custom-image prompts", async () => {
+    callImageGenerationMock.mockResolvedValue("https://img.example.com/custom-reference.png");
+    const project = createProject("第9项参考图不内联测试");
+    project.currentStep = "custom-image";
+
+    function StatefulWorkspace() {
+      const [currentProject, setCurrentProject] = useState(project);
+      return (
+        <Workspace
+          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+          project={currentProject}
+          onAiSettingsChange={() => undefined}
+          onProjectChange={setCurrentProject}
+          onSaveVersion={() => undefined}
+        />
+      );
+    }
+
+    render(<StatefulWorkspace />);
+
+    fireEvent.change(screen.getByLabelText("上传参考图片"), {
+      target: {
+        files: [new File(["image-1"], "person.png", { type: "image/png" })],
+      },
+    });
+    expect(await screen.findByText("参考图片 1")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("主提示词"), {
+      target: { value: "@参考图片 1 保持人物脸型不变，改成雨夜街头电影感。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
+    const prompt = callImageGenerationMock.mock.calls[0][1] as string;
+    expect(prompt).toContain("@参考图片 1：person.png");
+    expect(prompt).toContain("已在第9项本地参考区上传");
+    expect(prompt).not.toContain("data:image/");
+    expect(callImageGenerationMock.mock.calls[0][5]).toMatchObject({
+      referenceImages: [expect.stringMatching(/^data:image\//)],
+    });
+  });
+
   it("uses a fixed Seedance video preview card layout for completed videos", async () => {
     vi.useFakeTimers();
     createAistarsLabVideoTaskMock.mockResolvedValue({
@@ -1728,20 +1812,19 @@ describe("Workspace writing flow", () => {
 });
 
 describe("Workspace asset extraction image generation", () => {
-  it("generates multiple images from a custom prompt under the asset image panel", async () => {
+  it("generates multiple images from custom-image reference prompt in step 9", async () => {
     callImageGenerationMock
       .mockResolvedValueOnce("https://img.example.com/custom-1.png")
       .mockResolvedValueOnce("https://img.example.com/custom-2.png")
       .mockResolvedValueOnce("https://img.example.com/custom-3.png");
-    const project = createProject("自定义提示词生图测试");
-    project.currentStep = "asset-extraction";
-    project.steps["asset-extraction"].inputs = {
-      sourceText: "顾玄站在破碎祭坛中央。",
-      assetType: "人物",
-      visualStyle: "3D国漫风格",
+    const project = createProject("第9项自定义参考图测试");
+    project.currentStep = "custom-image";
+    project.steps["custom-image"].inputs = {
+      referencePrompt: "@参考图片 1 电影宽屏，黑衣刀客站在破碎祭坛，冷月逆光。",
       imageModel: "gemini-3.1-flash-preview",
       imageRatio: "21:9",
       imageResolution: "2K",
+      imageCount: "3",
     };
 
     render(
@@ -1754,51 +1837,55 @@ describe("Workspace asset extraction image generation", () => {
       />,
     );
 
-    expect(screen.getByText("自定义提示词出图")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("前置提示词"), {
-      target: { value: "统一风格：3D国漫电影级，低饱和高对比。" },
-    });
-    fireEvent.change(screen.getByLabelText("主提示词"), {
-      target: { value: "电影宽屏，黑衣刀客站在破碎祭坛，冷月逆光。" },
-    });
-    fireEvent.change(screen.getByLabelText("出图数量"), {
-      target: { value: "3" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "按提示词出图" }));
+    expect(screen.getByText("第9项：自定义参考图出图")).toBeInTheDocument();
+    expect(screen.queryByText("自定义提示词出图")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
 
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(3));
     for (const call of callImageGenerationMock.mock.calls) {
-      expect(call[1]).toContain("统一风格：3D国漫电影级，低饱和高对比。");
-      expect(call[1]).toContain("电影宽屏，黑衣刀客站在破碎祭坛，冷月逆光。");
+      expect(call[1]).toContain("@参考图片 1 电影宽屏，黑衣刀客站在破碎祭坛，冷月逆光。");
       expect(call[2]).toBe("gemini-3.1-flash-preview");
       expect(call[3]).toBe("21:9");
       expect(call[4]).toBe("2K");
     }
-    expect(await screen.findByRole("img", { name: "自定义提示词 生图结果 1" })).toHaveAttribute(
+    expect(await screen.findByRole("img", { name: "自定义参考图 custom-image-job-1 生图结果 1" })).toHaveAttribute(
       "src",
       "https://img.example.com/custom-1.png",
     );
-    expect(await screen.findByRole("img", { name: "自定义提示词 生图结果 2" })).toHaveAttribute(
+    expect(await screen.findByRole("img", { name: "自定义参考图 custom-image-job-1 生图结果 2" })).toHaveAttribute(
       "src",
       "https://img.example.com/custom-2.png",
     );
-    expect(await screen.findByRole("img", { name: "自定义提示词 生图结果 3" })).toHaveAttribute(
+    expect(await screen.findByRole("img", { name: "自定义参考图 custom-image-job-1 生图结果 3" })).toHaveAttribute(
       "src",
       "https://img.example.com/custom-3.png",
     );
   });
 
-  it("previews custom prompt images from gateway image fields without file extensions", async () => {
-    callImageGenerationMock.mockResolvedValue('{"image":"https://cdn.example.com/generated?id=custom&token=secure"}');
-    const project = createProject("自定义提示词网关格式测试");
-    project.currentStep = "asset-extraction";
-    project.steps["asset-extraction"].inputs = {
-      sourceText: "顾玄站在破碎祭坛中央。",
-      assetType: "人物",
-      visualStyle: "3D国漫风格",
+  it("allows submitting a second custom-image generation job while the first is still running", async () => {
+    let resolveFirst: (value: string) => void = () => undefined;
+    let resolveSecond: (value: string) => void = () => undefined;
+    callImageGenerationMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            resolveSecond = resolve;
+          }),
+      );
+    const project = createProject("第9项并发任务测试");
+    project.currentStep = "custom-image";
+    project.steps["custom-image"].inputs = {
+      referencePrompt: "电影宽屏，黑衣刀客站在破碎祭坛，冷月逆光。",
       imageModel: "gpt-image-2",
       imageRatio: "16:9",
       imageResolution: "1K",
+      imageCount: "1",
     };
 
     render(
@@ -1811,12 +1898,45 @@ describe("Workspace asset extraction image generation", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("主提示词"), {
-      target: { value: "电影宽屏，黑衣刀客站在破碎祭坛，冷月逆光。" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "按提示词出图" }));
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
 
-    expect(await screen.findByRole("img", { name: "自定义提示词 生图结果 1" })).toHaveAttribute(
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText("第9项任务列表")).toBeInTheDocument();
+    expect(screen.getByText("任务 1")).toBeInTheDocument();
+    expect(screen.getByText("任务 2")).toBeInTheDocument();
+
+    resolveFirst("https://img.example.com/custom-job-1.png");
+    resolveSecond("https://img.example.com/custom-job-2.png");
+
+    await waitFor(() => expect(screen.getAllByAltText(/自定义参考图 .* 生图结果 1/).length).toBeGreaterThanOrEqual(2));
+  });
+
+  it("previews custom-image prompt results from gateway image fields without file extensions", async () => {
+    callImageGenerationMock.mockResolvedValue('{"image":"https://cdn.example.com/generated?id=custom&token=secure"}');
+    const project = createProject("第9项网关格式测试");
+    project.currentStep = "custom-image";
+    project.steps["custom-image"].inputs = {
+      referencePrompt: "电影宽屏，黑衣刀客站在破碎祭坛，冷月逆光。",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+      imageCount: "1",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+
+    expect(await screen.findByRole("img", { name: "自定义参考图 custom-image-job-1 生图结果 1" })).toHaveAttribute(
       "src",
       "https://cdn.example.com/generated?id=custom&token=secure",
     );
@@ -2145,7 +2265,7 @@ describe("Workspace asset extraction image generation", () => {
     expect(screen.getByText("已清空资产生图结果")).toBeInTheDocument();
   });
 
-  it("lets other assets and custom prompt generation run while one asset image is still generating", async () => {
+  it("lets other assets run while one asset image is still generating and keeps custom image out of step 3", async () => {
     callImageGenerationMock
       .mockReturnValueOnce(new Promise(() => {}))
       .mockReturnValueOnce(new Promise(() => {}))
@@ -2173,23 +2293,18 @@ describe("Workspace asset extraction image generation", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("主提示词"), {
-      target: { value: "夜市追逐镜头，霓虹光，电影感" },
-    });
     fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
 
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("button", { name: "生成 林晚" })).toBeDisabled();
 
     const guXuanButton = screen.getByRole("button", { name: "生成 顾玄" });
-    const customButton = screen.getByRole("button", { name: "按提示词出图" });
     expect(guXuanButton).not.toBeDisabled();
-    expect(customButton).not.toBeDisabled();
+    expect(screen.queryByRole("button", { name: "按提示词出图" })).not.toBeInTheDocument();
 
     fireEvent.click(guXuanButton);
-    fireEvent.click(customButton);
 
-    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(2));
   });
 
   it("shows image generation progress that changes while waiting for the model", async () => {
@@ -2666,8 +2781,8 @@ describe("Workspace asset extraction image generation", () => {
     expect(screen.getByText("已删除资产：林晚")).toBeInTheDocument();
   });
 
-  it("clears custom image prompts without touching extracted assets", () => {
-    const project = createProject("自定义提示词清空测试");
+  it("keeps the old custom image prompt controls out of asset extraction", () => {
+    const project = createProject("第3项不显示自定义出图测试");
     project.currentStep = "asset-extraction";
     project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，站在夜市摊前，神情警觉。";
 
@@ -2681,36 +2796,22 @@ describe("Workspace asset extraction image generation", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("前置提示词"), {
-      target: { value: "统一风格：3D国漫。" },
-    });
-    fireEvent.change(screen.getByLabelText("主提示词"), {
-      target: { value: "夜市摊前的白衬衫少女。" },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "清空提示词" }));
-
-    expect(screen.getByLabelText("前置提示词")).toHaveValue(
-      [
-        "人物结构：正脸特写+侧脸特写+脖子以下全身(脸裁出)+背面全身 + 四格同一人",
-        "Hyperrealistic photographic 35mm film + NOT Caucasian + NOT 3D + 左下格不露脸",
-        "【Layout】2x2 grid",
-        "Top-left: FRONT FACE CLOSE-UP（正脸特写）",
-        "Top-right: SIDE FACE CLOSE-UP（侧脸特写）",
-        "Bottom-left: FULL BODY NECK DOWN, NO FACE（脖子以下全身，脸裁出画面）",
-        "Bottom-right: FULL BODY BACK VIEW（背面全身）",
-        "不要出现任何字幕、水印、logo、编号或多余文字",
-      ].join("\n"),
-    );
-    expect(screen.getByLabelText("主提示词")).toHaveValue("");
-    expect(screen.getByText("已清空自定义提示词")).toBeInTheDocument();
+    expect(screen.queryByLabelText("前置提示词")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "清空提示词" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "按提示词出图" })).not.toBeInTheDocument();
     expect(screen.getByText("林晚")).toBeInTheDocument();
   });
 
-  it("prefills the custom image prefix with the character sheet layout standard", () => {
-    const project = createProject("默认前置提示词测试");
-    project.currentStep = "asset-extraction";
-    project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，站在夜市摊前，神情警觉。";
+  it("clears the custom-image workspace without touching its prompt", () => {
+    const project = createProject("第9项清空测试");
+    project.currentStep = "custom-image";
+    project.steps["custom-image"].inputs = {
+      referencePrompt: "@参考图片 1 夜市摊前的白衬衫少女。",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+      imageCount: "1",
+    };
 
     render(
       <Workspace
@@ -2722,24 +2823,31 @@ describe("Workspace asset extraction image generation", () => {
       />,
     );
 
-    expect(screen.getByLabelText("前置提示词")).toHaveValue(
-      [
-        "人物结构：正脸特写+侧脸特写+脖子以下全身(脸裁出)+背面全身 + 四格同一人",
-        "Hyperrealistic photographic 35mm film + NOT Caucasian + NOT 3D + 左下格不露脸",
-        "【Layout】2x2 grid",
-        "Top-left: FRONT FACE CLOSE-UP（正脸特写）",
-        "Top-right: SIDE FACE CLOSE-UP（侧脸特写）",
-        "Bottom-left: FULL BODY NECK DOWN, NO FACE（脖子以下全身，脸裁出画面）",
-        "Bottom-right: FULL BODY BACK VIEW（背面全身）",
-        "不要出现任何字幕、水印、logo、编号或多余文字",
-      ].join("\n"),
+    fireEvent.click(screen.getByRole("button", { name: "一键清空" }));
+
+    expect(screen.getByLabelText("主提示词")).toHaveValue("@参考图片 1 夜市摊前的白衬衫少女。");
+    expect(screen.getByText("已清空第9项参考图片和生图结果")).toBeInTheDocument();
+  });
+
+  it("hides the generic result paste area in custom-image step", () => {
+    const project = createProject("第9项隐藏通用结果区测试");
+    project.currentStep = "custom-image";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
     );
 
-    fireEvent.change(screen.getByLabelText("前置提示词"), {
-      target: { value: "自定义前置提示词" },
-    });
-
-    expect(screen.getByLabelText("前置提示词")).toHaveValue("自定义前置提示词");
+    expect(screen.queryByText("当前步骤")).not.toBeInTheDocument();
+    expect(screen.queryByText("生成结果 / 外部粘贴区")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("把 AI 输出粘贴到这里，或点击“调用 AI 生成”。确认后点击“保存结果”。")).not.toBeInTheDocument();
+    expect(screen.getByText("第9项：自定义参考图出图")).toBeInTheDocument();
+    expect(screen.queryByText("生成结果 / 外部粘贴区")).not.toBeInTheDocument();
   });
 
   it("renders asset dropdowns, calls the selected image model and ratio, then previews the image", async () => {
@@ -2814,6 +2922,7 @@ describe("Workspace asset extraction image generation", () => {
       "gemini-3.1-flash-preview",
       "21:9",
       "2K",
+      undefined,
     );
     expect(await screen.findByRole("img", { name: "林晚 生图结果 1" })).toHaveAttribute(
       "src",
@@ -3055,13 +3164,17 @@ describe("Workspace asset extraction image generation", () => {
     };
     fireEvent.dragStart(image, { dataTransfer });
 
-    expect(dataTransfer.setData).toHaveBeenCalledWith("text/uri-list", imageSrc);
-    expect(dataTransfer.setData).toHaveBeenCalledWith("text/plain", imageSrc);
+    expect(dataTransfer.setData).toHaveBeenCalledWith(
+      "application/x-xiaotu-asset-image",
+      expect.stringContaining('"assetName":"林晚"'),
+    );
+    expect(dataTransfer.setData).toHaveBeenCalledWith("text/plain", "图片：拖拽图片测试-剧本资产提取-林晚-image-1.png");
     expect(dataTransfer.setData).toHaveBeenCalledWith(
       "DownloadURL",
-      expect.stringContaining("image/png:拖拽图片测试-剧本资产提取-林晚-image-1.png:"),
+      "image/png:拖拽图片测试-剧本资产提取-林晚-image-1.png:拖拽图片测试-剧本资产提取-林晚-image-1.png",
     );
-    expect(dataTransfer.items.add).toHaveBeenCalledWith(expect.any(File));
+    expect(dataTransfer.setData).not.toHaveBeenCalledWith("text/uri-list", imageSrc);
+    expect(dataTransfer.items.add).not.toHaveBeenCalled();
   });
 
   it("keeps large data-url image drags lightweight so previews remain clickable", async () => {
@@ -3105,6 +3218,16 @@ describe("Workspace asset extraction image generation", () => {
 
       expect(globalThis.atob).not.toHaveBeenCalled();
       expect(dataTransfer.items.add).not.toHaveBeenCalled();
+      expect(dataTransfer.setData).toHaveBeenCalledWith(
+        "application/x-xiaotu-asset-image",
+        expect.stringContaining('"filename":"大图拖拽预览测试-剧本资产提取-林晚-image-1.png"'),
+      );
+      expect(dataTransfer.setData).not.toHaveBeenCalledWith("text/uri-list", imageSrc);
+      expect(dataTransfer.setData).toHaveBeenCalledWith("text/plain", "图片：大图拖拽预览测试-剧本资产提取-林晚-image-1.png");
+      expect(dataTransfer.setData).toHaveBeenCalledWith(
+        "DownloadURL",
+        "image/png:大图拖拽预览测试-剧本资产提取-林晚-image-1.png:大图拖拽预览测试-剧本资产提取-林晚-image-1.png",
+      );
       fireEvent.click(image);
       expect(screen.getByRole("dialog", { name: "图片高清预览" })).toBeInTheDocument();
     } finally {
@@ -3112,15 +3235,44 @@ describe("Workspace asset extraction image generation", () => {
     }
   });
 
-  it("uses a blob url for large data-url image previews and releases it on close", async () => {
-    const imageSrc = `data:image/png;base64,${"A".repeat(1_100_000)}`;
+  it("recognizes multiple character output formats from asset extraction", async () => {
+    const project = createProject("人物格式识别测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = [
+      "1. 【人物】林晚：夜市摊前，神情警觉。",
+      "人物名称：刘婶：豆腐坊摊主，说话直接。",
+      "角色3：老赵：卤味摊主，动作谨慎。",
+      "配角：陈伯：街坊老人，站在摊位旁。",
+    ].join("\n");
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚、刘婶、老赵、陈伯都出现在夜市。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("林晚")).toBeInTheDocument();
+    expect(screen.getByText("刘婶")).toBeInTheDocument();
+    expect(screen.getByText("老赵")).toBeInTheDocument();
+    expect(screen.getByText("陈伯")).toBeInTheDocument();
+  });
+
+  it("keeps large data-url previews on the original source without refetching them", async () => {
+    const imageSrc = `data:image/png;base64,${"A".repeat(2_100_000)}`;
     callImageGenerationMock.mockResolvedValue(imageSrc);
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(new Blob(["image-bytes"], { type: "image/png" })));
-    const originalCreateObjectUrl = URL.createObjectURL;
-    const originalRevokeObjectUrl = URL.revokeObjectURL;
-    URL.createObjectURL = vi.fn(() => "blob:large-preview-url");
-    URL.revokeObjectURL = vi.fn();
-    const project = createProject("大图预览不卡测试");
+    const project = createProject("大图预览直显测试");
     project.currentStep = "asset-extraction";
     project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，站在夜市摊前。";
     project.steps["asset-extraction"].inputs = {
@@ -3132,36 +3284,22 @@ describe("Workspace asset extraction image generation", () => {
       imageResolution: "1K",
     };
 
-    try {
-      render(
-        <Workspace
-          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
-          project={project}
-          onAiSettingsChange={() => undefined}
-          onProjectChange={() => undefined}
-          onSaveVersion={() => undefined}
-        />,
-      );
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
 
-      fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
-      const image = await screen.findByRole("img", { name: "林晚 生图结果 1" });
-      fireEvent.click(image);
+    fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+    const image = await screen.findByRole("img", { name: "林晚 生图结果 1" });
+    fireEvent.click(image);
 
-      expect(await screen.findByRole("dialog", { name: "图片高清预览" })).toBeInTheDocument();
-      const previewImage = await screen.findByRole("img", { name: "高清预览：林晚 生图结果 1" });
-      expect(previewImage).toHaveAttribute("src", "blob:large-preview-url");
-      expect(fetchMock).toHaveBeenCalledWith(imageSrc);
-
-      fireEvent.click(screen.getByRole("button", { name: "关闭" }));
-      await waitFor(() => expect(screen.queryByRole("dialog", { name: "图片高清预览" })).not.toBeInTheDocument());
-      expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:large-preview-url");
-    } finally {
-      fetchMock.mockRestore();
-      if (originalCreateObjectUrl) URL.createObjectURL = originalCreateObjectUrl;
-      else delete (URL as Partial<typeof URL>).createObjectURL;
-      if (originalRevokeObjectUrl) URL.revokeObjectURL = originalRevokeObjectUrl;
-      else delete (URL as Partial<typeof URL>).revokeObjectURL;
-    }
+    expect(await screen.findByRole("dialog", { name: "图片高清预览" })).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: "高清预览：林晚 生图结果 1" })).toHaveAttribute("src", imageSrc);
   });
 
   it("sends edited extracted assets to ZZDH entity managers", async () => {

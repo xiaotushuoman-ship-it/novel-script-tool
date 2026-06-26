@@ -26,7 +26,7 @@ async function defaultTestTextModelConnection(settings: AiSettings) {
   return "连接正常";
 }
 
-function getCurrentModelApiKeySource(settings: AiSettings): "primary" | "secondary" {
+function getCurrentModelApiKeySource(settings: AiSettings): "primary" | "secondary" | "claude" {
   return settings.modelApiKeySources?.[settings.model] ?? settings.apiKeySource ?? "primary";
 }
 
@@ -58,10 +58,10 @@ export function SettingsDialog({
     }
   }
 
-  function updateCurrentModelKeySource(source: "primary" | "secondary") {
+  function updateCurrentModelKeySource(source: "primary" | "secondary" | "claude") {
     onChange({
       ...settings,
-      apiKeySource: source,
+      apiKeySource: source === "secondary" ? "secondary" : "primary",
       modelApiKeySources: {
         ...(settings.modelApiKeySources ?? {}),
         [settings.model]: source,
@@ -73,7 +73,7 @@ export function SettingsDialog({
     <div className="dialog-backdrop" role="presentation">
       <section aria-label="API 设置" className="dialog">
         <h2>API 设置</h2>
-        <p>支持 OpenAI 兼容的 chat/completions 接口。密钥只保存在当前浏览器。</p>
+        <p>支持 OpenAI 兼容的 chat/completions 接口，密钥只保存在当前浏览器。</p>
 
         <label>
           <span>API 地址</span>
@@ -122,38 +122,57 @@ export function SettingsDialog({
         ) : null}
 
         <label>
-          <span>API Key</span>
+          <span>主 API Key</span>
           <input
             type="password"
             value={settings.apiKey}
             onChange={(event) => onChange({ ...settings, apiKey: event.target.value })}
             placeholder="sk-..."
           />
-          <small className="field-hint">模型名要与 API 分组对应</small>
+          <small className="field-hint">当前模型可在下面切换到不同分组；这里保留一把主 Key。</small>
         </label>
 
         <label>
-          <span>备用 API Key</span>
-          <input
-            type="password"
-            value={settings.apiKeySecondary ?? ""}
-            onChange={(event) => onChange({ ...settings, apiKeySecondary: event.target.value })}
-            placeholder="sk-..."
-          />
-          <small className="field-hint">切换到不同模型时可改用这把 Key</small>
-        </label>
-
-        <label>
-          <span>当前模型使用 Key</span>
+          <span>当前模型分组</span>
           <select
-            aria-label="当前模型使用 Key"
+            aria-label="当前模型分组"
             value={currentModelKeySource}
-            onChange={(event) => updateCurrentModelKeySource(event.target.value === "secondary" ? "secondary" : "primary")}
+            onChange={(event) => {
+              const source =
+                event.target.value === "secondary" ? "secondary" : event.target.value === "claude" ? "claude" : "primary";
+              updateCurrentModelKeySource(source);
+            }}
           >
-            <option value="primary">主 API Key</option>
-            <option value="secondary">备用 API Key</option>
+            <option value="primary">主分组</option>
+            <option value="secondary">备用分组</option>
+            <option value="claude">Claude 分组</option>
           </select>
+          <small className="field-hint">这里记录模型与中转分组的对应关系，不影响 Gemini 备用通道。</small>
         </label>
+
+        <details className="advanced-settings">
+          <summary>高级设置</summary>
+
+          <label>
+            <span>备用 API Key</span>
+            <input
+              type="password"
+              value={settings.apiKeySecondary ?? ""}
+              onChange={(event) => onChange({ ...settings, apiKeySecondary: event.target.value })}
+              placeholder="sk-..."
+            />
+          </label>
+
+          <label>
+            <span>Claude API Key</span>
+            <input
+              type="password"
+              value={settings.claudeApiKey ?? ""}
+              onChange={(event) => onChange({ ...settings, claudeApiKey: event.target.value })}
+              placeholder="sk-..."
+            />
+          </label>
+        </details>
 
         <div className="panel-title image-fallback-title">Gemini 生图备用通道</div>
 

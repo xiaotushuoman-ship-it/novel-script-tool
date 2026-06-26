@@ -14,6 +14,7 @@ describe("template catalog", () => {
       "gpt-image2-storyboard",
       "xiaotu-skill",
       "seedance-video",
+      "custom-image",
     ]);
   });
 });
@@ -208,6 +209,9 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("【画面内容】里的每个分镜不要再写横屏、竖屏、16:9、9:16、21:9等画面比例词");
     expect(prompt).toContain("对白：角色名：台词");
     expect(prompt).toContain("不要把台词揉进动作描述里");
+    expect(prompt).toContain("分镜旁白里的角色称呼保持稳定，用角色全名或明确身份；但对白台词必须按真实口语写法生成，可以自然使用“我、你、他、她、它”等代词，不要为了称呼规则把台词写得生硬。");
+    expect(prompt).toContain("对白台词必须按真实口语写法生成");
+    expect(prompt).toContain("可以自然使用“我、你、他、她、它”等代词");
     expect(prompt).toContain("对白：刘婶：年轻人嫌麻烦！");
     expect(prompt).toContain("对白：老赵：小摊，没啥好拍！");
     expect(prompt).toContain("每一个15S段落都是一个独立可生成的视频提示词单元");
@@ -240,6 +244,9 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("对白：角色名（音色标签，轻/重，缓/急，情绪状态）：台词");
     expect(prompt).toContain("可拍摄的生理反应");
     expect(prompt).toContain("听者反应");
+    expect(prompt).toContain("分镜旁白里的角色称呼保持稳定，用角色全名或明确身份；但对白台词必须按真实口语写法生成，可以自然使用“我、你、他、她、它”等代词，不要为了称呼规则把台词写得生硬。");
+    expect(prompt).toContain("对白台词必须按真实口语写法生成");
+    expect(prompt).toContain("可以自然使用“我、你、他、她、它”等代词");
     expect(prompt).toContain("不要只写“悲伤/愤怒/心动/紧张/释然”");
     expect(prompt).toContain("15S容量控制");
     expect(prompt).toContain("高密度秒表模式");
@@ -327,6 +334,78 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("Cooke Anamorphic/i");
     expect(prompt).toContain("分镜1丨分镜标题丨0-2.5s丨");
     expect(prompt).toContain("不要输出[0-3s]这种方括号时间码");
+  });
+
+  it("locks Xiaotu skill spatial continuity and interaction direction", () => {
+    const template = getTemplate("xiaotu-skill");
+    const prompt = buildPrompt(template, {
+      sourceText: "林晚舟站在豆腐坊门口，刘婶在门内质疑她，老赵在卤味摊旁轻拍锅盖。",
+      mode: "多机位分镜",
+      segmentSeconds: "15",
+      visualStyle: "影视写实现代",
+      audioRule: "保留同期声",
+    });
+
+    expect(prompt).toContain("【空间坐标与连续性】");
+    expect(prompt).toContain("空间坐标锁定");
+    expect(prompt).toContain("上下分镜继承");
+    expect(prompt).toContain("反打不反关系");
+    expect(prompt).toContain("互动链校验");
+    expect(prompt).toContain("实际站位不变，仅镜头反打");
+    expect(prompt).toContain("动作发起者 -> 动作承受者/目标物 -> 可见结果");
+  });
+
+  it("locks Xiaotu skill character voices and dialogue delivery", () => {
+    const template = getTemplate("xiaotu-skill");
+    const prompt = buildPrompt(template, {
+      sourceText: "林晚舟看向刘婶说：“我想让你们被看见。”刘婶停顿后说：“年轻人嫌麻烦。”",
+      mode: "多机位分镜",
+      segmentSeconds: "15",
+      visualStyle: "影视写实现代",
+      audioRule: "保留原文对白和环境声",
+    });
+
+    expect(prompt).toContain("【角色音色锁定表】");
+    expect(prompt).toContain("顶级声优级别");
+    expect(prompt).toContain("同一角色跨段沿用同一基础音色");
+    expect(prompt).toContain("不得来回换声音");
+    expect(prompt).toContain("对白：角色名（音色标签，语气，轻/重，缓/急，情绪状态）：台词");
+    expect(prompt).toContain("音色一致性校验");
+  });
+
+  it("keeps Xiaotu skill dialogue pronouns natural instead of replacing them with character names", () => {
+    const template = getTemplate("xiaotu-skill");
+    const prompt = buildPrompt(template, {
+      sourceText: "许燃看向宋叔亭说：“你不是宋叔亭的，我会去。”",
+      mode: "多机位分镜",
+      segmentSeconds: "15",
+      visualStyle: "影视写实现代",
+      audioRule: "保留原文对白",
+    });
+
+    expect(prompt).toContain("台词内容必须保留自然口语代词");
+    expect(prompt).toContain("不能改成“许燃不是宋叔亭的”");
+    expect(prompt).toContain("不能改成“许燃会去”");
+    expect(prompt).toContain("这条只约束画面描述，不约束对白台词");
+  });
+
+  it("separates Xiaotu skill real spatial positions from temporary screen left and right", () => {
+    const template = getTemplate("xiaotu-skill");
+    const prompt = buildPrompt(template, {
+      sourceText: "许燃站在门外台阶下，宋叔亭站在门内，登记员坐在柜台后方。",
+      mode: "多机位分镜",
+      segmentSeconds: "15",
+      visualStyle: "影视写实现代",
+      audioRule: "保留同期声",
+    });
+
+    expect(prompt).toContain("画面左/右只允许用于临时构图");
+    expect(prompt).toContain("禁止把“画面左侧/画面右侧”当成真实站位依据");
+    expect(prompt).toContain("人物真实站位");
+    expect(prompt).toContain("镜头构图区分");
+    expect(prompt).toContain("门内/门外");
+    expect(prompt).toContain("柜台内/柜台外");
+    expect(prompt).toContain("实际站位不变，仅镜头反打");
   });
 
   it("builds a GPT-image2 director storyboard prompt with image and video sections", () => {

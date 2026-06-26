@@ -120,6 +120,20 @@ type SeedanceMaterialItem = {
   url: string;
 };
 
+type CustomImageReference = {
+  id: string;
+  name: string;
+  src: string;
+};
+
+type CustomImageJob = {
+  id: string;
+  label: string;
+  status: "queued" | "generating" | "completed" | "failed";
+  progress: GenerationProgress;
+  error?: string;
+};
+
 type Props = {
   project: Project;
   aiSettings: AiSettings;
@@ -140,6 +154,7 @@ const STEP_NAME_BY_ID: Record<TemplateId, string> = {
   "gpt-image2-storyboard": "GPT-image2 六宫格故事板",
   "xiaotu-skill": "小兔skill",
   "seedance-video": "SEEDANCE2.0 视频生成",
+  "custom-image": "自定义参考图出图",
 };
 
 const NO_PREVIEWABLE_IMAGE_MESSAGE = "模型已响应，但没有返回可预览图片。请换生图模型或检查该模型是否支持图片输出。";
@@ -172,7 +187,6 @@ export function Workspace({
   const [isSendingToZzdh, setIsSendingToZzdh] = useState(false);
   const [isSendingAssetsToZzdh, setIsSendingAssetsToZzdh] = useState(false);
   const [generatingAssets, setGeneratingAssets] = useState<Record<string, boolean>>({});
-  const [isGeneratingCustomImages, setIsGeneratingCustomImages] = useState(false);
   const [assetImageResults, setAssetImageResults] = useState<ImageResult[]>([]);
   const [storyboardImageResults, setStoryboardImageResults] = useState<ImageResult[]>([]);
   const [storyboardImageProgress, setStoryboardImageProgress] = useState<GenerationProgress | null>(null);
@@ -191,9 +205,14 @@ export function Workspace({
   const [isGeneratingSeedanceVideo, setIsGeneratingSeedanceVideo] = useState(false);
   const [isUploadingSeedanceMaterial, setIsUploadingSeedanceMaterial] = useState(false);
   const [seedanceSafetyReport, setSeedanceSafetyReport] = useState<SeedanceSafetyReport | null>(null);
-  const [customImagePrefix, setCustomImagePrefix] = useState(DEFAULT_CUSTOM_IMAGE_PREFIX);
-  const [customImagePrompt, setCustomImagePrompt] = useState("");
-  const [customImageCount, setCustomImageCount] = useState("1");
+  const [customImageReferences, setCustomImageReferences] = useState<CustomImageReference[]>([]);
+  const [customImageResults, setCustomImageResults] = useState<ImageResult[]>([]);
+  const [customImageJobs, setCustomImageJobs] = useState<CustomImageJob[]>([]);
+  const [customImageStatus, setCustomImageStatus] = useState("");
+  const [customImageProgress, setCustomImageProgress] = useState<GenerationProgress | null>(null);
+  const [customImageMentionQuery, setCustomImageMentionQuery] = useState<string | null>(null);
+  const customImagePromptRef = useRef<HTMLTextAreaElement | null>(null);
+  const customImageJobIdRef = useRef(0);
   const [assetLibraryItems, setAssetLibraryItems] = useState<AssetLibraryItem[]>(() => loadAssetLibrary());
   const [assetLibraryImportType, setAssetLibraryImportType] = useState<AssetLibraryType>("人物");
   const [assetLibraryImportName, setAssetLibraryImportName] = useState("");
@@ -358,6 +377,25 @@ export function Workspace({
       return normalizeSeedanceMention(item.name).includes(query);
     });
   }, [seedanceMentionQuery, visibleSeedanceMaterials]);
+  const customImagePrompt = step.inputs.referencePrompt ?? "";
+  const selectedCustomImageReferences = useMemo(() => {
+    if (project.currentStep !== "custom-image") return [];
+    const mentionMatches = Array.from(customImagePrompt.matchAll(/@参考图片\s*(\d+)/g))
+      .map((match) => Number.parseInt(match[1], 10))
+      .filter((index) => Number.isFinite(index) && index > 0);
+    if (mentionMatches.length === 0) return customImageReferences;
+    const selectedIndexes = new Set(mentionMatches.map((index) => index - 1));
+    return customImageReferences.filter((_, index) => selectedIndexes.has(index));
+  }, [customImagePrompt, customImageReferences, project.currentStep]);
+  const customImageMentionOptions = useMemo(() => {
+    if (customImageMentionQuery === null) return [];
+    const query = normalizeSeedanceMention(customImageMentionQuery);
+    return customImageReferences.filter((_, index) => {
+      const name = `参考图片 ${index + 1}`;
+      if (!query) return true;
+      return normalizeSeedanceMention(name).includes(query);
+    });
+  }, [customImageMentionQuery, customImageReferences]);
   const assetLibraryGroups = useMemo(
     () => ({
       人物: assetLibraryItems.filter((item) => item.type === "人物"),
@@ -725,6 +763,11 @@ export function Workspace({
     updateDraft("");
     if (project.currentStep === "asset-extraction") setAssetImageResults([]);
     if (project.currentStep === "gpt-image2-storyboard") setStoryboardImageResults([]);
+    if (project.currentStep === "custom-image") {
+      setCustomImageResults([]);
+      setCustomImageProgress(null);
+      setCustomImageStatus("");
+    }
     if (project.currentStep === "seedance-video") {
       setSeedanceVideoTask(null);
       setSeedanceVideoResults([]);
@@ -732,12 +775,6 @@ export function Workspace({
       setSeedanceVideoStatus("");
     }
     setStatus("已清空当前结果区");
-  }
-
-  function clearCustomImagePrompts() {
-    setCustomImagePrefix(DEFAULT_CUSTOM_IMAGE_PREFIX);
-    setCustomImagePrompt("");
-    setStatus("已清空自定义提示词");
   }
 
   function refreshAssetLibrary() {
@@ -757,6 +794,7 @@ export function Workspace({
   function deleteImageResult(imageId: string) {
     setAssetImageResults((current) => current.filter((image) => image.id !== imageId));
     setStoryboardImageResults((current) => current.filter((image) => image.id !== imageId));
+    setCustomImageResults((current) => current.filter((image) => image.id !== imageId));
     setStatus("已删除图片");
   }
 
@@ -976,21 +1014,7 @@ export function Workspace({
       return;
     }
 
-    setPreviewImage({ src, previewSrc: "", alt, filename, image });
-    void createPreviewObjectUrl(src)
-      .then((objectUrl) => {
-        setPreviewImage((current) => {
-          if (!current || current.src !== src) {
-            if (objectUrl.startsWith("blob:")) URL.revokeObjectURL?.(objectUrl);
-            return current;
-          }
-          if (objectUrl.startsWith("blob:")) previewObjectUrlRef.current = objectUrl;
-          return { ...current, previewSrc: objectUrl };
-        });
-      })
-      .catch(() => {
-        setPreviewImage((current) => (current?.src === src ? { ...current, previewSrc: src } : current));
-      });
+    setPreviewImage({ src, previewSrc: src, alt, filename, image });
   }
 
   function closeImagePreview() {
@@ -1007,13 +1031,6 @@ export function Workspace({
 
   function shouldUseObjectUrlPreview(src: string) {
     return /^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(src) && src.length > MAX_INLINE_PREVIEW_DATA_URL_LENGTH;
-  }
-
-  async function createPreviewObjectUrl(src: string) {
-    const response = await fetch(src);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const blob = await response.blob();
-    return URL.createObjectURL?.(blob) ?? src;
   }
 
   function runSeedanceSafetyCheck() {
@@ -1204,6 +1221,96 @@ export function Workspace({
     setSeedanceVideoStatus(`已移除参考素材：${item.name}`);
   }
 
+  async function importCustomImageReferences(files: FileList | File[]) {
+    const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length === 0) {
+      setCustomImageStatus("请上传图片格式的参考素材。");
+      return;
+    }
+
+    const availableSlots = Math.max(0, 14 - customImageReferences.length);
+    if (availableSlots === 0) {
+      setCustomImageStatus("参考图片最多14张，请先删除部分图片后再上传。");
+      return;
+    }
+
+    const acceptedFiles = imageFiles.slice(0, availableSlots);
+    const references = await Promise.all(
+      acceptedFiles.map(async (file) => ({
+        id: `custom-ref-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: file.name,
+        src: await fileToDataUrl(file),
+      })),
+    );
+    setCustomImageReferences((current) => [...current, ...references].slice(0, 14));
+    setCustomImageStatus(`已导入 ${references.length} 张参考图片${imageFiles.length > acceptedFiles.length ? "，超出14张的部分已忽略" : ""}`);
+  }
+
+  function clearCustomImageWorkspace() {
+    setCustomImageReferences([]);
+    setCustomImageResults([]);
+    setCustomImageJobs([]);
+    setCustomImageProgress(null);
+    setCustomImageStatus("已清空第9项参考图片和生图结果");
+  }
+
+  function removeCustomImageReference(referenceId: string) {
+    setCustomImageReferences((current) => current.filter((item) => item.id !== referenceId));
+    setCustomImageStatus("已移除参考图片");
+  }
+
+  function insertCustomImageReferenceMention(referenceIndex: number) {
+    const mention = `@参考图片 ${referenceIndex + 1}`;
+    const current = step.inputs.referencePrompt ?? "";
+    const textarea = customImagePromptRef.current;
+    const canInsertAtCursor = textarea && document.activeElement === textarea;
+    const start = canInsertAtCursor ? textarea.selectionStart : current.length;
+    const end = canInsertAtCursor ? textarea.selectionEnd : current.length;
+    const prefix = current.slice(0, start);
+    const suffix = current.slice(end);
+    const needsLeadingSpace = prefix.length > 0 && !/[\s\n]$/.test(prefix);
+    const needsTrailingSpace = suffix.length > 0 && !/^[\s\n]/.test(suffix);
+    const insertedText = `${needsLeadingSpace ? " " : ""}${mention}${needsTrailingSpace ? " " : ""}`;
+    const next = `${prefix}${insertedText}${suffix}`;
+    updateInput("referencePrompt", next);
+    window.setTimeout(() => {
+      const nextPosition = prefix.length + insertedText.length;
+      customImagePromptRef.current?.focus();
+      customImagePromptRef.current?.setSelectionRange(nextPosition, nextPosition);
+    }, 0);
+    setCustomImageStatus(`已插入 ${mention}`);
+  }
+
+  function refreshCustomImageMentionPicker(textarea: HTMLTextAreaElement) {
+    const activeMention = getActiveSeedanceMentionRange(textarea.value, textarea.selectionStart);
+    setCustomImageMentionQuery(activeMention?.query ?? null);
+  }
+
+  function insertCustomImageReferenceMentionFromPicker(referenceIndex: number) {
+    const mention = `@参考图片 ${referenceIndex + 1}`;
+    const current = step.inputs.referencePrompt ?? "";
+    const textarea = customImagePromptRef.current;
+    const activeMention = textarea ? getActiveSeedanceMentionRange(current, textarea.selectionStart) : null;
+    if (!activeMention) {
+      insertCustomImageReferenceMention(referenceIndex);
+      return;
+    }
+
+    const prefix = current.slice(0, activeMention.start);
+    const suffix = current.slice(activeMention.end);
+    const needsTrailingSpace = suffix.length > 0 && !/^[\s\n]/.test(suffix);
+    const insertedText = `${mention}${needsTrailingSpace ? " " : ""}`;
+    const next = `${prefix}${insertedText}${suffix}`;
+    updateInput("referencePrompt", next);
+    setCustomImageMentionQuery(null);
+    window.setTimeout(() => {
+      const nextPosition = prefix.length + insertedText.length;
+      customImagePromptRef.current?.focus();
+      customImagePromptRef.current?.setSelectionRange(nextPosition, nextPosition);
+    }, 0);
+    setCustomImageStatus(`已插入 ${mention}`);
+  }
+
   function insertSeedanceMaterialMention(item: SeedanceMaterialItem, replaceActiveMention = false) {
     const mention = `@${item.name}`;
     const current = step.inputs.videoPromptSource ?? "";
@@ -1384,35 +1491,25 @@ export function Workspace({
 
   function prepareImageDrag(event: React.DragEvent<HTMLImageElement>, image: ImageResult, filename: string) {
     event.dataTransfer.effectAllowed = "copy";
-    event.dataTransfer.setData("text/uri-list", image.src);
-    event.dataTransfer.setData("text/plain", image.src);
-    event.dataTransfer.setData("application/x-xiaotu-asset-image", JSON.stringify({ ...image, filename }));
-    event.dataTransfer.setData("DownloadURL", `image/png:${filename}:${image.src}`);
-
-    if (canAttachImageFileDuringDrag(image.src)) {
-      const file = createFileFromDataUrl(image.src, filename);
-      if (file) {
-        event.dataTransfer.items.add(file);
-      }
+    event.dataTransfer.setData(
+      "application/x-xiaotu-asset-image",
+      JSON.stringify({
+        id: image.id,
+        assetName: image.assetName,
+        assetType: image.assetType,
+        filename,
+      }),
+    );
+    if (/^https?:\/\//i.test(image.src)) {
+      event.dataTransfer.setData("text/uri-list", image.src);
+      event.dataTransfer.setData("text/plain", image.src);
+      event.dataTransfer.setData("DownloadURL", `image/png:${filename}:${image.src}`);
+      return;
     }
-  }
 
-  function canAttachImageFileDuringDrag(src: string) {
-    return !/^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(src) || src.length <= MAX_SYNC_DRAG_DATA_URL_LENGTH;
-  }
-
-  function createFileFromDataUrl(src: string, filename: string): File | null {
-    const match = src.match(/^data:([^;,]+)(;base64)?,(.*)$/);
-    if (!match) return null;
-    const mimeType = match[1] || "image/png";
-    const isBase64 = Boolean(match[2]);
-    const payload = match[3] || "";
-    const binaryString = isBase64 ? atob(payload) : decodeURIComponent(payload);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let index = 0; index < binaryString.length; index += 1) {
-      bytes[index] = binaryString.charCodeAt(index);
-    }
-    return new File([bytes], filename, { type: mimeType });
+    const fallbackText = `图片：${filename}`;
+    event.dataTransfer.setData("text/plain", fallbackText);
+    event.dataTransfer.setData("DownloadURL", `image/png:${filename}:${filename}`);
   }
 
   function zoomPreviewImage() {
@@ -1468,11 +1565,12 @@ export function Workspace({
     ratio: string,
     resolution: string,
     onRetry?: (attempt: number, delaySeconds: number) => void,
+    options?: { referenceImages?: string[] },
   ) {
     const retryDelays = [3500, 9000];
     for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
       try {
-        return await callImageGeneration(settings, prompt, model, ratio, resolution);
+        return await callImageGeneration(settings, prompt, model, ratio, resolution, options);
       } catch (error) {
         if (!isRateLimitError(error) || attempt >= retryDelays.length) throw error;
         const delay = retryDelays[attempt];
@@ -1922,87 +2020,6 @@ export function Workspace({
     }
   }
 
-  async function runCustomPromptImageGeneration() {
-    const cleanPrompt = customImagePrompt.trim();
-    const prefixPrompt = customImagePrefix.trim();
-    const finalPrompt = [prefixPrompt, cleanPrompt].filter(Boolean).join("\n");
-    const count = Math.min(12, Math.max(1, Number.parseInt(customImageCount, 10) || 1));
-    if (!cleanPrompt) {
-      setStatus("请先填写主提示词");
-      return;
-    }
-
-    setIsGeneratingCustomImages(true);
-    setStatus(`正在按自定义提示词排队生成 ${count} 张图片...`);
-    stopImageProgressTimer();
-    setProgress({ label: "准备自定义生图参数", percent: 8 });
-
-    try {
-      const imageModel = normalizeImageModelSelection(step.inputs.imageModel);
-      const imageRatio = step.inputs.imageRatio ?? "16:9";
-      const imageResolution = step.inputs.imageResolution ?? "1K";
-      const imageCall = resolveImageCallSettings(imageModel);
-      setProgress({ label: "排队发送生图请求", percent: 18 });
-      setProgress({ label: "模型生图中", percent: 28 });
-      startImageProgressTimer();
-      const groupedResults: ImageResult[] = [];
-      let customImageIndex = 0;
-      const failedMessages: string[] = [];
-      for (let index = 0; index < count; index += 1) {
-        try {
-          setStatus(`正在生成自定义图片 ${index + 1}/${count}`);
-          setProgress({
-            label: `生成 ${index + 1}/${count}`,
-            percent: Math.min(88, 28 + Math.floor((index / count) * 55)),
-          });
-          const result = await callImageGenerationWithRetry(
-            imageCall.settings,
-            finalPrompt,
-            imageCall.model,
-            imageRatio,
-            imageResolution,
-            (attempt, delaySeconds) => {
-              setStatus(`自定义图片 ${index + 1}/${count} 触发限流，${delaySeconds}秒后自动重试第${attempt}次...`);
-            },
-          );
-          const images = parseImageResults(result, "自定义提示词", {
-            assetType: "物品",
-            prompt: finalPrompt,
-            model: imageCall.model,
-            ratio: imageRatio,
-            resolution: imageResolution,
-          });
-          const indexedImages = images.map((image) => ({
-            ...image,
-            id: `${image.id}-${++customImageIndex}`,
-          }));
-          groupedResults.push(...indexedImages);
-          setAssetImageResults((current) => [...current, ...indexedImages]);
-        } catch (error) {
-          failedMessages.push(error instanceof Error ? `第${index + 1}张：${error.message}` : `第${index + 1}张：生图失败`);
-        }
-      }
-      stopImageProgressTimer();
-      setProgress({ label: "接收图片结果", percent: 90 });
-      setProgress({ label: "解析预览图片", percent: 96 });
-      setProgress({ label: "生图完成", percent: 100 });
-      const images = groupedResults.flat();
-      if (failedMessages.length > 0 && images.length > 0) {
-        setStatus(`已生成 ${images.length} 张图片，${failedMessages.length} 张失败：${failedMessages.join("；")}`);
-      } else if (failedMessages.length > 0) {
-        setStatus(failedMessages.join("；"));
-      } else {
-        setStatus(images.length > 0 ? `已完成 ${count} 张自定义提示词图片生成` : NO_PREVIEWABLE_IMAGE_MESSAGE);
-      }
-    } catch (error) {
-      stopImageProgressTimer();
-      setProgress({ label: "生图失败", percent: 100 });
-      setStatus(error instanceof Error ? error.message : "生图调用失败");
-    } finally {
-      setIsGeneratingCustomImages(false);
-    }
-  }
-
   async function runStoryboardImageGeneration() {
     const storyboardPrompt = buildStoryboardImagePrompt();
     if (!storyboardPrompt.trim()) {
@@ -2053,6 +2070,124 @@ export function Workspace({
     } finally {
       setIsGeneratingImage(false);
     }
+  }
+
+  function buildCustomImagePrompt() {
+    const referenceLines = selectedCustomImageReferences.map((item) => {
+      const index = customImageReferences.findIndex((reference) => reference.id === item.id);
+      return `@参考图片 ${index + 1}：${item.name}（已在第9项本地参考区上传；不要把图片数据写进提示词）`;
+    });
+    return [
+      referenceLines.length > 0
+        ? `# 参考图片\n${referenceLines.join("\n\n")}`
+        : "# 参考图片\n未上传参考图片，本次按纯文本提示词生成。",
+      "# 用户主提示词",
+      step.inputs.referencePrompt ?? "",
+      "# 生成要求",
+      "如果用户提示词包含 @参考图片 N，请以对应图片为主体、风格、构图或局部修改参考；不要把已引用主体替换成无关内容。",
+      "不要字幕、水印、logo、编号、多余 UI 文字、乱码文字。",
+    ].join("\n\n");
+  }
+
+  function updateCustomImageJob(jobId: string, patch: Partial<CustomImageJob>) {
+    setCustomImageJobs((current) => current.map((job) => (job.id === jobId ? { ...job, ...patch } : job)));
+  }
+
+  function runCustomImageGeneration() {
+    const cleanPrompt = (step.inputs.referencePrompt ?? "").trim();
+    if (!cleanPrompt) {
+      setCustomImageStatus("请先填写主提示词。");
+      return;
+    }
+
+    const imageModel = normalizeImageModelSelection(step.inputs.imageModel);
+    const imageRatio = step.inputs.imageRatio ?? "16:9";
+    const imageResolution = normalizeAssetImageResolution(imageModel, step.inputs.imageResolution ?? "1K");
+    const imageCount = Math.min(12, Math.max(1, Number.parseInt(step.inputs.imageCount ?? "1", 10) || 1));
+    const imagePrompt = buildCustomImagePrompt();
+    const imageCall = resolveImageCallSettings(imageModel);
+    const generatedImages: ImageResult[] = [];
+    const failedMessages: string[] = [];
+    const jobId = `custom-image-job-${++customImageJobIdRef.current}`;
+    const selectedReferenceImages = selectedCustomImageReferences.map((item) => item.src);
+
+    setCustomImageJobs((current) => [
+      ...current,
+      {
+        id: jobId,
+        label: `任务 ${current.length + 1}`,
+        status: "queued",
+        progress: { label: "排队中", percent: 4 },
+      },
+    ]);
+    setCustomImageStatus(`已提交任务 ${customImageJobIdRef.current}，可继续生成新的任务。`);
+    setCustomImageProgress({ label: "任务已提交", percent: 4 });
+
+    void (async () => {
+      setCustomImageResults((current) => current);
+      updateCustomImageJob(jobId, { status: "generating", progress: { label: "准备第9项生图参数", percent: 8 } });
+      try {
+        for (let index = 0; index < imageCount; index += 1) {
+          try {
+            updateCustomImageJob(jobId, {
+              status: "generating",
+              progress: {
+                label: `生成 ${index + 1}/${imageCount}`,
+                percent: Math.min(88, 18 + Math.floor((index / imageCount) * 68)),
+              },
+            });
+            setCustomImageStatus(`第9项任务 ${customImageJobIdRef.current} 正在生成第 ${index + 1}/${imageCount} 张图片`);
+            const result = await callImageGenerationWithRetry(
+              imageCall.settings,
+              imagePrompt,
+              imageCall.model,
+              imageRatio,
+              imageResolution,
+              (attempt, delaySeconds) => {
+                setCustomImageStatus(`第9项任务 ${customImageJobIdRef.current} 图片 ${index + 1}/${imageCount} 触发限流，${delaySeconds}秒后自动重试第${attempt}次...`);
+                updateCustomImageJob(jobId, {
+                  status: "generating",
+                  progress: { label: `限流等待重试 ${attempt}`, percent: 42 },
+                });
+              },
+              { referenceImages: selectedReferenceImages },
+            );
+            const images = parseImageResults(result, `自定义参考图 ${jobId}`, {
+              assetType: "物品",
+              prompt: imagePrompt,
+              model: imageCall.model,
+              ratio: imageRatio,
+              resolution: imageResolution,
+            });
+            generatedImages.push(...images);
+            setCustomImageResults((current) => [...current, ...images]);
+          } catch (error) {
+            failedMessages.push(error instanceof Error ? `第${index + 1}张：${error.message}` : `第${index + 1}张：生图失败`);
+          }
+        }
+
+        updateCustomImageJob(jobId, {
+          status: failedMessages.length > 0 && generatedImages.length === 0 ? "failed" : "completed",
+          progress: { label: "任务完成", percent: 100 },
+          error: failedMessages.length > 0 ? failedMessages.join("；") : undefined,
+        });
+        setCustomImageProgress({ label: "第9项生图完成", percent: 100 });
+        if (failedMessages.length > 0 && generatedImages.length > 0) {
+          setCustomImageStatus(`任务 ${jobId} 已生成 ${generatedImages.length} 张图片，${failedMessages.length} 张失败：${failedMessages.join("；")}`);
+        } else if (failedMessages.length > 0) {
+          setCustomImageStatus(`任务 ${jobId}：${failedMessages.join("；")}`);
+        } else {
+          setCustomImageStatus(generatedImages.length > 0 ? `任务 ${jobId} 已完成 ${generatedImages.length} 张自定义参考图生成` : NO_PREVIEWABLE_IMAGE_MESSAGE);
+        }
+      } catch (error) {
+        updateCustomImageJob(jobId, {
+          status: "failed",
+          progress: { label: "任务失败", percent: 100 },
+          error: error instanceof Error ? error.message : "生图调用失败",
+        });
+        setCustomImageStatus(error instanceof Error ? error.message : "生图调用失败");
+      }
+    })();
   }
 
   function parseImageResults(
@@ -2147,21 +2282,37 @@ export function Workspace({
     for (let index = 0; index < draftLines.length; index += 1) {
       const line = draftLines[index].trim();
       if (!line) continue;
-      const bracketMatch = line.match(/^【(人物|角色|场景|物品|道具)】\s*([^：:，,]+)[：:，,]?\s*(.*)$/);
-      const labelMatch = line.match(/^(人物|角色|场景|物品|道具)[：:]\s*([^：:，,]+)[：:，,]?\s*(.*)$/);
+      const normalizedLine = line.replace(/^\s*(?:[-*•]\s*)?(?:\d+[.、)]\s*)?/, "");
+      const bracketMatch = normalizedLine.match(/^【(人物|角色|场景|物品|道具)】\s*([^：:，,]+)[：:，,]?\s*(.*)$/);
+      const labelMatch = normalizedLine.match(/^(人物|角色|场景|物品|道具)[：:]\s*([^：:，,]+)[：:，,]?\s*(.*)$/);
+      const namedFieldMatch = normalizedLine.match(/^(?:人物名称|角色名称|姓名|名称)[：:]\s*([^：:，,]+)[：:，,]?\s*(.*)$/);
+      const roleIndexMatch = normalizedLine.match(/^(角色|人物)\s*\d+[：:]\s*([^：:，,]+)[：:，,]?\s*(.*)$/);
+      const categoryMatch = normalizedLine.match(/^(?:主要人物|出场人物|配角|反派|家人|路人|旁观者)[：:]\s*([^：:，,]+)[：:，,]?\s*(.*)$/);
       const match = bracketMatch ?? labelMatch;
-      if (!match) continue;
-      const type = match[1] === "角色" ? "人物" : match[1] === "道具" ? "物品" : match[1];
-      const name = match[2].trim();
+      const type =
+        match?.[1] === "角色"
+          ? "人物"
+          : match?.[1] === "道具"
+            ? "物品"
+            : match?.[1] ?? (namedFieldMatch || roleIndexMatch || categoryMatch ? "人物" : "");
+      if (!type) continue;
+      const name = (match?.[2] ?? namedFieldMatch?.[1] ?? roleIndexMatch?.[2] ?? categoryMatch?.[1] ?? "").trim();
       if (!name) continue;
       const followingLines: string[] = [];
       for (let nextIndex = index + 1; nextIndex < draftLines.length; nextIndex += 1) {
         const nextLine = draftLines[nextIndex].trim();
         if (!nextLine) continue;
-        if (/^(【(人物|角色|场景|物品|道具)】|(人物|角色|场景|物品|道具)[：:])/.test(nextLine)) break;
+        const normalizedNextLine = nextLine.replace(/^\s*(?:[-*•]\s*)?(?:\d+[.、)]\s*)?/, "");
+        if (
+          /^(【(人物|角色|场景|物品|道具)】|(人物|角色|场景|物品|道具)[：:]|(?:人物名称|角色名称|姓名|名称)[：:]|(?:角色|人物)\s*\d+[：:]|(?:主要人物|出场人物|配角|反派|家人|路人|旁观者)[：:])/.test(
+            normalizedNextLine,
+          )
+        )
+          break;
         followingLines.push(nextLine);
       }
-      const description = [match[3]?.trim(), ...followingLines].filter(Boolean).join("\n") || line;
+      const inlineDescription = (match?.[3] ?? namedFieldMatch?.[2] ?? roleIndexMatch?.[3] ?? categoryMatch?.[2] ?? "").trim();
+      const description = [inlineDescription, ...followingLines].filter(Boolean).join("\n") || line;
       assets.push({
         id: `${type}-${name}-${assets.length}`,
         name,
@@ -3126,20 +3277,22 @@ export function Workspace({
 
   return (
     <section className="workspace">
-      <div className="workspace-header">
-        <div>
-          <p className="eyebrow">当前步骤</p>
-          <h2>{template.name}</h2>
-          <p>{template.description}</p>
+      {project.currentStep !== "custom-image" ? (
+        <div className="workspace-header">
+          <div>
+            <p className="eyebrow">当前步骤</p>
+            <h2>{template.name}</h2>
+            <p>{template.description}</p>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="form-grid">
         {template.fields
           .filter(
             (field) =>
-              project.currentStep !== "gpt-image2-storyboard" ||
-              field.key === "sourceText",
+              (project.currentStep !== "gpt-image2-storyboard" || field.key === "sourceText") &&
+              project.currentStep !== "custom-image",
           )
           .map((field) => (
           <label className={field.multiline ? "wide-field" : ""} key={field.key}>
@@ -3191,16 +3344,20 @@ export function Workspace({
         </div>
       ) : null}
 
-      <div className="ai-model-summary" aria-label="当前 AI 模型">
-        <span>当前文本模型：{aiSettings.model}</span>
-        <span>Gemini 生图备用：{aiSettings.geminiImageModel || "未设置"}</span>
-      </div>
+      {project.currentStep !== "custom-image" ? (
+        <div className="ai-model-summary" aria-label="当前 AI 模型">
+          <span>当前文本模型：{aiSettings.model}</span>
+          <span>Gemini 生图备用：{aiSettings.geminiImageModel || "未设置"}</span>
+        </div>
+      ) : null}
 
       <div className="action-row">
-        <button onClick={runAi} disabled={currentGeneration.isCalling}>
-          <Bot size={16} />
-          {currentGeneration.isCalling ? "生成中" : "调用 AI 生成"}
-        </button>
+        {project.currentStep !== "custom-image" ? (
+          <button onClick={runAi} disabled={currentGeneration.isCalling}>
+            <Bot size={16} />
+            {currentGeneration.isCalling ? "生成中" : "调用 AI 生成"}
+          </button>
+        ) : null}
         {project.currentStep === "storyboard-15s" || project.currentStep === "xiaotu-skill" ? (
           <button className="secondary-button" disabled={isSendingToZzdh || !step.draft.trim()} onClick={sendCurrentStoryboardToZzdh}>
             <Play size={16} />
@@ -3212,14 +3369,18 @@ export function Workspace({
             SEEDAN2.0违禁词检测
           </button>
         ) : null}
-        <button className="secondary-button" onClick={() => onSaveVersion(step.draft)}>
-          <Save size={16} />
-          保存结果
-        </button>
-        <button className="ghost-button" onClick={() => copyText(step.draft, "结果")}>
-          <Play size={16} />
-          复制结果
-        </button>
+        {project.currentStep !== "custom-image" ? (
+          <>
+            <button className="secondary-button" onClick={() => onSaveVersion(step.draft)}>
+              <Save size={16} />
+              保存结果
+            </button>
+            <button className="ghost-button" onClick={() => copyText(step.draft, "结果")}>
+              <Play size={16} />
+              复制结果
+            </button>
+          </>
+        ) : null}
       </div>
 
       {visibleStatus ? <div className="status-line">{visibleStatus}</div> : null}
@@ -3299,34 +3460,38 @@ export function Workspace({
         </div>
       ) : null}
 
-      <div className="section-heading">
-        <h3>生成结果 / 外部粘贴区</h3>
-        <div className="heading-actions">
-          <button className="secondary-button" onClick={() => copyText(step.draft, "结果")}>
-            <Clipboard size={16} />
-            复制
-          </button>
-          {project.currentStep === "chapter-split" ? (
-            <button className="secondary-button" onClick={continueToProseGeneration}>
-              下一步：正文生成
-            </button>
-          ) : null}
-          <button className="secondary-button" onClick={() => downloadTextFile(step.draft, "结果")}>
-            <Download size={16} />
-            导出 TXT
-          </button>
-          <button className="secondary-button" onClick={clearResults}>
-            <Trash2 size={16} />
-            一键清除
-          </button>
-        </div>
-      </div>
-      <textarea
-        className="result-editor"
-        placeholder="把 AI 输出粘贴到这里，或点击“调用 AI 生成”。确认后点击“保存结果”。"
-        value={step.draft}
-        onChange={(event) => updateDraft(event.target.value)}
-      />
+      {project.currentStep !== "custom-image" ? (
+        <>
+          <div className="section-heading">
+            <h3>生成结果 / 外部粘贴区</h3>
+            <div className="heading-actions">
+              <button className="secondary-button" onClick={() => copyText(step.draft, "结果")}>
+                <Clipboard size={16} />
+                复制
+              </button>
+              {project.currentStep === "chapter-split" ? (
+                <button className="secondary-button" onClick={continueToProseGeneration}>
+                  下一步：正文生成
+                </button>
+              ) : null}
+              <button className="secondary-button" onClick={() => downloadTextFile(step.draft, "结果")}>
+                <Download size={16} />
+                导出 TXT
+              </button>
+              <button className="secondary-button" onClick={clearResults}>
+                <Trash2 size={16} />
+                一键清除
+              </button>
+            </div>
+          </div>
+          <textarea
+            className="result-editor"
+            placeholder="把 AI 输出粘贴到这里，或点击“调用 AI 生成”。确认后点击“保存结果”。"
+            value={step.draft}
+            onChange={(event) => updateDraft(event.target.value)}
+          />
+        </>
+      ) : null}
 
       {project.currentStep === "outline-expansion" ? (
         <div className="chapter-picker">
@@ -3433,55 +3598,6 @@ export function Workspace({
             <p className="muted">先调用 AI 提取资产，或把人物、场景、物品结果粘贴到上方结果区。</p>
           )}
 
-          <div className="custom-image-panel">
-            <div className="section-heading">
-              <h3>自定义提示词出图</h3>
-              <div className="heading-actions">
-                <button className="secondary-button" onClick={clearCustomImagePrompts}>
-                  <Trash2 size={16} />
-                  清空提示词
-                </button>
-              </div>
-            </div>
-            <label className="wide-field">
-              <span>前置提示词</span>
-              <textarea
-                className="custom-image-prefix"
-                placeholder="可选。用于固定画风、镜头、比例、负面限制等，会自动拼到主提示词前面。"
-                value={customImagePrefix}
-                onChange={(event) => setCustomImagePrefix(event.target.value)}
-              />
-            </label>
-            <label className="wide-field">
-              <span>主提示词</span>
-              <textarea
-                className="custom-image-prompt"
-                placeholder="直接输入你要送入生图模型的提示词，可生成单图或多图。"
-                value={customImagePrompt}
-                onChange={(event) => setCustomImagePrompt(event.target.value)}
-              />
-            </label>
-            <div className="custom-image-actions">
-              <label>
-                <span>出图数量</span>
-                <input
-                  max={12}
-                  min={1}
-                  type="number"
-                  value={customImageCount}
-                  onChange={(event) => setCustomImageCount(event.target.value)}
-                />
-              </label>
-              <button
-                className="secondary-button"
-                disabled={isGeneratingCustomImages}
-                onClick={runCustomPromptImageGeneration}
-              >
-                <FileImage size={16} />
-                {isGeneratingCustomImages ? "提示词出图中" : "按提示词出图"}
-              </button>
-            </div>
-          </div>
         </div>
       ) : null}
 
@@ -3530,6 +3646,175 @@ export function Workspace({
       ) : null}
 
       {project.currentStep === "asset-extraction" ? renderImageResultsPanel(assetImageResults) : null}
+      {project.currentStep === "custom-image" ? (
+        <div className="asset-generation-panel">
+          <div className="section-heading">
+            <h3>第9项：自定义参考图出图</h3>
+            <div className="heading-actions">
+              <button className="secondary-button" onClick={clearCustomImageWorkspace}>
+                <Trash2 size={16} />
+                一键清空
+              </button>
+            </div>
+          </div>
+          <div
+            className="custom-image-panel import-dropzone"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              void importCustomImageReferences(event.dataTransfer.files);
+            }}
+          >
+            <div className="section-heading">
+              <h3>参考图片</h3>
+              <div className="heading-actions">
+                <label className="file-import-button">
+                  <FileUp size={16} />
+                  上传参考图
+                  <input
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp,image/tiff"
+                    aria-label="上传参考图片"
+                    multiple
+                    type="file"
+                    onChange={(event) => {
+                      void importCustomImageReferences(event.target.files ?? []);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+            <p className="muted">支持拖拽或本地导入，最多14张。提示词里可写 @参考图片 1、@参考图片 2，也可以点击下方 @调用。</p>
+            {customImageReferences.length > 0 ? (
+              <div className="seedance-material-grid">
+                {customImageReferences.map((item, index) => (
+                  <article className="seedance-material-card" key={item.id}>
+                    <img alt={`参考图片 ${index + 1}`} src={item.src} />
+                    <div>
+                      <strong>参考图片 {index + 1}</strong>
+                      <span>{item.name}</span>
+                    </div>
+                    <div className="asset-library-actions">
+                      <button className="secondary-button" onClick={() => insertCustomImageReferenceMention(index)}>
+                        @调用
+                      </button>
+                      <button className="danger-button" onClick={() => removeCustomImageReference(item.id)}>
+                        删除
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">还没有参考图片。可以直接拖入图片，或先只用文字提示词生成。</p>
+            )}
+
+            <label className="wide-field">
+              <span>主提示词 <b>必填</b></span>
+              <textarea
+                aria-label="主提示词"
+                ref={customImagePromptRef}
+                value={step.inputs.referencePrompt ?? ""}
+                onChange={(event) => {
+                  updateInput("referencePrompt", event.target.value);
+                  refreshCustomImageMentionPicker(event.currentTarget);
+                }}
+                onClick={(event) => refreshCustomImageMentionPicker(event.currentTarget)}
+                onKeyUp={(event) => refreshCustomImageMentionPicker(event.currentTarget)}
+                placeholder="例如：@参考图片 1 保持人物五官和发型不变，改成夜雨街头电影感半身照，冷蓝侧逆光。"
+              />
+              {customImageMentionQuery !== null ? (
+                <div className="seedance-mention-picker" aria-label="第9项参考图片选择">
+                  {customImageMentionOptions.length > 0 ? (
+                    customImageMentionOptions.map((item) => {
+                      const referenceIndex = customImageReferences.findIndex((reference) => reference.id === item.id);
+                      return (
+                        <button key={item.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => insertCustomImageReferenceMentionFromPicker(referenceIndex)}>
+                          <span>参考图片 {referenceIndex + 1}</span>
+                          <small>{item.name}</small>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <p className="muted">没有匹配的参考图片，请先上传或换个关键词。</p>
+                  )}
+                </div>
+              ) : null}
+            </label>
+
+            <div className="storyboard-image-settings">
+              {renderSelectControl("生图模型", "imageModel", IMAGE_MODEL_OPTIONS, "gpt-image-2")}
+              {renderTemplateSelectControl("imageRatio")}
+              {renderTemplateSelectControl("imageResolution")}
+              <label>
+                <span>出图数量</span>
+                <input
+                  aria-label="出图数量"
+                  max={12}
+                  min={1}
+                  type="number"
+                  value={step.inputs.imageCount ?? "1"}
+                  onChange={(event) => updateInput("imageCount", event.target.value)}
+                />
+              </label>
+              <button className="secondary-button" onClick={runCustomImageGeneration}>
+                <FileImage size={16} />
+                生成图片
+              </button>
+            </div>
+          </div>
+          {customImageJobs.length > 0 ? (
+            <div className="task-center" aria-label="第9项任务列表">
+              <div className="section-heading">
+                <h3>第9项任务列表</h3>
+              </div>
+              <div className="task-list">
+                {customImageJobs.map((job) => (
+                  <article className="task-item" key={job.id}>
+                    <div>
+                      <strong>{job.label}</strong>
+                      <span>{job.status === "queued" ? "排队中" : job.status === "generating" ? "生成中" : job.status === "completed" ? "完成" : "失败"}</span>
+                    </div>
+                    <p>{job.progress.label}</p>
+                    <div
+                      aria-label={`${job.label}进度`}
+                      aria-valuemax={100}
+                      aria-valuemin={0}
+                      aria-valuenow={job.progress.percent}
+                      className="progress-track"
+                      role="progressbar"
+                    >
+                      <div className="progress-fill" style={{ width: `${job.progress.percent}%` }} />
+                    </div>
+                    {job.error ? <small className="muted">{job.error}</small> : null}
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {customImageStatus ? <div className="status-line">{customImageStatus}</div> : null}
+          {customImageProgress ? (
+            <div className="generation-progress" aria-label="第9项图片生成进度" aria-live="polite">
+              <div className="progress-header">
+                <strong>第9项生图进度</strong>
+                <span>{customImageProgress.label}</span>
+                <b>{customImageProgress.percent}%</b>
+              </div>
+              <div
+                aria-label="第9项图片生成进度"
+                aria-valuemax={100}
+                aria-valuemin={0}
+                aria-valuenow={customImageProgress.percent}
+                className="progress-track"
+                role="progressbar"
+              >
+                <div className="progress-fill" style={{ width: `${customImageProgress.percent}%` }} />
+              </div>
+            </div>
+          ) : null}
+          {renderImageResultsPanel(customImageResults, "第9项生图结果预览")}
+        </div>
+      ) : null}
       {previewImage ? (
         <div
           className="image-preview-backdrop"

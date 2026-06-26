@@ -9,6 +9,7 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   endpoint: DEFAULT_TIMEAI_ENDPOINT,
   apiKey: PROXY_API_KEY_PLACEHOLDER,
   apiKeySecondary: "",
+  claudeApiKey: "",
   apiKeySource: "primary",
   modelApiKeySources: {},
   model: "gpt-5.5",
@@ -31,6 +32,7 @@ export function normalizeAiSettingsForRuntime(
   const geminiImageEndpoint = normalizeDisplayEndpoint(settings?.geminiImageEndpoint);
   const geminiImageApiKey = settings?.geminiImageApiKey?.trim();
   const apiKeySecondary = settings?.apiKeySecondary?.trim();
+  const claudeApiKey = settings?.claudeApiKey?.trim();
   const apiKeySource = settings?.apiKeySource === "secondary" ? "secondary" : "primary";
   const modelApiKeySources = settings?.modelApiKeySources;
   void runtimeUrl;
@@ -39,9 +41,16 @@ export function normalizeAiSettingsForRuntime(
     endpoint,
     apiKey: settings?.apiKey?.trim() || DEFAULT_AI_SETTINGS.apiKey,
     apiKeySecondary: apiKeySecondary || DEFAULT_AI_SETTINGS.apiKeySecondary,
+    claudeApiKey: claudeApiKey || DEFAULT_AI_SETTINGS.claudeApiKey,
     apiKeySource,
     modelApiKeySources:
-      modelApiKeySources && typeof modelApiKeySources === "object" ? modelApiKeySources : {},
+      modelApiKeySources && typeof modelApiKeySources === "object"
+        ? Object.fromEntries(
+            Object.entries(modelApiKeySources).filter(([, value]) =>
+              value === "primary" || value === "secondary" || value === "claude",
+            ),
+          )
+        : {},
     model: model === "gpt5.5" ? "gpt-5.5" : model || DEFAULT_AI_SETTINGS.model,
     geminiImageEndpoint,
     geminiImageApiKey: geminiImageApiKey || DEFAULT_AI_SETTINGS.geminiImageApiKey,

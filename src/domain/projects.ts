@@ -38,6 +38,7 @@ const STEP_IDS: TemplateId[] = [
   "gpt-image2-storyboard",
   "xiaotu-skill",
   "seedance-video",
+  "custom-image",
 ];
 
 function createEmptyStep(): StepState {

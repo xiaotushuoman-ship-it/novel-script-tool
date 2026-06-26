@@ -231,6 +231,36 @@ describe("callAiStream", () => {
     expect(result).toBe("人物资产场景资产故事板");
   });
 
+  it("streams plain text chunks when a proxy forwards non-SSE text progressively", async () => {
+    const chunks = ["【段落1】\n", "【基础设定】许燃站在门外。\n", "【画面内容】许燃看向宋叔亭。"];
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      body: {
+        getReader() {
+          let index = 0;
+          return {
+            read: async () => {
+              if (index >= chunks.length) return { done: true, value: undefined };
+              const value = new TextEncoder().encode(chunks[index++]);
+              return { done: false, value };
+            },
+          };
+        },
+      },
+    });
+    const seen: string[] = [];
+
+    const result = await callAiStream(
+      { endpoint: "https://timeai.chat/v1", apiKey: "key", model: "claude-opus-4-8" },
+      "小兔skill长提示词",
+      (chunk) => seen.push(chunk),
+      fetchImpl,
+    );
+
+    expect(seen).toEqual(chunks.map((chunk) => chunk.trim()));
+    expect(result).toBe(chunks.map((chunk) => chunk.trim()).join(""));
+  });
+
   it("falls back to a normal chat completion when streaming is unavailable", async () => {
     const fetchImpl = vi
       .fn()
@@ -714,7 +744,7 @@ describe("callImageGeneration", () => {
       }),
     );
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body as string)).toMatchObject({
-      contents: [{ parts: [{ text: "Gemini native image prompt" }] }],
+      contents: [{ parts: [{ text: expect.stringContaining("Gemini native image prompt") }] }],
       generationConfig: {
         responseModalities: ["IMAGE"],
         responseFormat: {
@@ -751,6 +781,34 @@ describe("callImageGeneration", () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: "Bearer sk-secondary",
+        }),
+      }),
+    );
+  });
+
+  it("uses the claude api key when the current model is mapped to it", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "ok" } }] }),
+    });
+
+    await callAi(
+      {
+        endpoint: "https://timeai.chat/v1",
+        apiKey: "sk-primary",
+        claudeApiKey: "sk-claude",
+        modelApiKeySources: { "claude-opus-4-8": "claude" },
+        model: "claude-opus-4-8",
+      },
+      "测试内容",
+      fetchImpl,
+    );
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/timeai/v1/chat/completions",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer sk-claude",
         }),
       }),
     );

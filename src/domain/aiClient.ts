@@ -2,12 +2,17 @@
   endpoint: string;
   apiKey: string;
   apiKeySecondary?: string;
+  claudeApiKey?: string;
   apiKeySource?: "primary" | "secondary";
-  modelApiKeySources?: Partial<Record<string, "primary" | "secondary">>;
+  modelApiKeySources?: Partial<Record<string, "primary" | "secondary" | "claude">>;
   model: string;
   geminiImageEndpoint?: string;
   geminiImageApiKey?: string;
   geminiImageModel?: string;
+};
+
+export type ImageGenerationOptions = {
+  referenceImages?: string[];
 };
 
 const TIMEAI_ENDPOINT = "https://timeai.chat/v1";
@@ -158,7 +163,18 @@ function extractStreamingLineText(line: string): string | null {
   const data = trimmed.startsWith("data:") ? trimmed.slice(5).trim() : trimmed;
   if (!data || data === "[DONE]") return null;
   const parsed = safeJsonParse(data);
-  return extractStreamingDeltaText(parsed);
+  if (parsed === null) return looksLikePlainStreamingText(data) ? data : null;
+  const delta = extractStreamingDeltaText(parsed);
+  if (delta) return delta;
+  return null;
+}
+
+function looksLikePlainStreamingText(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (/^[{[]/.test(trimmed)) return false;
+  if (/^(event|id|retry)\s*:/i.test(trimmed)) return false;
+  return true;
 }
 
 export async function callImageGeneration(
@@ -167,17 +183,21 @@ export async function callImageGeneration(
   imageModel: string,
   imageRatio = "16:9",
   imageResolution = "1K",
-  fetchImpl: typeof fetch = fetch,
+  optionsOrFetchImpl?: ImageGenerationOptions | typeof fetch,
+  maybeFetchImpl?: typeof fetch,
 ): Promise<string> {
+  const options = typeof optionsOrFetchImpl === "function" ? {} : optionsOrFetchImpl ?? {};
+  const fetchImpl = typeof optionsOrFetchImpl === "function" ? optionsOrFetchImpl : maybeFetchImpl ?? fetch;
   if (!settings.endpoint.trim()) throw new Error("请填写 API 地址");
   const apiKey = resolveApiKey(settings);
   if (!apiKey.trim()) throw new Error("请填写 API Key");
   if (!imageModel.trim()) throw new Error("请选择生图模型");
   const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint);
   const runtimeSettings = { ...settings, endpoint: runtimeEndpoint };
+  const referenceImages = sanitizeReferenceImages(options.referenceImages);
 
   if (isGeminiNativeEndpoint(runtimeEndpoint) && isGeminiImageModel(imageModel)) {
-    return callGeminiImageGeneration(runtimeSettings, apiKey, prompt, imageModel, imageRatio, imageResolution, fetchImpl);
+    return callGeminiImageGeneration(runtimeSettings, apiKey, prompt, imageModel, imageRatio, imageResolution, referenceImages, fetchImpl);
   }
 
   const response = await requestAi(
@@ -193,6 +213,13 @@ export async function callImageGeneration(
           prompt,
           size: resolveImageSize(imageRatio, imageResolution, imageModel),
           response_format: "url",
+          ...(referenceImages.length > 0
+            ? {
+                images: referenceImages,
+                reference_images: referenceImages,
+                image_urls: referenceImages,
+              }
+            : {}),
         }),
       }),
     runtimeEndpoint,
@@ -207,6 +234,7 @@ export async function callImageGeneration(
         imageModel,
         imageRatio,
         imageResolution,
+        referenceImages,
         fetchImpl,
       );
     }
@@ -227,6 +255,7 @@ async function callThirdPartyGeminiChatImageGeneration(
   imageModel: string,
   imageRatio: string,
   imageResolution: string,
+  referenceImages: string[],
   fetchImpl: typeof fetch,
 ): Promise<string> {
   const response = await requestAi(
@@ -242,13 +271,7 @@ async function callThirdPartyGeminiChatImageGeneration(
           messages: [
             {
               role: "user",
-              content: [
-                `请根据以下内容生成图片。`,
-                `画面比例：${normalizeImageRatio(imageRatio)}`,
-                `清晰度：${imageResolution.trim().toUpperCase()}`,
-                `请返回图片 URL 或 base64 图片数据，不要只返回文字描述。`,
-                prompt,
-              ].join("\n"),
+              content: buildImageChatContent(prompt, imageRatio, imageResolution, referenceImages),
             },
           ],
         }),
@@ -257,7 +280,7 @@ async function callThirdPartyGeminiChatImageGeneration(
   );
 
   if (!response.ok) {
-    return callThirdPartyGeminiGenerateContent(settings, apiKey, prompt, imageModel, imageRatio, imageResolution, fetchImpl);
+    return callThirdPartyGeminiGenerateContent(settings, apiKey, prompt, imageModel, imageRatio, imageResolution, referenceImages, fetchImpl);
   }
 
   const data = await response.json();
@@ -273,6 +296,7 @@ async function callThirdPartyGeminiGenerateContent(
   imageModel: string,
   imageRatio: string,
   imageResolution: string,
+  referenceImages: string[],
   fetchImpl: typeof fetch,
 ): Promise<string> {
   const response = await requestAi(
@@ -284,7 +308,7 @@ async function callThirdPartyGeminiGenerateContent(
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ parts: buildGeminiContentParts(prompt, imageRatio, imageResolution, referenceImages) }],
           generationConfig: {
             responseModalities: ["IMAGE"],
             responseFormat: {
@@ -316,6 +340,7 @@ async function callGeminiImageGeneration(
   imageModel: string,
   imageRatio: string,
   imageResolution: string,
+  referenceImages: string[],
   fetchImpl: typeof fetch,
 ): Promise<string> {
   const response = await requestAi(
@@ -327,7 +352,7 @@ async function callGeminiImageGeneration(
           "x-goog-api-key": apiKey,
         },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ parts: buildGeminiContentParts(prompt, imageRatio, imageResolution, referenceImages) }],
           generationConfig: {
             responseModalities: ["IMAGE"],
             responseFormat: {
@@ -352,6 +377,67 @@ async function callGeminiImageGeneration(
   return images.join("\n");
 }
 
+function sanitizeReferenceImages(referenceImages: string[] | undefined): string[] {
+  return [...new Set((referenceImages ?? []).map((item) => item.trim()).filter(Boolean))];
+}
+
+function buildImageChatContent(
+  prompt: string,
+  imageRatio: string,
+  imageResolution: string,
+  referenceImages: string[],
+): string | Array<{ type: string; text?: string; image_url?: { url: string } }> {
+  const text = [
+    "请根据以下内容生成图片。",
+    referenceImages.length > 0 ? `已附带 ${referenceImages.length} 张参考图片，请真实参考其主体、构图、风格或局部细节。` : "",
+    `画面比例：${normalizeImageRatio(imageRatio)}`,
+    `清晰度：${imageResolution.trim().toUpperCase()}`,
+    "请返回图片 URL 或 base64 图片数据，不要只返回文字描述。",
+    prompt,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  if (referenceImages.length === 0) return text;
+  return [
+    { type: "text", text },
+    ...referenceImages.map((url) => ({
+      type: "image_url",
+      image_url: { url },
+    })),
+  ];
+}
+
+function buildGeminiContentParts(
+  prompt: string,
+  imageRatio: string,
+  imageResolution: string,
+  referenceImages: string[],
+): Array<{ text: string } | { inlineData: { mimeType: string; data: string } } | { fileData: { mimeType: string; fileUri: string } }> {
+  const text = [
+    referenceImages.length > 0 ? `已附带 ${referenceImages.length} 张参考图片，请真实参考其主体、构图、风格或局部细节。` : "",
+    `画面比例：${normalizeImageRatio(imageRatio)}`,
+    `清晰度：${imageResolution.trim().toUpperCase()}`,
+    prompt,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return [
+    { text },
+    ...referenceImages.map((image) => {
+      const dataUrl = parseImageDataUrl(image);
+      if (dataUrl) return { inlineData: { mimeType: dataUrl.mimeType, data: dataUrl.data } };
+      return { fileData: { mimeType: "image/png", fileUri: image } };
+    }),
+  ];
+}
+
+function parseImageDataUrl(value: string) {
+  const match = value.match(/^data:([^;,]+);base64,(.+)$/);
+  if (!match) return null;
+  return { mimeType: match[1] || "image/png", data: match[2] };
+}
+
 function resolveImageModel(imageModel: string, imageResolution: string): string {
   const normalizedResolution = imageResolution.trim().toUpperCase();
   if (normalizedResolution === "2K" && imageModel.trim() === "gpt-image-1") return "gpt-image-2";
@@ -368,6 +454,7 @@ function resolveGeminiImageSize(imageResolution: string): string {
 function resolveApiKey(settings: AiSettings): string {
   const model = settings.model.trim();
   const source = model ? settings.modelApiKeySources?.[model] ?? settings.apiKeySource ?? "primary" : "primary";
+  if (source === "claude") return settings.claudeApiKey?.trim() || settings.apiKey.trim();
   if (source === "secondary") return settings.apiKeySecondary?.trim() || settings.apiKey.trim();
   return settings.apiKey.trim();
 }
@@ -419,7 +506,7 @@ function buildHttpErrorMessage(operation: string, status: number): string {
     return `${operation}失败：HTTP ${status}。中转站或模型当前响应超时/不可用，请稍后重试或切换模型。`;
   }
   if (status === 502) {
-    return `${operation}失败：HTTP 502。本地/网页代理转发到中转站失败，通常是中转站连接被断开、模型响应过慢或请求过长。请稍后重试；如果只在第6项出现，请减少输入长度或切换文本模型。`;
+    return `${operation}失败：HTTP 502。本地/网页代理转发到中转站失败，通常是本地代理超时、中转站连接被断开、模型响应过慢或请求过长。请稍后重试；如果只在第9项出现，请先减少参考图数量或稍缩短提示词。`;
   }
   return `${operation}失败：HTTP ${status}`;
 }

@@ -1301,3 +1301,225 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+/* Cartoon game UI skin */
+body {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 233, 142, 0.35), rgba(255, 233, 142, 0) 26%),
+    radial-gradient(circle at 90% 10%, rgba(135, 191, 255, 0.28), rgba(135, 191, 255, 0) 24%),
+    radial-gradient(circle at 24% 86%, rgba(255, 157, 184, 0.2), rgba(255, 157, 184, 0) 24%),
+    linear-gradient(180deg, #edf4ff 0%, #f5f7ff 36%, #effaf4 100%);
+  color: #2a2840;
+}
+
+.app-shell {
+  position: relative;
+}
+
+.app-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.9) 0 6px, transparent 7px),
+    radial-gradient(circle at 22% 20%, rgba(255, 255, 255, 0.9) 0 4px, transparent 5px),
+    radial-gradient(circle at 82% 16%, rgba(255, 255, 255, 0.88) 0 5px, transparent 6px),
+    radial-gradient(circle at 78% 18%, rgba(255, 255, 255, 0.88) 0 3px, transparent 4px);
+  opacity: 0.55;
+}
+
+.topbar,
+.left-panel,
+.right-panel,
+.workspace,
+.topic-recommendation-panel,
+.asset-generation-panel,
+.asset-library-section,
+.seedance-parameter-panel,
+.seedance-advanced-settings,
+.task-center,
+.generation-progress,
+.status-line,
+.chapter-picker,
+.connection-test-status,
+.dialog,
+.version-card,
+.asset-box,
+.image-result-card,
+.seedance-material-card,
+.task-item,
+.topic-recommendation-card,
+.asset-library-card,
+.safety-panel {
+  box-shadow: 0 14px 28px rgba(75, 92, 165, 0.12);
+  border-radius: 18px;
+}
+
+.topbar {
+  padding: 16px 18px;
+  border: 1px solid rgba(121, 143, 255, 0.35);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(242, 246, 255, 0.86));
+  backdrop-filter: blur(10px);
+}
+
+.topbar h1,
+.workspace-header h2,
+.section-heading h3,
+.right-panel h3,
+.panel-title {
+  color: #30306a;
+}
+
+.topbar h1 {
+  font-size: 26px;
+  letter-spacing: 0;
+}
+
+.left-panel,
+.right-panel,
+.workspace,
+.topic-recommendation-panel,
+.asset-generation-panel,
+.asset-library-section,
+.seedance-parameter-panel,
+.seedance-advanced-settings,
+.task-center,
+.generation-progress,
+.status-line,
+.chapter-picker,
+.connection-test-status,
+.version-card,
+.asset-box,
+.safety-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(245, 248, 255, 0.84));
+  border: 1px solid rgba(133, 154, 255, 0.24);
+  backdrop-filter: blur(8px);
+}
+
+button {
+  border-radius: 14px;
+  border: 1px solid #4f63ea;
+  background: linear-gradient(180deg, #7b88ff 0%, #5565e8 100%);
+  box-shadow: 0 6px 0 rgba(70, 83, 190, 0.28), 0 12px 18px rgba(85, 99, 166, 0.16);
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(1px);
+  box-shadow: 0 3px 0 rgba(70, 83, 190, 0.28), 0 8px 14px rgba(85, 99, 166, 0.12);
+}
+
+.secondary-button {
+  border-color: #8ca0ff;
+  background: linear-gradient(180deg, #ffffff 0%, #eef3ff 100%);
+  color: #30306a;
+}
+
+.ghost-button {
+  background: transparent;
+  border-color: transparent;
+  color: #5964e0;
+  box-shadow: none;
+}
+
+.danger-button {
+  border-color: #f09a92;
+  background: linear-gradient(180deg, #fff7f5 0%, #ffe7e4 100%);
+  color: #ad2f34;
+}
+
+input,
+select,
+textarea,
+.project-select {
+  border-radius: 14px;
+  border: 1px solid #c5d1ff;
+  background: rgba(255, 255, 255, 0.95);
+  color: #2a2840;
+}
+
+.step-button,
+.asset-generation-item,
+.asset-library-card,
+.topic-recommendation-card,
+.task-item,
+.image-result-card,
+.seedance-material-card {
+  border-radius: 18px;
+  border: 1px solid #c5d1ff;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(239, 243, 255, 0.92));
+}
+
+.step-button {
+  box-shadow: 0 6px 0 rgba(89, 104, 233, 0.14), 0 10px 16px rgba(85, 99, 166, 0.08);
+}
+
+.step-button.active {
+  background: linear-gradient(180deg, #7786ff 0%, #5a68e8 100%);
+}
+
+.step-index {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(221, 229, 255, 0.9));
+  color: #5a66e8;
+}
+
+.step-status,
+.status-line,
+.connection-test-status {
+  color: #4b52b5;
+}
+
+.progress-fill {
+  background: linear-gradient(90deg, #6270ff 0%, #8bdbff 45%, #7ee0b4 100%);
+}
+
+.image-result-card img,
+.seedance-video-frame,
+.seedance-video-thumbnail {
+  background: linear-gradient(180deg, #1d2550, #101429);
+}
+
+.image-preview-backdrop {
+  background: rgba(28, 35, 75, 0.56);
+}
+
+.image-preview-shell {
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(133, 154, 255, 0.24);
+}
+
+.image-preview-toolbar {
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid rgba(133, 154, 255, 0.18);
+}
+
+.image-preview-stage {
+  background: linear-gradient(180deg, #1d2550, #101429);
+}
+
+.seedance-mention-picker button,
+.file-import-button {
+  border-radius: 14px;
+  border-color: #8ca0ff;
+  background: linear-gradient(180deg, #ffffff 0%, #eef3ff 100%);
+}
+
+.task-item span {
+  border-color: #a7b5ff;
+  background: #eff2ff;
+  color: #5a66e8;
+}
+
+.muted,
+.workspace-header p,
+.topbar p,
+.topic-recommendation-card p,
+.asset-library-card p,
+.task-item p {
+  color: #62648b;
+}

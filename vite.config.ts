@@ -47,7 +47,7 @@ async function forwardLocalTimeAiRequest(request: IncomingMessage, response: Ser
   try {
     const body = await readRequestBody(request);
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 180000);
+    const timeout = setTimeout(() => controller.abort(), 420000);
     const upstream = await fetchWithTimeoutCleanup(
       targetUrl,
       {
