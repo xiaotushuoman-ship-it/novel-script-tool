@@ -3323,6 +3323,9 @@ describe("Workspace asset extraction image generation", () => {
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalled());
     const imagePrompt = callImageGenerationMock.mock.calls[0][1] as string;
     expect(imagePrompt).toContain("白衬衫，站在夜市摊前");
+    expect(imagePrompt).toContain("像服装设计总监一样");
+    expect(imagePrompt).toContain("不要把所有人物默认生成西装");
+    expect(imagePrompt).toContain("不得撞脸当红网红、明星、艺人、博主");
     expect(imagePrompt).not.toContain("完整原文背景：林晚穿白衬衫站在夜市摊前");
     expect(imagePrompt).toContain("林晚");
     expect(imagePrompt).toContain("人物");

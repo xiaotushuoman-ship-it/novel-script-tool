@@ -507,6 +507,9 @@ describe("buildPrompt", () => {
     expect(template.body).not.toContain("补全说明");
     expect(template.body).toContain("性别、年龄感");
     expect(template.body).toContain("服装");
+    expect(template.body).toContain("像服装设计总监一样");
+    expect(template.body).toContain("禁止所有人物默认统一穿西装");
+    expect(template.body).toContain("不得撞脸当红网红、明星、艺人、博主");
     expect(template.body).toContain("人物外貌：");
     expect(template.body).toContain("整体风格：根据画风锚点{{visualStyle}}");
     expect(template.body).toContain("Hyperrealistic photographic 35mm film");
