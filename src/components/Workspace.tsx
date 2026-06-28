@@ -1645,6 +1645,170 @@ export function Workspace({
     };
   }
 
+  function getExpectedXiaotuSegmentCount(inputs: Record<string, string>) {
+    const sourceText = String(inputs.sourceText ?? "");
+    const segmentSeconds = Math.max(Number.parseInt(String(inputs.segmentSeconds ?? "15"), 10) || 15, 1);
+    const capacityCount = estimateXiaotuSegmentCountByContent(sourceText, segmentSeconds);
+
+    return capacityCount > 1 ? capacityCount : null;
+  }
+
+  function estimateXiaotuSegmentCountByContent(sourceText: string, segmentSeconds: number) {
+    const compactText = sourceText
+      .replace(/<[^>]+>/g, "")
+      .replace(/(?:^|\n)\s*第\s*[一二三四五六七八九十百千万\d]+\s*[集场幕段章]\s*[:：、.．-]?/g, "")
+      .replace(/\s+/g, "");
+    if (!compactText) return 0;
+    const charsPer15Seconds = 150;
+    const charsPerSegment = Math.max(Math.round((segmentSeconds / 15) * charsPer15Seconds), 60);
+    return Math.ceil(compactText.length / charsPerSegment);
+  }
+
+  function parseChineseOrArabicNumber(value: string) {
+    const normalized = value.trim();
+    if (/^\d+$/.test(normalized)) return Number.parseInt(normalized, 10);
+    const digits: Record<string, number> = {
+      零: 0,
+      一: 1,
+      二: 2,
+      两: 2,
+      三: 3,
+      四: 4,
+      五: 5,
+      六: 6,
+      七: 7,
+      八: 8,
+      九: 9,
+    };
+    if (normalized === "十") return 10;
+    const tenIndex = normalized.indexOf("十");
+    if (tenIndex >= 0) {
+      const left = normalized.slice(0, tenIndex);
+      const right = normalized.slice(tenIndex + 1);
+      const tens = left ? digits[left] ?? 0 : 1;
+      const ones = right ? digits[right] ?? 0 : 0;
+      return tens * 10 + ones;
+    }
+    return digits[normalized] ?? Number.NaN;
+  }
+
+  function getGeneratedXiaotuSegmentCount(draft: string) {
+    const numbers = Array.from(draft.matchAll(/(?:^|\n)\s*【\s*段落\s*([一二三四五六七八九十百千万\d]+)/g))
+      .map((match) => parseChineseOrArabicNumber(match[1]))
+      .filter((number) => Number.isFinite(number) && number > 0);
+    if (numbers.length > 0) return Math.max(...numbers);
+    const sectionCount = (draft.match(/(?:^|\n)\s*【基础设定】/g) ?? []).length;
+    return sectionCount > 0 ? sectionCount : 0;
+  }
+
+  function cleanXiaotuSkillOutput(value: string) {
+    const cleaned = cleanAiTextOutput(value);
+    const firstSegmentIndex = cleaned.search(/(?:^|\n)\s*【\s*段落\s*[一二三四五六七八九十百千万\d]+/);
+    if (firstSegmentIndex >= 0) return cleanXiaotuVisibleBlocks(cleaned.slice(firstSegmentIndex)).trim();
+    return "";
+  }
+
+  function cleanXiaotuVisibleBlocks(value: string) {
+    return removeXiaotuStandaloneDialogueLines(removeXiaotuInternalBlocks(value)).trim();
+  }
+
+  function removeXiaotuInternalBlocks(value: string) {
+    return value
+      .replace(
+        /(?:^|\n)\s*【\s*(?:角色音色锁定表|空间坐标与连续性)\s*】[\s\S]*?(?=\n\s*【\s*(?:段落\s*[一二三四五六七八九十百千万\d]+[^】]*|基础设定|氛围与画质|声音|画面内容)\s*】|$)/g,
+        "\n",
+      )
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  function removeXiaotuStandaloneDialogueLines(value: string) {
+    return value
+      .split("\n")
+      .filter((line) => !/^\s*(?:[-*]\s*)?对白[:：]/.test(line))
+      .map((line) =>
+        line.replace(/对白[:：]\s*([^：:\n]+?)（([^）\n]+)）[:：]\s*([^。！？!?；;\n]+[。！？!?；;]?)/g, (_match, speaker, tone, words) => {
+          const trimmedWords = String(words).trim().replace(/^["“]|["”]$/g, "");
+          return `${String(speaker).trim()}（${String(tone).trim()}）说：“${trimmedWords}”`;
+        }),
+      )
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  async function ensureCompleteXiaotuSkill(
+    initialResult: string,
+    originalPrompt: string,
+    inputs: Record<string, string>,
+    stepId: TemplateId,
+    onCombinedResult?: (combinedResult: string) => void,
+  ) {
+    const expectedCount = getExpectedXiaotuSegmentCount(inputs);
+    if (!expectedCount || expectedCount <= 1) return initialResult;
+
+    let combinedResult = initialResult.trim();
+    const continuationBatchSize = 1;
+    const maxContinuationAttempts = Math.min(expectedCount + 4, 120);
+    let emptyContinuationCount = 0;
+    for (let attempt = 0; attempt < maxContinuationAttempts; attempt += 1) {
+      const generatedCount = getGeneratedXiaotuSegmentCount(combinedResult);
+      if (generatedCount >= expectedCount) break;
+      const nextSegment = generatedCount + 1;
+      const batchEndSegment = Math.min(expectedCount, nextSegment + continuationBatchSize - 1);
+
+      updateStepGeneration(stepId, {
+        progress: { label: `补齐段落${nextSegment}-${batchEndSegment}`, percent: Math.min(72 + attempt * 4, 88) },
+        status: `检测到小兔skill只生成 ${generatedCount || 1}/${expectedCount} 段，正在继续补齐...`,
+      });
+
+      const continuationPrompt = [
+        "继续补齐小兔skill视频提示词。",
+        `原文预计需要输出 ${expectedCount} 个15秒段落，当前只生成到第${generatedCount || 1}段。`,
+        `本次只输出【段落${nextSegment}】到【段落${batchEndSegment}】，不要一次输出更多段落。`,
+        "",
+        "这是原始生成要求：",
+        originalPrompt,
+        "",
+        "当前已经生成：",
+        combinedResult,
+        "",
+        `请从【段落${nextSegment}】继续输出到【段落${batchEndSegment}】。`,
+        "必须继续覆盖原文对应剧情，不要重复已经生成的段落，不要总结，不要解释，不要说受长度限制，不要说可以继续分批。",
+        "保持每段完整包含【基础设定】【角色音色锁定表】【氛围与画质】【空间坐标与连续性】【画面内容】。",
+        "段落标题继续使用【段落N｜时长秒｜模式】格式，时间轴每段都从0s重新开始。",
+      ].join("\n");
+      const baseResult = combinedResult;
+      const continuationResult = await streamAiText(getTextAiSettings(), continuationPrompt, (partial) => {
+        const cleanedPartial = cleanXiaotuSkillOutput(partial);
+        if (cleanedPartial.trim()) {
+          onCombinedResult?.([baseResult, cleanedPartial].filter(Boolean).join("\n\n"));
+        }
+      });
+      const cleanedContinuation = cleanXiaotuSkillOutput(continuationResult);
+      if (!cleanedContinuation.trim()) {
+        emptyContinuationCount += 1;
+        if (emptyContinuationCount >= 2) break;
+        continue;
+      }
+      emptyContinuationCount = 0;
+      combinedResult = [combinedResult, cleanedContinuation].filter(Boolean).join("\n\n");
+      onCombinedResult?.(combinedResult);
+    }
+
+    const generatedCount = getGeneratedXiaotuSegmentCount(combinedResult);
+    if (generatedCount < expectedCount) {
+      combinedResult = [
+        combinedResult,
+        "",
+        `【系统提醒】当前小兔skill结果只检测到 ${generatedCount}/${expectedCount} 段，请再次点击“调用 AI 生成”或缩短单次输入后重试。`,
+      ].join("\n");
+      onCombinedResult?.(combinedResult);
+    }
+
+    return combinedResult;
+  }
+
   async function ensureCompleteChapterSplit(
     initialResult: string,
     originalPrompt: string,
@@ -1774,26 +1938,34 @@ export function Workspace({
       startTextProgressTimer(runStepId, "等待模型生成", 65, 92);
       const textAiSettings = getTextAiSettingsForStep(runStepId);
       const initialResult = await streamAiText(textAiSettings, runPrompt, (partial) => {
-        writeDraftForStep(runProjectId, runStepId, partial);
+        const visiblePartial = runStepId === "xiaotu-skill" ? cleanXiaotuSkillOutput(partial) : partial;
+        if (visiblePartial.trim()) {
+          writeDraftForStep(runProjectId, runStepId, visiblePartial);
+        }
       });
+      const cleanedInitialResult = runStepId === "xiaotu-skill" ? cleanXiaotuSkillOutput(initialResult) : initialResult;
       stopTextProgressTimer(runStepId);
-      if (!initialResult.trim()) {
+      if (!cleanedInitialResult.trim()) {
         throw new Error("AI 返回内容为空，请检查模型是否只返回了思考过程或更换模型重试。");
       }
       const result =
         runStepId === "chapter-split"
-          ? await ensureCompleteChapterSplit(initialResult, runPrompt, runInputs, runStepId, (partial) => {
+          ? await ensureCompleteChapterSplit(cleanedInitialResult, runPrompt, runInputs, runStepId, (partial) => {
               writeDraftForStep(runProjectId, runStepId, partial);
             })
-          : initialResult;
+          : runStepId === "xiaotu-skill"
+            ? await ensureCompleteXiaotuSkill(cleanedInitialResult, runPrompt, runInputs, runStepId, (partial) => {
+                writeDraftForStep(runProjectId, runStepId, partial);
+              })
+          : cleanedInitialResult;
       if (!result.trim()) {
         throw new Error("AI 返回内容为空，请检查模型是否只返回了思考过程或更换模型重试。");
       }
       updateStepGeneration(runStepId, { progress: { label: "写入草稿", percent: 90 } });
-      if (result !== initialResult) {
+      if (result !== cleanedInitialResult) {
         writeDraftForStep(runProjectId, runStepId, result);
       } else {
-        writeDraftForStep(runProjectId, runStepId, initialResult);
+        writeDraftForStep(runProjectId, runStepId, cleanedInitialResult);
       }
       updateStepGeneration(runStepId, {
         progress: { label: "生成完成", percent: 100 },

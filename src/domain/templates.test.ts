@@ -319,15 +319,27 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("必须自动替换为可拍摄、可过审、可生成的同等戏剧功能画面");
     expect(prompt).toContain("必须先从原文抽取真实角色名");
     expect(prompt).toContain("规则条例优化版");
+    expect(prompt).toContain("学习参考提炼版");
+    expect(prompt).toContain("对白对峙默认使用过肩镜（OTS）+反打");
+    expect(prompt).toContain("镜头时长以0.3-4.5秒为主");
+    expect(prompt).toContain("每条分镜必须写清对准谁、对准哪里、表情/微动作、主体动作、跟随动作、画面信息点、镜头位置与运动");
+    expect(prompt).toContain("每段最后一镜必须承担结尾钩子或转场任务");
     expect(prompt).toContain("时间戳必须按故事动作、对白长度、情绪停顿和镜头复杂度自由划分");
     expect(prompt).toContain("不要默认0-3s、3-6s、6-9s");
     expect(prompt).toContain("实际输出必须根据当前剧情自由增减分镜数量、分镜标题和时间戳");
     expect(prompt).toContain("参考图统一写成“角色名：{@图1}角色描述”");
     expect(prompt).toContain("【段落1｜12秒｜多机位分镜】");
     expect(prompt).toContain("长内容继续输出【段落2】【段落3】");
+    expect(prompt).toContain("集数/场次/章节号只用于识别剧情顺序，不等于输出段落数");
+    expect(prompt).toContain("一集或一场超过12秒容量时，必须拆成多个【段落】");
+    expect(prompt).toContain("场次编号不是拆段命令");
+    expect(prompt).toContain("能在12秒内讲清，必须合并为一个【段落1】");
+    expect(prompt).toContain("严禁只输出【段落1】后停止");
     expect(prompt).toContain("【基础设定】");
     expect(prompt).toContain("角色名：{@图1}外貌/状态/手持道具/站位。");
-    expect(prompt).toContain("声音：保留环境声和原文对白。");
+    expect(prompt).toContain("每个段落必须独立包含且只显示【基础设定】【氛围与画质】【声音】【画面内容】四个结果字段");
+    expect(prompt).toContain("【声音】");
+    expect(prompt).toContain("保留环境声和原文对白。");
     expect(prompt).toContain("视觉基调：必须写成不少于80字的完整段落");
     expect(prompt).toContain("色彩与影调：必须写成不少于80字的完整段落");
     expect(prompt).toContain("ARRI Alexa 65");
@@ -346,7 +358,7 @@ describe("buildPrompt", () => {
       audioRule: "保留同期声",
     });
 
-    expect(prompt).toContain("【空间坐标与连续性】");
+    expect(prompt).toContain("禁止输出【角色音色锁定表】【空间坐标与连续性】");
     expect(prompt).toContain("空间坐标锁定");
     expect(prompt).toContain("上下分镜继承");
     expect(prompt).toContain("反打不反关系");
@@ -365,11 +377,13 @@ describe("buildPrompt", () => {
       audioRule: "保留原文对白和环境声",
     });
 
-    expect(prompt).toContain("【角色音色锁定表】");
+    expect(prompt).toContain("内部建立角色音色锁定表");
     expect(prompt).toContain("顶级声优级别");
-    expect(prompt).toContain("同一角色跨段沿用同一基础音色");
-    expect(prompt).toContain("不得来回换声音");
-    expect(prompt).toContain("对白：角色名（音色标签，语气，轻/重，缓/急，情绪状态）：台词");
+    expect(prompt).toContain("结果区只写简洁可用表达");
+    expect(prompt).toContain("不能让角色来回换声音");
+    expect(prompt).toContain("不要输出“对白：”独立行");
+    expect(prompt).toContain("台词必须嵌入对应分镜画面句子里，并使用中文双引号“”");
+    expect(prompt).not.toContain("对白：角色名（语气，轻/重，缓/急）：台词");
     expect(prompt).toContain("音色一致性校验");
   });
 
@@ -402,7 +416,7 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("画面左/右只允许用于临时构图");
     expect(prompt).toContain("禁止把“画面左侧/画面右侧”当成真实站位依据");
     expect(prompt).toContain("人物真实站位");
-    expect(prompt).toContain("镜头构图区分");
+    expect(prompt).toContain("不要输出【空间坐标与连续性】标题或表格");
     expect(prompt).toContain("门内/门外");
     expect(prompt).toContain("柜台内/柜台外");
     expect(prompt).toContain("实际站位不变，仅镜头反打");
