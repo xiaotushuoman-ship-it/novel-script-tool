@@ -288,7 +288,27 @@ textarea {
 .heading-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+}
+
+.inline-select-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: #5f564d;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.inline-select-control select {
+  min-height: 34px;
+  min-width: 150px;
+  border: 1px solid #d6ccbd;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 8px;
 }
 
 .section-heading h3,

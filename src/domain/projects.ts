@@ -39,6 +39,7 @@ const STEP_IDS: TemplateId[] = [
   "xiaotu-skill",
   "seedance-video",
   "custom-image",
+  "script-polish",
 ];
 
 function createEmptyStep(): StepState {

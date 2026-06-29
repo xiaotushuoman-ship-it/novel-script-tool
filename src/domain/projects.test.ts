@@ -14,6 +14,16 @@ describe("projects", () => {
     expect(loadProjects()[0].name).toBe("第一本短剧小说");
   });
 
+  it("creates an empty state for the one-click script polish step", () => {
+    const project = createProject("洗稿项目");
+
+    expect(project.steps["script-polish"]).toMatchObject({
+      draft: "",
+      inputs: {},
+      versions: [],
+    });
+  });
+
   it("adds step versions without overwriting existing output", () => {
     const project = createProject("版本测试");
     const updated = addVersion(project, "prose-generation", "第一版正文");

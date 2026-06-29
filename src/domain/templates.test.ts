@@ -15,6 +15,7 @@ describe("template catalog", () => {
       "xiaotu-skill",
       "seedance-video",
       "custom-image",
+      "script-polish",
     ]);
   });
 });
@@ -209,9 +210,9 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("【画面内容】里的每个分镜不要再写横屏、竖屏、16:9、9:16、21:9等画面比例词");
     expect(prompt).toContain("对白：角色名：台词");
     expect(prompt).toContain("不要把台词揉进动作描述里");
-    expect(prompt).toContain("分镜旁白里的角色称呼保持稳定，用角色全名或明确身份；但对白台词必须按真实口语写法生成，可以自然使用“我、你、他、她、它”等代词，不要为了称呼规则把台词写得生硬。");
-    expect(prompt).toContain("对白台词必须按真实口语写法生成");
-    expect(prompt).toContain("可以自然使用“我、你、他、她、它”等代词");
+    expect(prompt).toContain("角色称呼规则只约束分镜描述和提示词");
+    expect(prompt).toContain("台词按真人说话逻辑");
+    expect(prompt).toContain("可以自然使用“我、你、他、她”等代词");
     expect(prompt).toContain("对白：刘婶：年轻人嫌麻烦！");
     expect(prompt).toContain("对白：老赵：小摊，没啥好拍！");
     expect(prompt).toContain("每一个15S段落都是一个独立可生成的视频提示词单元");
@@ -244,9 +245,9 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("对白：角色名（音色标签，轻/重，缓/急，情绪状态）：台词");
     expect(prompt).toContain("可拍摄的生理反应");
     expect(prompt).toContain("听者反应");
-    expect(prompt).toContain("分镜旁白里的角色称呼保持稳定，用角色全名或明确身份；但对白台词必须按真实口语写法生成，可以自然使用“我、你、他、她、它”等代词，不要为了称呼规则把台词写得生硬。");
-    expect(prompt).toContain("对白台词必须按真实口语写法生成");
-    expect(prompt).toContain("可以自然使用“我、你、他、她、它”等代词");
+    expect(prompt).toContain("角色称呼规则只约束分镜描述和提示词");
+    expect(prompt).toContain("台词按真人说话逻辑");
+    expect(prompt).toContain("可以自然使用“我、你、他、她”等代词");
     expect(prompt).toContain("不要只写“悲伤/愤怒/心动/紧张/释然”");
     expect(prompt).toContain("15S容量控制");
     expect(prompt).toContain("高密度秒表模式");
@@ -296,6 +297,47 @@ describe("buildPrompt", () => {
     expect(fieldKeys).not.toContain("characterAssets");
     expect(fieldKeys).not.toContain("sceneAssets");
     expect(fieldKeys).not.toContain("propAssets");
+  });
+
+  it("configures one-click script polish as a Douyin-safe rewrite workflow", () => {
+    const template = getTemplate("script-polish");
+    const fields = Object.fromEntries(template.fields.map((field) => [field.key, field]));
+    const prompt = buildPrompt(template, {
+      sourceText: "女主被全家看不起，拿到证据后当众反击。",
+      rewriteDirection: "打脸逆袭",
+      outputForm: "短剧剧本",
+      originalityLevel: "大幅重构，只学习爆点逻辑",
+      targetLength: "30分钟（单集2分钟）",
+      extraRequirement: "台词更口语化，节奏更快。",
+    });
+
+    expect(template.name).toBe("剧本一键洗稿");
+    expect(fields.sourceText.multiline).toBe(true);
+    expect(fields.sourceText.required).toBe(true);
+    expect(fields.rewriteDirection.control).toBe("select");
+    expect(fields.rewriteDirection.options).toContain("男频热血逆袭");
+    expect(fields.rewriteDirection.options).toContain("女频大女主复仇");
+    expect(fields.rewriteDirection.options).toContain("AI漫剧爆款");
+    expect(fields.rewriteDirection.options).toContain("海外出海爽剧");
+    expect(fields.rewriteDirection.options).toContain("电商带货剧情");
+    expect(fields.outputForm.options).toContain("短剧剧本");
+    expect(fields.targetLength.control).toBe("select");
+    expect(fields.targetLength.options).toEqual(["30分钟（单集2分钟）", "60分钟（单集2分钟）", "90分钟（单集2分钟）"]);
+    expect(prompt).toContain("不照抄原文");
+    expect(prompt).toContain("只学习冲突结构、爽点递进、人物动机、爆点前置、钩子节奏和台词方式");
+    expect(prompt).toContain("0-2秒");
+    expect(prompt).toContain("2-5秒");
+    expect(prompt).toContain("8-12秒");
+    expect(prompt).toContain("抖音审核");
+    expect(prompt).toContain("番茄小说/知乎");
+    expect(prompt).toContain("女主被全家看不起");
+    expect(prompt).toContain("大幅重构，只学习爆点逻辑");
+    expect(prompt).toContain("30分钟（单集2分钟）");
+    expect(prompt).toContain("【制作规格】");
+    expect(prompt).toContain("总时长");
+    expect(prompt).toContain("单集时长");
+    expect(prompt).toContain("预计总集数");
+    expect(prompt).toContain("完结状态");
   });
 
   it("builds the Xiaotu skill prompt with Seedance safety and free timestamps", () => {

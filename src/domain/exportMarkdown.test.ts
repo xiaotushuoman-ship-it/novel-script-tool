@@ -26,4 +26,11 @@ describe("exportProjectMarkdown", () => {
     expect(markdown).toContain("【人物】林晚：白衬衫，夜市摊主。");
     expect(markdown).not.toContain("暂无保存版本。");
   });
+
+  it("skips missing steps from older saved projects", () => {
+    const project = createProject("old-project-export");
+    delete (project.steps as Partial<typeof project.steps>)["script-polish"];
+
+    expect(() => exportProjectMarkdown(project)).not.toThrow();
+  });
 });

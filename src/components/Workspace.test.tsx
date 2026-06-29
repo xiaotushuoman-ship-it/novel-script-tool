@@ -230,6 +230,104 @@ describe("Workspace progress", () => {
     );
   });
 
+  it("streams asset extraction results into the result area before the request finishes", async () => {
+    let finishStream: ((value: string) => void) | undefined;
+    callAiStreamMock.mockImplementation(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
+      onChunk("【人物】林晚：夜市摊主，");
+      await new Promise<string>((resolve) => {
+        finishStream = resolve;
+      });
+      onChunk("服装带有市井烟火细节。");
+      return "【人物】林晚：夜市摊主，服装带有市井烟火细节。";
+    });
+    const project = createProject("资产提取流式测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].inputs.sourceText = "林晚在夜市摊前端起第一碗面。";
+    const onStepDraftChange = vi.fn();
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+        onStepDraftChange={onStepDraftChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
+
+    await waitFor(() =>
+      expect(onStepDraftChange).toHaveBeenCalledWith(project.id, "asset-extraction", "【人物】林晚：夜市摊主，"),
+    );
+    expect(screen.getByRole("button", { name: "生成中" })).toBeDisabled();
+
+    await act(async () => {
+      finishStream?.("done");
+    });
+
+    await waitFor(() =>
+      expect(onStepDraftChange).toHaveBeenLastCalledWith(
+        project.id,
+        "asset-extraction",
+        "【人物】林晚：夜市摊主，服装带有市井烟火细节。",
+      ),
+    );
+  });
+
+  it("streams one-click script polish results into the result area before the request finishes", async () => {
+    let finishStream: ((value: string) => void) | undefined;
+    callAiStreamMock.mockImplementation(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
+      onChunk("【制作规格】\n总时长：30分钟\n");
+      await new Promise<string>((resolve) => {
+        finishStream = resolve;
+      });
+      onChunk("预计总集数：15集\n【成品短剧剧本】\n【第1集】女主当众拿出证据反击。");
+      return "【制作规格】\n总时长：30分钟\n预计总集数：15集\n【成品短剧剧本】\n【第1集】女主当众拿出证据反击。";
+    });
+    const project = createProject("洗稿流式测试");
+    project.currentStep = "script-polish";
+    project.steps["script-polish"].inputs.sourceText = "女主被全家看不起，拿到证据后当众反击。";
+    const onStepDraftChange = vi.fn();
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+        onStepDraftChange={onStepDraftChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
+
+    await waitFor(() =>
+      expect(onStepDraftChange).toHaveBeenCalledWith(project.id, "script-polish", "【制作规格】\n总时长：30分钟"),
+    );
+    expect(screen.getByPlaceholderText("把 AI 输出粘贴到这里，或点击“调用 AI 生成”。确认后点击“保存结果”。")).toHaveValue(
+      "【制作规格】\n总时长：30分钟",
+    );
+    expect(screen.getByRole("button", { name: "生成中" })).toBeDisabled();
+
+    await act(async () => {
+      finishStream?.("done");
+    });
+
+    await waitFor(() =>
+      expect(onStepDraftChange).toHaveBeenLastCalledWith(
+        project.id,
+        "script-polish",
+        "【制作规格】\n总时长：30分钟\n预计总集数：15集\n【成品短剧剧本】\n【第1集】女主当众拿出证据反击。",
+      ),
+    );
+    expect(screen.getByPlaceholderText("把 AI 输出粘贴到这里，或点击“调用 AI 生成”。确认后点击“保存结果”。")).toHaveValue(
+      "【制作规格】\n总时长：30分钟\n预计总集数：15集\n【成品短剧剧本】\n【第1集】女主当众拿出证据反击。",
+    );
+  });
+
   it("continues chapter split generation until the requested total chapters are present", async () => {
     mockStreamTextOnce(["第1章：开局。", "第2章：夜市。", "第3章：追兵。", "第4章：反击。", "第5章：线索。"].join("\n"));
     mockStreamTextOnce(["第6章：暗巷。", "第7章：旧友。", "第8章：码头。"].join("\n"));
@@ -825,18 +923,27 @@ describe("Workspace progress", () => {
     project.currentStep = "outline-expansion";
     project.steps["outline-expansion"].inputs.outline = "主角被赶出家门。";
 
-    render(
-      <Workspace
-        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
-        project={project}
-        onAiSettingsChange={() => undefined}
-        onProjectChange={() => undefined}
-        onSaveVersion={() => undefined}
-      />,
-    );
+    function StatefulWorkspace() {
+      const [currentProject, setCurrentProject] = useState(project);
+      return (
+        <Workspace
+          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+          project={currentProject}
+          onAiSettingsChange={() => undefined}
+          onProjectChange={setCurrentProject}
+          onSaveVersion={() => undefined}
+        />
+      );
+    }
+
+    render(<StatefulWorkspace />);
 
     expect(screen.getByRole("heading", { name: "AI 随机推荐抖音爆款题材" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "刷新推荐" })).toBeInTheDocument();
+    const recommendationStyleSelect = screen.getByRole("combobox", { name: "推荐文风" });
+    expect(recommendationStyleSelect).toBeInTheDocument();
+    fireEvent.change(recommendationStyleSelect, { target: { value: "电影感写实" } });
+    expect(screen.getByRole("combobox", { name: "文风" })).toHaveValue("电影感写实");
     expect(screen.getAllByRole("button", { name: "一键填入大纲" }).length).toBeGreaterThan(0);
   });
 
@@ -1861,9 +1968,10 @@ describe("Workspace writing flow", () => {
     expect(screen.getByText("一键小说正文生成")).toBeInTheDocument();
     expect(screen.getByLabelText("总章数")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "单章字数" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "文风" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "都市爽文" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "电影感写实" })).toBeInTheDocument();
+    const styleSelect = screen.getByRole("combobox", { name: "文风" });
+    expect(styleSelect).toBeInTheDocument();
+    expect(within(styleSelect).getByRole("option", { name: "都市爽文" })).toBeInTheDocument();
+    expect(within(styleSelect).getByRole("option", { name: "电影感写实" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "叙事视角" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "第三人称限知" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "多主角群像视角" })).toBeInTheDocument();

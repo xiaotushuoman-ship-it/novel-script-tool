@@ -30,6 +30,7 @@ import {
   LOCAL_TREND_TOPIC_RECOMMENDATIONS,
   IMAGE_MODEL_OPTIONS,
   IMAGE_RESOLUTION_OPTIONS,
+  NOVEL_STYLE_OPTIONS,
   type TopicRecommendation,
   type TemplateField,
   type TemplateId,
@@ -155,6 +156,7 @@ const STEP_NAME_BY_ID: Record<TemplateId, string> = {
   "xiaotu-skill": "小兔skill",
   "seedance-video": "SEEDANCE2.0 视频生成",
   "custom-image": "自定义参考图出图",
+  "script-polish": "剧本一键洗稿",
 };
 
 const NO_PREVIEWABLE_IMAGE_MESSAGE = "模型已响应，但没有返回可预览图片。请换生图模型或检查该模型是否支持图片输出。";
@@ -182,6 +184,7 @@ export function Workspace({
   const template = getTemplate(project.currentStep);
   const step = project.steps[project.currentStep];
   const [status, setStatus] = useState("");
+  const [liveDraftByStep, setLiveDraftByStep] = useState<Partial<Record<TemplateId, string>>>({});
   const [generationByStep, setGenerationByStep] = useState<Partial<Record<TemplateId, StepGenerationState>>>({});
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isSendingToZzdh, setIsSendingToZzdh] = useState(false);
@@ -247,6 +250,7 @@ export function Workspace({
   };
   const visibleProgress = project.currentStep === "asset-extraction" && progress ? progress : currentGeneration.progress;
   const visibleStatus = currentGeneration.status || status;
+  const visibleDraft = liveDraftByStep[project.currentStep] ?? step.draft;
   const backgroundTasks = Object.entries(generationByStep)
     .filter(([, task]) => task?.progress || task?.status)
     .map(([stepId, task]) => ({
@@ -264,6 +268,19 @@ export function Workspace({
       stopAllTextProgressTimers();
     };
   }, [isAssetLibraryStep]);
+
+  useEffect(() => {
+    setLiveDraftByStep((current) => {
+      if (current[project.currentStep] === undefined || current[project.currentStep] !== step.draft) return current;
+      const next = { ...current };
+      delete next[project.currentStep];
+      return next;
+    });
+  }, [project.currentStep, step.draft]);
+
+  useEffect(() => {
+    setLiveDraftByStep({});
+  }, [project.id]);
 
   useEffect(() => {
     if (!previewImage) return;
@@ -473,6 +490,7 @@ export function Workspace({
   }
 
   function updateDraft(value: string) {
+    setLiveDraftByStep((current) => ({ ...current, [project.currentStep]: value }));
     onProjectChange({
       ...project,
       steps: {
@@ -483,6 +501,7 @@ export function Workspace({
   }
 
   function writeDraftForStep(projectId: string, stepId: TemplateId, value: string) {
+    setLiveDraftByStep((current) => ({ ...current, [stepId]: value }));
     if (onStepDraftChange) {
       onStepDraftChange(projectId, stepId, value);
       return;
@@ -1985,7 +2004,8 @@ export function Workspace({
   async function sendCurrentStoryboardToZzdh() {
     const canSendToZzdh = project.currentStep === "storyboard-15s" || project.currentStep === "xiaotu-skill";
     if (!canSendToZzdh) return;
-    if (!step.draft.trim()) {
+    const storyboardDraft = liveDraftByStep[project.currentStep] ?? step.draft;
+    if (!storyboardDraft.trim()) {
       setStatus(
         project.currentStep === "xiaotu-skill"
           ? "请先生成或粘贴小兔skill结果，再发送到字字动画。"
@@ -1997,7 +2017,7 @@ export function Workspace({
     setIsSendingToZzdh(true);
     setStatus("正在发送到字字动画...");
     try {
-      await sendStoryboardToZzdh(project.name, step.draft);
+      await sendStoryboardToZzdh(project.name, storyboardDraft);
       setStatus("已发送到字字动画，并自动创建/打开项目");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "发送到字字动画失败");
@@ -2787,6 +2807,7 @@ export function Workspace({
       (project.currentStep === "gpt-image2-storyboard" && field.key === "sourceText") ||
       (project.currentStep === "xiaotu-skill" && field.key === "sourceText") ||
       (project.currentStep === "seedance-video" && field.key === "videoPromptSource") ||
+      (project.currentStep === "script-polish" && field.key === "sourceText") ||
       (project.currentStep === "asset-extraction" && field.key === "sourceText");
 
     if (canImportText) {
@@ -3434,17 +3455,17 @@ export function Workspace({
         <div className="section-heading">
           <h3>生成结果 / 外部粘贴区</h3>
           <div className="heading-actions">
-            <button className="secondary-button" onClick={() => copyText(step.draft, "结果")}>
+            <button className="secondary-button" onClick={() => copyText(visibleDraft, "结果")}>
               <Clipboard size={16} />
               复制
             </button>
-            <button className="secondary-button" onClick={() => downloadTextFile(step.draft, "结果")}>
+            <button className="secondary-button" onClick={() => downloadTextFile(visibleDraft, "结果")}>
               <Download size={16} />
               导出 TXT
             </button>
           </div>
         </div>
-        <textarea className="result-editor" placeholder="整理后的视频提示词会显示在这里，也可以手动粘贴。" value={step.draft} onChange={(event) => updateDraft(event.target.value)} />
+        <textarea className="result-editor" placeholder="整理后的视频提示词会显示在这里，也可以手动粘贴。" value={visibleDraft} onChange={(event) => updateDraft(event.target.value)} />
       </section>
     );
   }
@@ -3484,6 +3505,20 @@ export function Workspace({
           <div className="section-heading">
             <h3>AI 随机推荐抖音爆款题材</h3>
             <div className="heading-actions">
+              <label className="inline-select-control">
+                <span>推荐文风</span>
+                <select
+                  aria-label="推荐文风"
+                  value={step.inputs.style ?? "贴合大纲气质"}
+                  onChange={(event) => updateInput("style", event.target.value)}
+                >
+                  {NOVEL_STYLE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button className="secondary-button" disabled={topicRecommendations.isLoading} onClick={() => void loadTopicRecommendations()}>
                 <Bot size={16} />
                 {topicRecommendations.isLoading ? "推荐中" : "刷新推荐"}
@@ -3533,7 +3568,7 @@ export function Workspace({
           </button>
         ) : null}
         {project.currentStep === "storyboard-15s" || project.currentStep === "xiaotu-skill" ? (
-          <button className="secondary-button" disabled={isSendingToZzdh || !step.draft.trim()} onClick={sendCurrentStoryboardToZzdh}>
+            <button className="secondary-button" disabled={isSendingToZzdh || !visibleDraft.trim()} onClick={sendCurrentStoryboardToZzdh}>
             <Play size={16} />
             {isSendingToZzdh ? "发送中" : project.currentStep === "xiaotu-skill" ? "发送到字字动画" : "发送分镜到字字动画"}
           </button>
@@ -3545,11 +3580,11 @@ export function Workspace({
         ) : null}
         {project.currentStep !== "custom-image" ? (
           <>
-            <button className="secondary-button" onClick={() => onSaveVersion(step.draft)}>
+            <button className="secondary-button" onClick={() => onSaveVersion(visibleDraft)}>
               <Save size={16} />
               保存结果
             </button>
-            <button className="ghost-button" onClick={() => copyText(step.draft, "结果")}>
+            <button className="ghost-button" onClick={() => copyText(visibleDraft, "结果")}>
               <Play size={16} />
               复制结果
             </button>
@@ -3639,7 +3674,7 @@ export function Workspace({
           <div className="section-heading">
             <h3>生成结果 / 外部粘贴区</h3>
             <div className="heading-actions">
-              <button className="secondary-button" onClick={() => copyText(step.draft, "结果")}>
+              <button className="secondary-button" onClick={() => copyText(visibleDraft, "结果")}>
                 <Clipboard size={16} />
                 复制
               </button>
@@ -3648,7 +3683,7 @@ export function Workspace({
                   下一步：正文生成
                 </button>
               ) : null}
-              <button className="secondary-button" onClick={() => downloadTextFile(step.draft, "结果")}>
+              <button className="secondary-button" onClick={() => downloadTextFile(visibleDraft, "结果")}>
                 <Download size={16} />
                 导出 TXT
               </button>
@@ -3661,7 +3696,7 @@ export function Workspace({
           <textarea
             className="result-editor"
             placeholder="把 AI 输出粘贴到这里，或点击“调用 AI 生成”。确认后点击“保存结果”。"
-            value={step.draft}
+            value={visibleDraft}
             onChange={(event) => updateDraft(event.target.value)}
           />
         </>

@@ -23,6 +23,7 @@ const PRIMARY_STEP_IDS: TemplateId[] = [
   "xiaotu-skill",
   "seedance-video",
   "custom-image",
+  "script-polish",
 ];
 
 export function FlowNav({

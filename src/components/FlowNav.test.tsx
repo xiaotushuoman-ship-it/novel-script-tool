@@ -32,4 +32,27 @@ describe("FlowNav", () => {
     fireEvent.click(screen.getByRole("button", { name: /小说改剧本/ }));
     expect(onSelectStep).toHaveBeenCalledWith("novel-to-script");
   });
+
+  it("shows the one-click script polish entry as step 10", () => {
+    const project = createProject("洗稿导航测试");
+    const onSelectStep = vi.fn();
+
+    render(
+      <FlowNav
+        activeProjectId={project.id}
+        activeStep={project.currentStep}
+        projects={[project]}
+        onCreateProject={() => undefined}
+        onOpenSettings={() => undefined}
+        onSelectProject={() => undefined}
+        onSelectStep={onSelectStep}
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: /剧本一键洗稿/ });
+    expect(button).toHaveTextContent("10");
+
+    fireEvent.click(button);
+    expect(onSelectStep).toHaveBeenCalledWith("script-polish");
+  });
 });
