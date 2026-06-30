@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildTimeAiTargetUrl, forwardTimeAiRequest } from "../../api/timeai/[...path].js";
+import { config as timeAiRootConfig } from "../../api/timeai.js";
+import { buildTimeAiTargetUrl, config as timeAiPathConfig, forwardTimeAiRequest } from "../../api/timeai/[...path].js";
 
 describe("TimeAI proxy target url", () => {
   it("keeps catch-all path slashes for chat completions", () => {
@@ -14,6 +15,11 @@ describe("TimeAI proxy target url", () => {
     expect(buildTimeAiTargetUrl("v1beta/models/gemini-3.1-flash-image-preview:generateContent")).toBe(
       "https://timeai.chat/v1beta/models/gemini-3.1-flash-image-preview:generateContent",
     );
+  });
+
+  it("configures TimeAI proxy functions for long image requests", () => {
+    expect(timeAiRootConfig.maxDuration).toBe(300);
+    expect(timeAiPathConfig.maxDuration).toBe(300);
   });
 
   it("flushes streaming TimeAI responses before the upstream finishes", async () => {

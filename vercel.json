@@ -1,4 +1,13 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/timeai.js": {
+      "maxDuration": 300
+    },
+    "api/timeai/[...path].js": {
+      "maxDuration": 300
+    }
+  },
   "rewrites": [
     {
       "source": "/api/timeai/:path*",

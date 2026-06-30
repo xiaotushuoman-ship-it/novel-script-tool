@@ -261,6 +261,43 @@ describe("callAiStream", () => {
     expect(result).toBe(chunks.map((chunk) => chunk.trim()).join(""));
   });
 
+  it("keeps long text streams open while the first chunk is slow", async () => {
+    vi.useFakeTimers();
+    const encoder = new TextEncoder();
+    let readCount = 0;
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      body: {
+        getReader() {
+          return {
+            read: async () => {
+              readCount += 1;
+              if (readCount > 1) return { done: true, value: undefined };
+              await new Promise((resolve) => setTimeout(resolve, 31_000));
+              return {
+                done: false,
+                value: encoder.encode('data: {"choices":[{"delta":{"content":"第1章实时返回"}}]}\n\n'),
+              };
+            },
+          };
+        },
+      },
+    });
+    const seen: string[] = [];
+
+    const resultPromise = callAiStream(
+      { endpoint: "https://timeai.chat/v1", apiKey: "key", model: "gpt-5.5" },
+      "长篇小说提示词",
+      (chunk) => seen.push(chunk),
+      fetchImpl,
+    );
+
+    await vi.advanceTimersByTimeAsync(31_000);
+    await expect(resultPromise).resolves.toBe("第1章实时返回");
+    expect(seen).toEqual(["第1章实时返回"]);
+    vi.useRealTimers();
+  });
+
   it("falls back to a normal chat completion when streaming is unavailable", async () => {
     const fetchImpl = vi
       .fn()
@@ -478,6 +515,25 @@ describe("callImageGeneration", () => {
         fetchImpl,
       ),
     ).rejects.toThrow("model gpt-image-2 is not available for this API group");
+  });
+
+  it("explains Vercel image proxy timeouts with an actionable message", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 504,
+      text: async () => "An error occurred with your deployment FUNCTION_INVOCATION_TIMEOUT",
+    });
+
+    await expect(
+      callImageGeneration(
+        { endpoint: "https://timeai.chat/v1", apiKey: "key", model: "gpt-5.5" },
+        "asset prompt",
+        "gpt-image-2",
+        "16:9",
+        "1K",
+        fetchImpl,
+      ),
+    ).rejects.toThrow("网页端代理等待图片生成超时");
   });
 
   it("sends 2K gpt-image requests when high resolution is selected", async () => {

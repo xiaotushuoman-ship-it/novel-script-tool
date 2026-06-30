@@ -103,6 +103,28 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("95分");
   });
 
+  it("tells one-click novel generation to infer missing outline details instead of asking follow-up questions", () => {
+    const template = getTemplate("outline-expansion");
+    const prompt = buildPrompt(template, {
+      outline: "主角拿回父亲留下的老招牌，靠一门手艺翻盘。",
+      totalChapters: "20",
+      chapterWords: "2500",
+      style: "粗粝写实",
+      perspective: "第三人称",
+      autoContinue: "完结",
+    });
+
+    expect(prompt).toContain("只要用户提供了故事大纲");
+    expect(prompt).toContain("不得向用户追问");
+    expect(prompt).toContain("自动合理补齐");
+    expect(prompt).toContain("主角姓名、年龄、性别、职业");
+    expect(prompt).toContain("家族成员关系");
+    expect(prompt).toContain("父辈留下的核心资产");
+    expect(prompt).toContain("主要对手");
+    expect(prompt).toContain("故事发生的年代和地点");
+    expect(prompt).toContain("结局方向");
+  });
+
   it("configures the first step as one-click novel generation", () => {
     const template = getTemplate("outline-expansion");
     const fields = Object.fromEntries(template.fields.map((field) => [field.key, field]));
@@ -338,6 +360,19 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("单集时长");
     expect(prompt).toContain("预计总集数");
     expect(prompt).toContain("完结状态");
+    expect(prompt).toContain("内置多阶段创作流程");
+    expect(prompt).toContain("赛道分析");
+    expect(prompt).toContain("农村乡土题材");
+    expect(prompt).toContain("普通老百姓");
+    expect(prompt).toContain("一句话就能吸引观众");
+    expect(prompt).toContain("反差点和猎奇点");
+    expect(prompt).toContain("分成20章");
+    expect(prompt).toContain("每章不低于1500字");
+    expect(prompt).toContain("强迫食用排泄物");
+    expect(prompt).toContain("狗链、狗笼");
+    expect(prompt).toContain("不要输出 Mermaid 流程图");
+    expect(prompt).not.toContain("graph TD");
+    expect(prompt).not.toContain("ag_001");
   });
 
   it("builds the Xiaotu skill prompt with Seedance safety and free timestamps", () => {
@@ -388,6 +423,18 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("Cooke Anamorphic/i");
     expect(prompt).toContain("分镜1丨分镜标题丨0-2.5s丨");
     expect(prompt).toContain("不要输出[0-3s]这种方括号时间码");
+    expect(prompt).toContain("Mx-Shell_Prompts v1.5");
+    expect(prompt).toContain("绝对禁止文学化修辞");
+    expect(prompt).toContain("对白与画外音例外条款");
+    expect(prompt).toContain("物理优先法则");
+    expect(prompt).toContain("有参考图时");
+    expect(prompt).toContain("不超过20字");
+    expect(prompt).toContain("无参考图时");
+    expect(prompt).toContain("详细物理描述");
+    expect(prompt).toContain("不需要配乐，仅保留同期声");
+    expect(prompt).toContain("对白与画外音处理");
+    expect(prompt).toContain("纯文本以 TXT 格式输出");
+    expect(prompt).not.toContain("欢迎来**AIGC自修室**");
   });
 
   it("locks Xiaotu skill spatial continuity and interaction direction", () => {

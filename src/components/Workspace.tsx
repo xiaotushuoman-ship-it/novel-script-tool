@@ -185,6 +185,7 @@ export function Workspace({
   const step = project.steps[project.currentStep];
   const [status, setStatus] = useState("");
   const [liveDraftByStep, setLiveDraftByStep] = useState<Partial<Record<TemplateId, string>>>({});
+  const [liveInputsByStep, setLiveInputsByStep] = useState<Partial<Record<TemplateId, Record<string, string>>>>({});
   const [generationByStep, setGenerationByStep] = useState<Partial<Record<TemplateId, StepGenerationState>>>({});
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isSendingToZzdh, setIsSendingToZzdh] = useState(false);
@@ -280,6 +281,7 @@ export function Workspace({
 
   useEffect(() => {
     setLiveDraftByStep({});
+    setLiveInputsByStep({});
   }, [project.id]);
 
   useEffect(() => {
@@ -325,11 +327,11 @@ export function Workspace({
 
   const prompt = useMemo(() => {
     try {
-      return buildPrompt(template, step.inputs);
+      return buildPrompt(template, { ...step.inputs, ...(liveInputsByStep[project.currentStep] ?? {}) });
     } catch (error) {
       return error instanceof Error ? error.message : "提示词生成失败";
     }
-  }, [template, step.inputs]);
+  }, [liveInputsByStep, project.currentStep, template, step.inputs]);
 
   const extractedAssets = useMemo(() => {
     if (project.currentStep !== "asset-extraction") return [];
@@ -439,6 +441,13 @@ export function Workspace({
   }, [assetLibrarySearch]);
 
   function updateInput(key: string, value: string) {
+    setLiveInputsByStep((current) => ({
+      ...current,
+      [project.currentStep]: {
+        ...current[project.currentStep],
+        [key]: value,
+      },
+    }));
     onProjectChange({
       ...project,
       steps: {
@@ -1627,9 +1636,10 @@ export function Workspace({
   }
 
   function getMissingRequiredFields() {
+    const currentInputs = { ...step.inputs, ...(liveInputsByStep[project.currentStep] ?? {}) };
     return template.fields
       .filter((field) => field.required)
-      .filter((field) => !String(step.inputs[field.key] ?? field.defaultValue ?? "").trim())
+      .filter((field) => !String(currentInputs[field.key] ?? field.defaultValue ?? "").trim())
       .map((field) => field.label);
   }
 
@@ -1937,11 +1947,17 @@ export function Workspace({
   async function runAi() {
     const runProjectId = project.id;
     const runStepId = project.currentStep;
-    const runPrompt = prompt;
-    const runInputs = { ...project.steps[runStepId].inputs };
+    const runInputs = { ...project.steps[runStepId].inputs, ...(liveInputsByStep[runStepId] ?? {}) };
     const missingFields = getMissingRequiredFields();
     if (missingFields.length > 0) {
       setStatus(`请先填写：${missingFields.join("、")}`);
+      return;
+    }
+    let runPrompt = "";
+    try {
+      runPrompt = buildPrompt(getTemplate(runStepId), runInputs);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "提示词生成失败");
       return;
     }
 

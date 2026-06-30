@@ -1,5 +1,9 @@
 const TIMEAI_BASE_URL = "https://timeai.chat";
 
+export const config = {
+  maxDuration: 300,
+};
+
 export function buildTimeAiTargetUrl(path) {
   const rawPath = Array.isArray(path) ? path.join("/") : String(path || "");
   const normalizedPath = rawPath

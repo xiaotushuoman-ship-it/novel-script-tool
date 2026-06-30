@@ -230,6 +230,35 @@ describe("Workspace progress", () => {
     );
   });
 
+  it("builds one-click novel prompts from the latest outline typed before clicking generate", async () => {
+    callAiStreamMock.mockImplementationOnce(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
+      onChunk("第1章：旧宅门前\n林清禾握紧木匣。");
+      return "第1章：旧宅门前\n林清禾握紧木匣。";
+    });
+    const project = createProject("最新大纲生成测试");
+    project.steps["outline-expansion"].inputs.outline = "旧大纲：夜市摊主逆袭。";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.change(screen.getByDisplayValue("旧大纲：夜市摊主逆袭。"), {
+      target: { value: "新大纲：林清禾回村守住父亲留下的旧宅和木雕招牌。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
+
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
+    const prompt = callAiStreamMock.mock.calls[0][1] as string;
+    expect(prompt).toContain("新大纲：林清禾回村守住父亲留下的旧宅和木雕招牌。");
+    expect(prompt).not.toContain("旧大纲：夜市摊主逆袭。");
+  });
+
   it("streams asset extraction results into the result area before the request finishes", async () => {
     let finishStream: ((value: string) => void) | undefined;
     callAiStreamMock.mockImplementation(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {

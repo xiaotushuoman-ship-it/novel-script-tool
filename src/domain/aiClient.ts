@@ -17,6 +17,7 @@ export type ImageGenerationOptions = {
 
 const TIMEAI_ENDPOINT = "https://timeai.chat/v1";
 const TIMEAI_PROXY_ENDPOINT = "/api/timeai/v1";
+const TEXT_STREAM_CHUNK_TIMEOUT_MS = 180000;
 
 export async function callAi(
   settings: AiSettings,
@@ -102,7 +103,7 @@ export async function callAiStream(
   const decoder = new TextDecoder();
   let buffer = "";
   let fullText = "";
-  const streamTimeoutMs = 30000;
+  const streamTimeoutMs = TEXT_STREAM_CHUNK_TIMEOUT_MS;
 
   while (true) {
     const { done, value } = await readStreamChunkWithTimeout(reader, streamTimeoutMs);
@@ -501,6 +502,9 @@ function buildHttpErrorMessage(operation: string, status: number): string {
   }
   if (status === 401 || status === 403) {
     return `${operation}失败：HTTP ${status}。请检查 API Key 是否有效、模型名是否与 API 分组对应。`;
+  }
+  if (status === 504) {
+    return `${operation}失败：HTTP 504。网页端代理等待图片生成超时，通常是模型排队、高清图生成较慢或 Vercel 函数等待时间到达上限；本地版可以等更久。请稍后重试，或先降低分辨率、减少批量数量。`;
   }
   if (status === 503 || status === 524) {
     return `${operation}失败：HTTP ${status}。中转站或模型当前响应超时/不可用，请稍后重试或切换模型。`;
