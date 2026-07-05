@@ -391,7 +391,7 @@ describe("Workspace progress", () => {
     );
   });
 
-  it("continues Xiaotu skill generation when a full script only returns the first segment", async () => {
+  it("streams Xiaotu skill output from one model request without auto continuation", async () => {
     mockStreamTextOnce(
       [
         "【段落1｜15秒｜多机位分镜】",
@@ -399,8 +399,6 @@ describe("Workspace progress", () => {
         "【画面内容】分镜1丨对峙丨0-15s丨许燃看向宋叔亭。",
       ].join("\n"),
     );
-    mockStreamTextOnce(["【段落2｜15秒｜多机位分镜】", "【基础设定】宋叔亭站在茶几旁。", "【画面内容】分镜1丨追问丨0-15s丨宋叔亭压低声音追问。"].join("\n"));
-    mockStreamTextOnce(["【段落3｜15秒｜多机位分镜】", "【基础设定】许燃和宋叔亭仍在客厅。", "【画面内容】分镜1丨沉默丨0-15s丨许燃移开视线。"].join("\n"));
     const project = createProject("小兔skill补齐测试");
     project.currentStep = "xiaotu-skill";
     const denseBeat =
@@ -427,18 +425,17 @@ describe("Workspace progress", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(3));
-    expect(callAiStreamMock.mock.calls[1][1]).toContain("继续补齐小兔skill视频提示词");
-    expect(callAiStreamMock.mock.calls[1][1]).toContain("预计需要输出 3 个15秒段落");
-    expect(callAiStreamMock.mock.calls[1][1]).toContain("请从【段落2】继续输出到【段落2】");
-    expect(callAiStreamMock.mock.calls[2][1]).toContain("请从【段落3】继续输出到【段落3】");
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
+    expect(callAiStreamMock.mock.calls[0][1]).not.toContain("继续补齐小兔skill视频提示词");
     await waitFor(() =>
       expect(onStepDraftChange).toHaveBeenLastCalledWith(
         project.id,
         "xiaotu-skill",
-        expect.stringContaining("【段落3｜15秒｜多机位分镜】"),
+        expect.stringContaining("【基础设定】许燃站在客厅门口。"),
       ),
     );
+    const finalDraft = String(onStepDraftChange.mock.calls.at(-1)?.[2] ?? "");
+    expect(finalDraft).not.toContain("【段落1｜15秒｜多机位分镜】");
   });
 
   it("does not force Xiaotu skill continuation when numbered beats fit in one 15-second segment", async () => {
@@ -474,19 +471,12 @@ describe("Workspace progress", () => {
     expect(callAiStreamMock.mock.calls[0][1]).toContain("第2场");
   });
 
-  it("requests long Xiaotu skill continuations one segment at a time", async () => {
+  it("does not request long Xiaotu skill continuations", async () => {
     mockStreamTextOnce(
       [
         "【段落1｜15秒｜多机位分镜】",
         "【基础设定】许燃站在客厅门口。",
         "【画面内容】分镜1丨对峙丨0-15s丨许燃看向宋叔亭。",
-      ].join("\n"),
-    );
-    mockStreamTextOnce(
-      [
-        "【段落62｜15秒｜多机位分镜】",
-        "【基础设定】许燃站在楼道尽头。",
-        "【画面内容】分镜1丨收束丨0-15s丨许燃停在门边。",
       ].join("\n"),
     );
     const project = createProject("小兔skill长剧本分批补齐测试");
@@ -510,14 +500,12 @@ describe("Workspace progress", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(2));
-    expect(callAiStreamMock.mock.calls[1][1]).toContain("请从【段落2】继续输出到【段落2】");
-    expect(callAiStreamMock.mock.calls[1][1]).not.toContain("请从【段落2】继续输出到【段落62】");
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("严禁只输出【段落1】后停止");
   });
 
-  it("does not treat episode count as the Xiaotu skill segment count for long episodes", async () => {
+  it("does not start a second Xiaotu skill request based on episode count", async () => {
     mockStreamTextOnce("【段落1｜15秒｜多机位分镜】\n【基础设定】许燃站在客厅门口。");
-    mockStreamTextOnce("【段落99｜15秒｜多机位分镜】\n【基础设定】宋叔亭站在茶几旁。");
     const longEpisodeText = "许燃站在客厅门口，宋叔亭站在茶几旁压低声音追问，许燃沉默后移开视线。".repeat(10);
     const project = createProject("小兔skill集数不是段落数测试");
     project.currentStep = "xiaotu-skill";
@@ -540,27 +528,26 @@ describe("Workspace progress", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-    await waitFor(() => expect(callAiStreamMock.mock.calls.length).toBeGreaterThanOrEqual(2));
-    expect(callAiStreamMock.mock.calls[1][1]).toMatch(/原文预计需要输出 ([2-9]\d|1\d{2,}) 个15秒段落/);
-    expect(callAiStreamMock.mock.calls[1][1]).not.toContain("至少需要输出 20 个段落");
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
   });
 
-  it("streams each Xiaotu continuation segment by appending the current segment without waiting for the full completion", async () => {
-    let finishSegment2: ((value: string) => void) | undefined;
+  it("streams Xiaotu skill chunks into the result area during the single model request", async () => {
+    let finishStream: ((value: string) => void) | undefined;
     callAiStreamMock.mockImplementationOnce(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
       const segment1 = "【段落1｜15秒｜多机位分镜】\n【基础设定】许燃站在客厅门口。";
       onChunk(segment1);
-      return segment1;
-    });
-    callAiStreamMock.mockImplementationOnce(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
       onChunk("【段落2｜15秒｜多机位分镜】\n");
       await new Promise<string>((resolve) => {
-        finishSegment2 = resolve;
+        finishStream = resolve;
       });
       onChunk("【基础设定】宋叔亭站在茶几旁。");
-      return "【段落2｜15秒｜多机位分镜】\n【基础设定】宋叔亭站在茶几旁。";
+      return [
+        "【段落1｜15秒｜多机位分镜】",
+        "【基础设定】许燃站在客厅门口。",
+        "【段落2｜15秒｜多机位分镜】",
+        "【基础设定】宋叔亭站在茶几旁。",
+      ].join("\n");
     });
-    mockStreamTextOnce("【段落3｜15秒｜多机位分镜】\n【基础设定】许燃移开视线。");
     const project = createProject("小兔skill逐段流式测试");
     project.currentStep = "xiaotu-skill";
     const denseBeat =
@@ -587,45 +574,33 @@ describe("Workspace progress", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-    await waitFor(() =>
-      expect(onStepDraftChange).toHaveBeenCalledWith(
-        project.id,
-        "xiaotu-skill",
-        expect.stringContaining("【段落2｜15秒｜多机位分镜】"),
-      ),
-    );
+    await waitFor(() => expect(onStepDraftChange).toHaveBeenCalledTimes(2));
     const segment2Partial = String(onStepDraftChange.mock.calls.at(-1)?.[2] ?? "");
-    expect(segment2Partial).toContain("【段落1｜15秒｜多机位分镜】");
-    expect(segment2Partial).toContain("【段落2｜15秒｜多机位分镜】");
-    expect(segment2Partial).not.toContain("【段落3｜15秒｜多机位分镜】");
+    expect(segment2Partial).not.toContain("【段落1｜15秒｜多机位分镜】");
+    expect(segment2Partial).not.toContain("【段落2｜15秒｜多机位分镜】");
+    expect(segment2Partial).toContain("许燃站在客厅门口");
+    expect(callAiStreamMock).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      finishSegment2?.("done");
+      finishStream?.("done");
     });
 
     await waitFor(() =>
       expect(onStepDraftChange).toHaveBeenLastCalledWith(
         project.id,
         "xiaotu-skill",
-        expect.stringContaining("【段落3｜15秒｜多机位分镜】"),
+        expect.stringContaining("宋叔亭站在茶几旁"),
       ),
     );
   });
 
-  it("does not write Xiaotu continuation length-limit explanations into the result area", async () => {
+  it("does not auto continue Xiaotu skill when the model mentions a length limit", async () => {
     mockStreamTextOnce(
       [
         "【段落1｜15秒｜多机位分镜】",
         "【基础设定】许燃站在客厅门口。",
         "【画面内容】分镜1丨对峙丨0-15s丨许燃看向宋叔亭。",
-      ].join("\n"),
-    );
-    mockStreamTextOnce("受单次输出长度限制，无法一次性塞下【段落2】到【段落62】且每段都完整包含全部字段。我可以继续分批补齐。");
-    mockStreamTextOnce(
-      [
-        "【段落62｜15秒｜多机位分镜】",
-        "【基础设定】许燃站在楼道尽头。",
-        "【画面内容】分镜1丨收束丨0-15s丨许燃停在门边。",
+        "受单次输出长度限制，无法一次性塞下【段落2】到【段落62】且每段都完整包含全部字段。我可以继续分批补齐。",
       ].join("\n"),
     );
     const project = createProject("小兔skill解释过滤测试");
@@ -651,11 +626,11 @@ describe("Workspace progress", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
     const finalDraft = String(onStepDraftChange.mock.calls.at(-1)?.[2] ?? "");
-    expect(finalDraft).toContain("【段落62｜15秒｜多机位分镜】");
-    expect(finalDraft).not.toContain("受单次输出长度限制");
-    expect(finalDraft).not.toContain("我可以继续分批补齐");
+    expect(finalDraft).not.toContain("【段落1｜15秒｜多机位分镜】");
+    expect(finalDraft).not.toContain("【段落62｜15秒｜多机位分镜】");
+    expect(finalDraft).toContain("【基础设定】许燃站在客厅门口。");
   });
 
   it("removes Xiaotu skill explanatory prefaces before the first segment", async () => {
@@ -692,10 +667,11 @@ describe("Workspace progress", () => {
       expect(onStepDraftChange).toHaveBeenLastCalledWith(
         project.id,
         "xiaotu-skill",
-        expect.stringMatching(/^【段落1｜15秒｜多机位分镜】/),
+        expect.stringMatching(/^【基础设定】/),
       ),
     );
     const finalDraft = String(onStepDraftChange.mock.calls.at(-1)?.[2] ?? "");
+    expect(finalDraft).not.toContain("【段落1｜15秒｜多机位分镜】");
     expect(finalDraft).not.toContain("我先按合规规则");
     expect(finalDraft).not.toContain("接下来会输出");
   });
@@ -1205,7 +1181,7 @@ describe("Workspace storyboard controls", () => {
 
     render(<StatefulWorkspace />);
 
-    expect(screen.getByText("把小说原文改成竖屏短剧脚本。")).toBeInTheDocument();
+    expect(screen.getByText("把小说原文改成短剧脚本。")).toBeInTheDocument();
     expect(screen.getByText("小说原文")).toBeInTheDocument();
     expect(screen.queryByText("小说原文或场景")).not.toBeInTheDocument();
     expect(screen.getByLabelText("导入文档")).toHaveAttribute("type", "file");
@@ -2771,9 +2747,12 @@ describe("Workspace asset extraction image generation", () => {
     const prompt = callImageGenerationMock.mock.calls[0][1] as string;
     expect(prompt).toContain("人物外貌：女性");
     expect(prompt).toContain("整体风格：3D国漫风格");
+    expect(prompt).toContain("指定画风：3D国漫风格");
     expect(prompt).toContain("图片的结构：左边人物正面近景肖像");
     expect(prompt).toContain("不是信息图、不是表格、不是PPT、不是教学海报、不是英文语法图");
     expect(prompt).toContain("绝对不要把这些英文或中文说明画进图片里");
+    expect(prompt).not.toContain("Hyperrealistic photographic");
+    expect(prompt).not.toContain("NOT 3D");
     expect(prompt).not.toContain("完整原文背景：林晚在夜市摊前抬头");
     expect(await screen.findByRole("img", { name: "林晚 生图结果 1" })).toHaveAttribute(
       "src",

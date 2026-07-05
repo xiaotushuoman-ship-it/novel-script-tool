@@ -17,7 +17,11 @@ const TEXT_MODEL_OPTIONS = [
   "claude-opus-4-8",
 ];
 
-const GEMINI_IMAGE_MODEL_OPTIONS = ["gemini-3.1-flash-preview", "gemini-3-pro-image-preview"];
+const GEMINI_IMAGE_MODEL_OPTIONS = [
+  "gemini-3.1-flash-preview",
+  "gemini-3.1-flash-lite-image",
+  "gemini-3-pro-image-preview",
+];
 const CONNECTION_TEST_PROMPT = "请只回复：连接正常";
 const TIMEAI_REGISTER_URL = "https://timeai.chat/register?aff=k2gn";
 

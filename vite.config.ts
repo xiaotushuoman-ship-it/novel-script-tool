@@ -30,7 +30,7 @@ function aistarsLabLocalProxy(): Plugin {
   };
 }
 
-async function forwardLocalTimeAiRequest(request: IncomingMessage, response: ServerResponse) {
+export async function forwardLocalTimeAiRequest(request: IncomingMessage, response: ServerResponse) {
   if (request.method === "OPTIONS") {
     response.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
@@ -62,10 +62,18 @@ async function forwardLocalTimeAiRequest(request: IncomingMessage, response: Ser
       timeout,
     );
 
+    const contentType = upstream.headers.get("content-type") || "application/json";
+    const isStreamingResponse = /text\/event-stream|application\/x-ndjson/i.test(contentType);
     response.statusCode = upstream.status;
-    response.setHeader("Content-Type", upstream.headers.get("content-type") || "application/json");
+    response.setHeader("Content-Type", contentType);
     response.setHeader("Cache-Control", "no-cache, no-transform");
     response.setHeader("X-Accel-Buffering", "no");
+    if (isStreamingResponse) {
+      response.setHeader("Connection", "keep-alive");
+      response.flushHeaders?.();
+      response.write(": stream-open\n\n");
+      response.flush?.();
+    }
     await pipeWebStreamToNodeResponse(upstream, response);
   } catch (error) {
     response.statusCode = 502;
@@ -206,6 +214,7 @@ async function pipeWebStreamToNodeResponse(upstream: Response, response: ServerR
       if (done) break;
       if (value) {
         response.write(Buffer.from(value));
+        response.flush?.();
       }
     }
   } finally {

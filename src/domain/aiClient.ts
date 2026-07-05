@@ -594,6 +594,7 @@ function resolveGeminiModelName(imageModel: string): string {
   const normalized = imageModel.trim();
   const modelMap: Record<string, string> = {
     "gemini-3.1-flash-preview": "gemini-3.1-flash-image",
+    "gemini-3.1-flash-lite-image": "gemini-3.1-flash-lite-image",
     "gemini-3-pro-image-preview": "gemini-3-pro-image",
   };
   return modelMap[normalized] ?? normalized.replace(/-preview$/, "");
@@ -617,6 +618,7 @@ function resolveThirdPartyGeminiImageModelName(imageModel: string): string {
   const normalized = imageModel.trim();
   const modelMap: Record<string, string> = {
     "gemini-3.1-flash-preview": "gemini-3.1-flash-image-preview",
+    "gemini-3.1-flash-lite-image": "gemini-3.1-flash-lite-image-preview",
     "gemini-3-pro-image-preview": "gemini-3-pro-image-preview",
   };
   return modelMap[normalized] ?? normalized;

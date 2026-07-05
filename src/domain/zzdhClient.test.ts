@@ -160,6 +160,41 @@ describe("zzdhClient", () => {
     expect(panels[1].paperwork).toContain("万金宝把账单拍在桌上");
   });
 
+  it("parses Xiaotu skill 剧情N blocks into separate ZZDH panels", () => {
+    const panels = parseStoryboardPanels(
+      [
+        "剧情1：",
+        "许明舟：站在夜市摊前。",
+        "【氛围与画质】",
+        "风格核心：废土西部片",
+        "【画面内容】",
+        "分镜1丨开场丨0-4s丨许明舟站在摊前，右手按住账单。",
+        "不要出现字幕，不要BGM",
+        "",
+        "剧情2：",
+        "万金宝：走到夜市摊前。",
+        "【氛围与画质】",
+        "风格核心：废土西部片",
+        "【画面内容】",
+        "分镜1丨逼近丨0-5s丨万金宝把账单推到许明舟面前。",
+        "不要出现字幕，不要BGM",
+        "",
+        "剧情3：",
+        "刘婶：站在人群前排。",
+        "【画面内容】",
+        "分镜1丨围观丨0-5s丨刘婶低头看向桌面账单。",
+      ].join("\n"),
+    );
+
+    expect(panels).toHaveLength(3);
+    expect(panels[0].paperwork.split("\n")[0]).toBe("剧情1：");
+    expect(panels[1].paperwork.split("\n")[0]).toBe("剧情2：");
+    expect(panels[2].paperwork.split("\n")[0]).toBe("剧情3：");
+    expect(panels[0].video_prompt).toContain("许明舟站在摊前");
+    expect(panels[1].video_prompt).toContain("万金宝把账单推到许明舟面前");
+    expect(panels[2].video_prompt).toContain("刘婶低头看向桌面账单");
+  });
+
   it("parses Chinese 15S unit headings into ordered ZZDH panels", () => {
     const panels = parseStoryboardPanels(
       [

@@ -289,7 +289,7 @@ function delay(milliseconds: number): Promise<void> {
 function splitStoryboardSegments(text: string): string[] {
   const xiaotuSkillMatches = [
     ...text.matchAll(
-      /(?:^|\n)(?=(?:#{1,6}\s*)?[【\[]?\s*(?:段落\s*\d+|第\s*\d+\s*段)[^\n]*(?:一镜到底|多机位分镜)[】\]]?)/g,
+      /(?:^|\n)(?=(?:#{1,6}\s*)?(?:[【\[]?\s*(?:段落\s*[一二三四五六七八九十百千万\d]+|第\s*[一二三四五六七八九十百千万\d]+\s*段)[^\n]*(?:一镜到底|多机位分镜)[】\]]?|剧情\s*[一二三四五六七八九十百千万\d]+\s*[:：]))/g,
     ),
   ];
   if (xiaotuSkillMatches.length > 1) {

@@ -609,6 +609,35 @@ describe("callImageGeneration", () => {
     });
   });
 
+  it("routes the Gemini flash lite image model to the Gemini generateContent endpoint", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [{ inlineData: { mimeType: "image/png", data: "abc123" } }],
+            },
+          },
+        ],
+      }),
+    });
+
+    await callImageGeneration(
+      { endpoint: "https://generativelanguage.googleapis.com/v1beta", apiKey: "sk-gemini", model: "gpt-5.5" },
+      "Gemini lite image prompt",
+      "gemini-3.1-flash-lite-image",
+      "16:9",
+      "1K",
+      fetchImpl,
+    );
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-image:generateContent",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("falls back to chat completions for third-party Gemini image models when image generation is unavailable", async () => {
     const fetchImpl = vi
       .fn()
@@ -750,6 +779,61 @@ describe("callImageGeneration", () => {
     expect(fetchImpl).toHaveBeenNthCalledWith(
       3,
       "/api/timeai/v1beta/models/gemini-3.1-flash-image-preview:generateContent",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer sk-third-party",
+        }),
+      }),
+    );
+  });
+
+  it("maps the Gemini flash lite image model for third-party v1beta generateContent fallback", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({ error: { message: "image endpoint unavailable" } }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({ error: { message: "chat endpoint unavailable" } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType: "image/png",
+                      data: "flash-lite-third-party-base64",
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      });
+
+    const result = await callImageGeneration(
+      { endpoint: "https://timeai.chat/v1", apiKey: "sk-third-party", model: "gpt-5.5" },
+      "Third-party Gemini flash lite image prompt",
+      "gemini-3.1-flash-lite-image",
+      "16:9",
+      "1K",
+      fetchImpl,
+    );
+
+    expect(result).toBe("data:image/png;base64,flash-lite-third-party-base64");
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      3,
+      "/api/timeai/v1beta/models/gemini-3.1-flash-lite-image-preview:generateContent",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({

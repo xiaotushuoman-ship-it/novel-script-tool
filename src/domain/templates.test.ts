@@ -154,7 +154,7 @@ describe("buildPrompt", () => {
 
   it("uses novel-only wording for the novel-to-script source field", () => {
     const template = getTemplate("novel-to-script");
-    expect(template.description).toBe("把小说原文改成竖屏短剧脚本。");
+    expect(template.description).toBe("把小说原文改成短剧脚本。");
     expect(template.fields[0]).toMatchObject({
       key: "sourceScene",
       label: "小说原文",
@@ -189,6 +189,10 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("若原文中已经分成 N 集 / N 段 / N 个剧情节点，必须输出 N 段");
     expect(prompt).toContain("不得把所有内容压成 1 集");
     expect(prompt).toContain("许明舟被二叔逼签断亲书");
+    expect(prompt).not.toContain("竖屏");
+    expect(prompt).not.toContain("横屏");
+    expect(prompt).not.toContain("9:16");
+    expect(prompt).not.toContain("16:9");
   });
 
   it("builds a 15-second storyboard prompt from the Douyin viral short-drama template", () => {
@@ -329,7 +333,10 @@ describe("buildPrompt", () => {
       rewriteDirection: "打脸逆袭",
       outputForm: "短剧剧本",
       originalityLevel: "大幅重构，只学习爆点逻辑",
-      targetLength: "30分钟（单集2分钟）",
+      targetLength: "20章",
+      chapterWords: "2000字左右",
+      endingMode: "完结",
+      storyTime: "按参考内容自动判断",
       extraRequirement: "台词更口语化，节奏更快。",
     });
 
@@ -344,7 +351,16 @@ describe("buildPrompt", () => {
     expect(fields.rewriteDirection.options).toContain("电商带货剧情");
     expect(fields.outputForm.options).toContain("短剧剧本");
     expect(fields.targetLength.control).toBe("select");
-    expect(fields.targetLength.options).toEqual(["30分钟（单集2分钟）", "60分钟（单集2分钟）", "90分钟（单集2分钟）"]);
+    expect(fields.targetLength.label).toBe("目标长度");
+    expect(fields.targetLength.options).toEqual(["10章", "20章", "30章", "50章", "80章", "100章", "自定义章数"]);
+    expect(fields.chapterWords.control).toBe("select");
+    expect(fields.chapterWords.defaultValue).toBe("2000字左右");
+    expect(fields.endingMode.control).toBe("select");
+    expect(fields.endingMode.options).toEqual(["完结", "连载"]);
+    expect(fields.storyTime.control).toBe("select");
+    expect(fields.storyTime.options).toContain("按参考内容自动判断");
+    expect(fields.storyTime.options).toContain("现代都市");
+    expect(fields.storyTime.options).toContain("古代架空");
     expect(prompt).toContain("不照抄原文");
     expect(prompt).toContain("只学习冲突结构、爽点递进、人物动机、爆点前置、钩子节奏和台词方式");
     expect(prompt).toContain("0-2秒");
@@ -354,22 +370,52 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("番茄小说/知乎");
     expect(prompt).toContain("女主被全家看不起");
     expect(prompt).toContain("大幅重构，只学习爆点逻辑");
-    expect(prompt).toContain("30分钟（单集2分钟）");
+    expect(prompt).toContain("20章");
+    expect(prompt).toContain("2000字左右");
+    expect(prompt).toContain("完结方式：完结");
+    expect(prompt).toContain("故事时间背景：按参考内容自动判断");
     expect(prompt).toContain("【制作规格】");
-    expect(prompt).toContain("总时长");
-    expect(prompt).toContain("单集时长");
-    expect(prompt).toContain("预计总集数");
+    expect(prompt).toContain("目标章数");
+    expect(prompt).toContain("单章字数");
+    expect(prompt).toContain("输出范围");
     expect(prompt).toContain("完结状态");
     expect(prompt).toContain("内置多阶段创作流程");
     expect(prompt).toContain("赛道分析");
+    expect(prompt).toContain("优先保持参考内容原始题材赛道");
+    expect(prompt).toContain("同类型剧情");
+    expect(prompt).toContain("洗稿方向只用于强化爽点结构");
+    expect(prompt).toContain("不得把末世、古风、都市、悬疑、职场、电商、玄幻、武侠等明确题材强行改成乡土家庭题材");
     expect(prompt).toContain("农村乡土题材");
     expect(prompt).toContain("普通老百姓");
     expect(prompt).toContain("一句话就能吸引观众");
     expect(prompt).toContain("反差点和猎奇点");
-    expect(prompt).toContain("分成20章");
-    expect(prompt).toContain("每章不低于1500字");
+    expect(prompt).toContain("按目标章数完整规划");
+    expect(prompt).toContain("每章约2000字");
+    expect(prompt).toContain("2S跳出率");
+    expect(prompt).toContain("5S完播率");
+    expect(prompt).toContain("开头第一句话必须能单独抓住观众");
+    expect(prompt).toContain("去AI感");
+    expect(prompt).toContain("男频都市爽文专属指令");
+    expect(prompt).toContain("小生意、婚恋钱财、物业维权、职场利益冲突");
+    expect(prompt).toContain("第一人称小说爆款稿");
+    expect(prompt).toContain("男主沉稳、成熟、有经验、有掌控力");
+    expect(prompt).toContain("合同、票据、后台、签字、盖章、流程");
+    expect(prompt).toContain("反派就是反派，不提前洗白");
+    expect(prompt).toContain("不写成“人物名：台词”的伪剧本");
+    expect(prompt).toContain("每章都有新爽点");
     expect(prompt).toContain("强迫食用排泄物");
     expect(prompt).toContain("狗链、狗笼");
+    expect(prompt).toContain("极端侮辱");
+    expect(prompt).toContain("非人化");
+    expect(prompt).toContain("亵渎受害者尊严");
+    expect(prompt).toContain("群体妖魔化");
+    expect(prompt).toContain("极端家庭暴力");
+    expect(prompt).toContain("违背家庭人伦亲情");
+    expect(prompt).toContain("封建婚恋观");
+    expect(prompt).toContain("伦理擦边");
+    expect(prompt).toContain("暴力美化与违法犯罪");
+    expect(prompt).toContain("恶意丑化群体");
+    expect(prompt).toContain("自动替换为同等戏剧功能");
     expect(prompt).toContain("不要输出 Mermaid 流程图");
     expect(prompt).not.toContain("graph TD");
     expect(prompt).not.toContain("ag_001");
@@ -404,23 +450,36 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("时间戳必须按故事动作、对白长度、情绪停顿和镜头复杂度自由划分");
     expect(prompt).toContain("不要默认0-3s、3-6s、6-9s");
     expect(prompt).toContain("实际输出必须根据当前剧情自由增减分镜数量、分镜标题和时间戳");
-    expect(prompt).toContain("参考图统一写成“角色名：{@图1}角色描述”");
-    expect(prompt).toContain("【段落1｜12秒｜多机位分镜】");
-    expect(prompt).toContain("长内容继续输出【段落2】【段落3】");
+    expect(prompt).toContain("参考图统一写成“角色名：{@图1}状态/手持道具/站位”");
+    expect(prompt).toContain("不要输出【段落1｜12秒｜多机位分镜】");
+    expect(prompt).toContain("每个段落必须直接从“剧情N：”开始");
+    expect(prompt).toContain("长内容必须在同一次回答内依次输出剧情2：剧情3：剧情4：");
+    expect(prompt).toContain("不要输出【段落2】【段落3】这类标题");
+    expect(prompt).toContain("不要说受长度限制，不要说可以继续分批补齐");
     expect(prompt).toContain("集数/场次/章节号只用于识别剧情顺序，不等于输出段落数");
     expect(prompt).toContain("一集或一场超过12秒容量时，必须拆成多个【段落】");
     expect(prompt).toContain("场次编号不是拆段命令");
     expect(prompt).toContain("能在12秒内讲清，必须合并为一个【段落1】");
     expect(prompt).toContain("严禁只输出【段落1】后停止");
-    expect(prompt).toContain("【基础设定】");
-    expect(prompt).toContain("角色名：{@图1}外貌/状态/手持道具/站位。");
-    expect(prompt).toContain("每个段落必须独立包含且只显示【基础设定】【氛围与画质】【声音】【画面内容】四个结果字段");
+    expect(prompt).toContain("剧情1：");
+    expect(prompt).toContain("剧情2：");
+    expect(prompt).toContain("不要输出【基础设定】");
+    expect(prompt).toContain("每个段落必须独立包含且只显示剧情N：【氛围与画质】【声音】【画面内容】四个结果字段");
+    expect(prompt).toContain("角色名：{@图1}状态/手持道具/站位。");
+    expect(prompt).toContain("不要写“成年男性”“成年女性”“二十多岁末到三十岁初”这类泛化年龄性别描述");
+    expect(prompt).toContain("除非剧情明确需要，不要描述服装");
+    expect(prompt).toContain("每个段落末尾必须单独加一句：不要出现字幕，不要BGM");
     expect(prompt).toContain("【声音】");
     expect(prompt).toContain("保留环境声和原文对白。");
+    expect(prompt).toContain("风格核心字段只能写成“风格核心：影视写实现代”");
     expect(prompt).toContain("视觉基调：必须写成不少于80字的完整段落");
+    expect(prompt).toContain("根据当前剧本或小说的题材、时代、空间和统一影像体系自行选择");
+    expect(prompt).toContain("视觉基调字段禁止复述影像风格里的画风关键词");
+    expect(prompt).toContain("只写摄影机设备感、镜头类型、画幅观感、拍摄方式、运动质感和景深控制");
+    expect(prompt).toContain("同一部剧本或小说必须保持统一影像体系");
     expect(prompt).toContain("色彩与影调：必须写成不少于80字的完整段落");
-    expect(prompt).toContain("ARRI Alexa 65");
-    expect(prompt).toContain("Cooke Anamorphic/i");
+    expect(prompt).not.toContain("例如ARRI Alexa 65");
+    expect(prompt).not.toContain("Cooke Anamorphic/i");
     expect(prompt).toContain("分镜1丨分镜标题丨0-2.5s丨");
     expect(prompt).toContain("不要输出[0-3s]这种方括号时间码");
     expect(prompt).toContain("Mx-Shell_Prompts v1.5");
@@ -430,7 +489,7 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("有参考图时");
     expect(prompt).toContain("不超过20字");
     expect(prompt).toContain("无参考图时");
-    expect(prompt).toContain("详细物理描述");
+    expect(prompt).toContain("只写角色身份、状态、手持道具、站位和当前动作");
     expect(prompt).toContain("不需要配乐，仅保留同期声");
     expect(prompt).toContain("对白与画外音处理");
     expect(prompt).toContain("纯文本以 TXT 格式输出");
@@ -476,6 +535,25 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("音色一致性校验");
   });
 
+  it("folds the emotion director rules into the Xiaotu skill prompt", () => {
+    const template = getTemplate("xiaotu-skill");
+    const prompt = buildPrompt(template, {
+      sourceText: "林晚舟看着空碗，手指攥紧衣角，声音发抖地说：“我没偷。”",
+      mode: "多机位分镜",
+      segmentSeconds: "15",
+      visualStyle: "影视写实现代",
+      audioRule: "保留同期声",
+    });
+
+    expect(prompt).toContain("情绪导演2.0增强规则");
+    expect(prompt).toContain("情绪曲线");
+    expect(prompt).toContain("微动作、惯性动作、神经反应、失控反应");
+    expect(prompt).toContain("动作四要素");
+    expect(prompt).toContain("台词标注维度");
+    expect(prompt).toContain("环境反馈必须与动作同步发生");
+    expect(prompt).toContain("禁止毫米、厘米、赫兹、精确角度、小数比例");
+  });
+
   it("keeps Xiaotu skill dialogue pronouns natural instead of replacing them with character names", () => {
     const template = getTemplate("xiaotu-skill");
     const prompt = buildPrompt(template, {
@@ -486,10 +564,26 @@ describe("buildPrompt", () => {
       audioRule: "保留原文对白",
     });
 
-    expect(prompt).toContain("台词内容必须保留自然口语代词");
+    expect(prompt).toContain("台词内容必须逐字保留原文台词和原文代词");
     expect(prompt).toContain("不能改成“许燃不是宋叔亭的”");
     expect(prompt).toContain("不能改成“许燃会去”");
     expect(prompt).toContain("这条只约束画面描述，不约束对白台词");
+  });
+
+  it("requires Xiaotu skill dialogue text to match the source exactly", () => {
+    const template = getTemplate("xiaotu-skill");
+    const prompt = buildPrompt(template, {
+      sourceText: "许燃看向宋叔亭说：“你不是宋叔亭的，我会去。”宋叔亭停顿后说：“别再骗我。”",
+      mode: "多机位分镜",
+      segmentSeconds: "15",
+      visualStyle: "影视写实现代",
+      audioRule: "保留原文对白",
+    });
+
+    expect(prompt).toContain("原文对白必须逐字保留");
+    expect(prompt).toContain("不得改写、润色、缩写、合并、扩写或替换台词内容");
+    expect(prompt).toContain("只能调整台词所在分镜、说话者动作、语气标注和听话者反应");
+    expect(prompt).not.toContain("只保留必要短对白");
   });
 
   it("separates Xiaotu skill real spatial positions from temporary screen left and right", () => {
@@ -562,6 +656,7 @@ describe("buildPrompt", () => {
     expect(fields.imageModel.options).toContain("gpt-image-2");
     expect(fields.imageModel.options).not.toContain("gpt-image-2-all");
     expect(fields.imageModel.options).toContain("gemini-3.1-flash-preview");
+    expect(fields.imageModel.options).toContain("gemini-3.1-flash-lite-image");
     expect(fields.imageResolution.control).toBe("select");
     expect(fields.imageResolution.options).toEqual(["1K", "2K", "4K"]);
     expect(fieldKeys).not.toContain("seedanceDuration");
@@ -584,6 +679,7 @@ describe("buildPrompt", () => {
     expect(fields.imageModel.options).toContain("gpt-image-2");
     expect(fields.imageModel.options).not.toContain("gpt-image-2-all");
     expect(fields.imageModel.options).toContain("gemini-3.1-flash-preview");
+    expect(fields.imageModel.options).toContain("gemini-3.1-flash-lite-image");
     expect(fields.imageModel.options).toContain("gemini-3-pro-image-preview");
     expect(fields.imageModel.options).not.toContain("banana-2");
     expect(fields.imageRatio.control).toBe("select");
@@ -601,10 +697,18 @@ describe("buildPrompt", () => {
     expect(template.body).toContain("不得撞脸当红网红、明星、艺人、博主");
     expect(template.body).toContain("人物外貌：");
     expect(template.body).toContain("整体风格：根据画风锚点{{visualStyle}}");
-    expect(template.body).toContain("Hyperrealistic photographic 35mm film");
+    expect(template.body).toContain("画风附加词必须由画风锚点{{visualStyle}}决定");
+    expect(template.body).toContain("{{assetCharacterStyleRule}}");
+    expect(template.body).not.toContain("Hyperrealistic photographic 35mm film");
+    expect(template.body).not.toContain("NOT 3D");
     expect(template.body).toContain("【Layout】2x2 grid");
     expect(template.body).toContain("FULL BODY NECK DOWN, NO FACE");
     expect(template.body).toContain("左下格不露脸");
+    expect(template.body).toContain("必须使用2x2四宫格：左上（正脸特写）；右上（侧脸特写）；左下（脖子以下全身，脸裁出画面）；右下（背面全身）");
+    expect(template.body).toContain("四格必须是同一人、同一服装、同一风格、同一光影");
+    expect(template.body).toContain("不要字幕、水印、logo、编号或多余文字");
+    expect(template.body).toContain("必须达到男女主角、重要反派或核心配角的精美角色标准");
+    expect(template.body).toContain("不能是大众脸");
     expect(template.body).toContain("人物的身份：");
     expect(template.body).toContain("图片的结构：");
     expect(template.body).not.toContain("绝对注意事项：");
@@ -621,5 +725,40 @@ describe("buildPrompt", () => {
     expect(template.body).toContain("4.右下：反向全景");
     expect(template.body).toContain("不要只拍单个物品");
     expect(template.body).toContain("物品资产必须使用电商纯白色背景强约束");
+  });
+
+  it("keeps non-realistic asset character style wording from polluting the image prompt", () => {
+    const template = getTemplate("asset-extraction");
+    const prompt = buildPrompt(template, {
+      sourceText: "林晚站在废弃加油站屋顶，手里握着骨制长矛。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+    const assetOutputRules = prompt.slice(prompt.indexOf("按下面格式输出"));
+
+    expect(assetOutputRules).not.toContain("现实主义");
+    expect(assetOutputRules).not.toContain("写实主义");
+    expect(assetOutputRules).not.toContain("写实质感");
+    expect(assetOutputRules).not.toContain("影视写实");
+    expect(assetOutputRules).toContain("当前画风锚点不属于真人摄影方向");
+  });
+
+  it("allows realistic wording only when the asset style anchor is cinematic realism", () => {
+    const template = getTemplate("asset-extraction");
+    const prompt = buildPrompt(template, {
+      sourceText: "林晚站在废弃加油站屋顶，手里握着骨制长矛。",
+      assetType: "人物",
+      visualStyle: "影视写实现代",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+    const assetOutputRules = prompt.slice(prompt.indexOf("按下面格式输出"));
+
+    expect(assetOutputRules).toContain("当前画风锚点属于影视写实方向");
+    expect(assetOutputRules).toContain("影视写实");
   });
 });

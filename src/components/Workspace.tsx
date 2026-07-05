@@ -1674,71 +1674,31 @@ export function Workspace({
     };
   }
 
-  function getExpectedXiaotuSegmentCount(inputs: Record<string, string>) {
-    const sourceText = String(inputs.sourceText ?? "");
-    const segmentSeconds = Math.max(Number.parseInt(String(inputs.segmentSeconds ?? "15"), 10) || 15, 1);
-    const capacityCount = estimateXiaotuSegmentCountByContent(sourceText, segmentSeconds);
-
-    return capacityCount > 1 ? capacityCount : null;
-  }
-
-  function estimateXiaotuSegmentCountByContent(sourceText: string, segmentSeconds: number) {
-    const compactText = sourceText
-      .replace(/<[^>]+>/g, "")
-      .replace(/(?:^|\n)\s*第\s*[一二三四五六七八九十百千万\d]+\s*[集场幕段章]\s*[:：、.．-]?/g, "")
-      .replace(/\s+/g, "");
-    if (!compactText) return 0;
-    const charsPer15Seconds = 150;
-    const charsPerSegment = Math.max(Math.round((segmentSeconds / 15) * charsPer15Seconds), 60);
-    return Math.ceil(compactText.length / charsPerSegment);
-  }
-
-  function parseChineseOrArabicNumber(value: string) {
-    const normalized = value.trim();
-    if (/^\d+$/.test(normalized)) return Number.parseInt(normalized, 10);
-    const digits: Record<string, number> = {
-      零: 0,
-      一: 1,
-      二: 2,
-      两: 2,
-      三: 3,
-      四: 4,
-      五: 5,
-      六: 6,
-      七: 7,
-      八: 8,
-      九: 9,
-    };
-    if (normalized === "十") return 10;
-    const tenIndex = normalized.indexOf("十");
-    if (tenIndex >= 0) {
-      const left = normalized.slice(0, tenIndex);
-      const right = normalized.slice(tenIndex + 1);
-      const tens = left ? digits[left] ?? 0 : 1;
-      const ones = right ? digits[right] ?? 0 : 0;
-      return tens * 10 + ones;
-    }
-    return digits[normalized] ?? Number.NaN;
-  }
-
-  function getGeneratedXiaotuSegmentCount(draft: string) {
-    const numbers = Array.from(draft.matchAll(/(?:^|\n)\s*【\s*段落\s*([一二三四五六七八九十百千万\d]+)/g))
-      .map((match) => parseChineseOrArabicNumber(match[1]))
-      .filter((number) => Number.isFinite(number) && number > 0);
-    if (numbers.length > 0) return Math.max(...numbers);
-    const sectionCount = (draft.match(/(?:^|\n)\s*【基础设定】/g) ?? []).length;
-    return sectionCount > 0 ? sectionCount : 0;
-  }
-
   function cleanXiaotuSkillOutput(value: string) {
     const cleaned = cleanAiTextOutput(value);
-    const firstSegmentIndex = cleaned.search(/(?:^|\n)\s*【\s*段落\s*[一二三四五六七八九十百千万\d]+/);
-    if (firstSegmentIndex >= 0) return cleanXiaotuVisibleBlocks(cleaned.slice(firstSegmentIndex)).trim();
+    const firstContentIndex = findXiaotuFirstVisibleContentIndex(cleaned);
+    if (firstContentIndex >= 0) return cleanXiaotuVisibleBlocks(cleaned.slice(firstContentIndex)).trim();
     return "";
   }
 
+  function findXiaotuFirstVisibleContentIndex(value: string) {
+    const markerMatch = value.match(/(?:^|\n)\s*(?:【\s*段落\s*[一二三四五六七八九十百千万\d]+|剧情\s*[一二三四五六七八九十百千万\d]+\s*[:：]|【\s*(?:基础设定|氛围与画质|声音|画面内容)\s*】)/);
+    if (!markerMatch || markerMatch.index === undefined) return -1;
+    return markerMatch[0].startsWith("\n") ? markerMatch.index + 1 : markerMatch.index;
+  }
+
   function cleanXiaotuVisibleBlocks(value: string) {
-    return removeXiaotuStandaloneDialogueLines(removeXiaotuInternalBlocks(value)).trim();
+    return removeXiaotuSegmentHeadingLines(removeXiaotuStandaloneDialogueLines(removeXiaotuInternalBlocks(value))).trim();
+  }
+
+  function removeXiaotuSegmentHeadingLines(value: string) {
+    return value
+      .replace(/【?\s*(?:段落|第)\s*[一二三四五六七八九十百千万\d]+\s*(?:段)?\s*(?:[｜|][^】\n]{0,48})?】?/g, "")
+      .split("\n")
+      .filter((line) => !/^\s*【?\s*(?:段落|第)\s*[一二三四五六七八九十百千万\d]+\s*(?:段)?\s*(?:[｜|].*)?】?\s*$/.test(line))
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
 
   function removeXiaotuInternalBlocks(value: string) {
@@ -1764,78 +1724,6 @@ export function Workspace({
       .join("\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
-  }
-
-  async function ensureCompleteXiaotuSkill(
-    initialResult: string,
-    originalPrompt: string,
-    inputs: Record<string, string>,
-    stepId: TemplateId,
-    onCombinedResult?: (combinedResult: string) => void,
-  ) {
-    const expectedCount = getExpectedXiaotuSegmentCount(inputs);
-    if (!expectedCount || expectedCount <= 1) return initialResult;
-
-    let combinedResult = initialResult.trim();
-    const continuationBatchSize = 1;
-    const maxContinuationAttempts = Math.min(expectedCount + 4, 120);
-    let emptyContinuationCount = 0;
-    for (let attempt = 0; attempt < maxContinuationAttempts; attempt += 1) {
-      const generatedCount = getGeneratedXiaotuSegmentCount(combinedResult);
-      if (generatedCount >= expectedCount) break;
-      const nextSegment = generatedCount + 1;
-      const batchEndSegment = Math.min(expectedCount, nextSegment + continuationBatchSize - 1);
-
-      updateStepGeneration(stepId, {
-        progress: { label: `补齐段落${nextSegment}-${batchEndSegment}`, percent: Math.min(72 + attempt * 4, 88) },
-        status: `检测到小兔skill只生成 ${generatedCount || 1}/${expectedCount} 段，正在继续补齐...`,
-      });
-
-      const continuationPrompt = [
-        "继续补齐小兔skill视频提示词。",
-        `原文预计需要输出 ${expectedCount} 个15秒段落，当前只生成到第${generatedCount || 1}段。`,
-        `本次只输出【段落${nextSegment}】到【段落${batchEndSegment}】，不要一次输出更多段落。`,
-        "",
-        "这是原始生成要求：",
-        originalPrompt,
-        "",
-        "当前已经生成：",
-        combinedResult,
-        "",
-        `请从【段落${nextSegment}】继续输出到【段落${batchEndSegment}】。`,
-        "必须继续覆盖原文对应剧情，不要重复已经生成的段落，不要总结，不要解释，不要说受长度限制，不要说可以继续分批。",
-        "保持每段完整包含【基础设定】【角色音色锁定表】【氛围与画质】【空间坐标与连续性】【画面内容】。",
-        "段落标题继续使用【段落N｜时长秒｜模式】格式，时间轴每段都从0s重新开始。",
-      ].join("\n");
-      const baseResult = combinedResult;
-      const continuationResult = await streamAiText(getTextAiSettings(), continuationPrompt, (partial) => {
-        const cleanedPartial = cleanXiaotuSkillOutput(partial);
-        if (cleanedPartial.trim()) {
-          onCombinedResult?.([baseResult, cleanedPartial].filter(Boolean).join("\n\n"));
-        }
-      });
-      const cleanedContinuation = cleanXiaotuSkillOutput(continuationResult);
-      if (!cleanedContinuation.trim()) {
-        emptyContinuationCount += 1;
-        if (emptyContinuationCount >= 2) break;
-        continue;
-      }
-      emptyContinuationCount = 0;
-      combinedResult = [combinedResult, cleanedContinuation].filter(Boolean).join("\n\n");
-      onCombinedResult?.(combinedResult);
-    }
-
-    const generatedCount = getGeneratedXiaotuSegmentCount(combinedResult);
-    if (generatedCount < expectedCount) {
-      combinedResult = [
-        combinedResult,
-        "",
-        `【系统提醒】当前小兔skill结果只检测到 ${generatedCount}/${expectedCount} 段，请再次点击“调用 AI 生成”或缩短单次输入后重试。`,
-      ].join("\n");
-      onCombinedResult?.(combinedResult);
-    }
-
-    return combinedResult;
   }
 
   async function ensureCompleteChapterSplit(
@@ -1988,10 +1876,6 @@ export function Workspace({
           ? await ensureCompleteChapterSplit(cleanedInitialResult, runPrompt, runInputs, runStepId, (partial) => {
               writeDraftForStep(runProjectId, runStepId, partial);
             })
-          : runStepId === "xiaotu-skill"
-            ? await ensureCompleteXiaotuSkill(cleanedInitialResult, runPrompt, runInputs, runStepId, (partial) => {
-                writeDraftForStep(runProjectId, runStepId, partial);
-              })
           : cleanedInitialResult;
       if (!result.trim()) {
         throw new Error("AI 返回内容为空，请检查模型是否只返回了思考过程或更换模型重试。");
@@ -2653,7 +2537,8 @@ export function Workspace({
       ...(assetType === "人物"
         ? [
             "人物统一后缀：2x2同一人角色设定图。",
-            "图片结构强制：正脸特写+侧脸特写+脖子以下全身(脸裁出)+背面全身 + 四格同一人 + Hyperrealistic photographic 35mm film + NOT Caucasian + NOT 3D + 左下格不露脸。",
+            "图片结构强制：正脸特写+侧脸特写+脖子以下全身(脸裁出)+背面全身 + 四格同一人 + 左下格不露脸。",
+            `画风锁定：所有风格附加词必须跟随“${visualStyle}”，不要追加与该画风冲突的固定摄影类、真人类、通用写实类或三维排除类参数，除非该画风锚点本身明确需要。`,
             "【Layout】2x2 grid：Top-left: FRONT FACE CLOSE-UP（正脸特写）；Top-right: SIDE FACE CLOSE-UP（侧脸特写）；Bottom-left: FULL BODY NECK DOWN, NO FACE（脖子以下全身，脸裁出画面）；Bottom-right: FULL BODY BACK VIEW（背面全身）。",
             "Layout、Top-left、Top-right、Bottom-left、Bottom-right 只是内部构图指令，绝对不要把这些英文或中文说明画进图片里，不要生成任何文字栏、标题栏、表格线或说明卡片。",
             "人物要求：四格必须是同一人、同一服装、同一风格、同一光影；优先遵循“该资产的提取内容”中的人物外貌、整体风格、人物身份和图片结构；不要字幕、水印、logo、编号或额外说明。",

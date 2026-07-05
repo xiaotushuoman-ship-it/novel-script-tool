@@ -45,4 +45,17 @@ describe("SettingsDialog", () => {
     expect(screen.getByText("主 API Key")).toBeInTheDocument();
     expect(screen.getByText("当前模型分组")).toBeInTheDocument();
   });
+
+  it("includes the Gemini flash lite image model in fallback image model options", () => {
+    render(
+      <SettingsDialog
+        open
+        settings={DEFAULT_AI_SETTINGS}
+        onChange={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(screen.getByRole("option", { name: "gemini-3.1-flash-lite-image" })).toBeInTheDocument();
+  });
 });
