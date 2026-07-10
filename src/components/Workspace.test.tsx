@@ -2846,6 +2846,58 @@ describe("Workspace asset extraction image generation", () => {
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(2));
   });
 
+  it("does not mark shared image progress complete while another single-asset generation is still running", async () => {
+    let resolveFirst: (value: string) => void = () => undefined;
+    callImageGenerationMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockReturnValueOnce(new Promise(() => {}));
+    const project = createProject("单张并发生图进度测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft =
+      "【人物】林晚：白衬衫，站在夜市摊前，神情警觉。\n【人物】顾玄：黑色战斗长衣，右手持长刀。";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚在夜市遇见顾玄，顾玄拔刀挡住追兵。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "生成 顾玄" }));
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByRole("button", { name: "生成 顾玄" })).toBeDisabled());
+
+    await act(async () => {
+      resolveFirst("https://img.example.com/lin-wan.png");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText("生图完成")).not.toBeInTheDocument();
+    const progressValue = Number(screen.getByRole("progressbar", { name: "生成进度" }).getAttribute("aria-valuenow"));
+    expect(progressValue).toBeLessThan(100);
+  });
+
   it("shows image generation progress that changes while waiting for the model", async () => {
     vi.useFakeTimers();
     callImageGenerationMock.mockReturnValue(new Promise(() => {}));
@@ -2883,6 +2935,56 @@ describe("Workspace asset extraction image generation", () => {
     const laterProgress = Number(screen.getByRole("progressbar").getAttribute("aria-valuenow"));
     expect(laterProgress).toBeGreaterThan(firstProgress);
     expect(laterProgress).toBeGreaterThan(88);
+  });
+
+  it("keeps batch image progress below complete until every asset image has finished", async () => {
+    let resolveFirst: (value: string) => void = () => undefined;
+    callImageGenerationMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockReturnValueOnce(new Promise(() => {}));
+    const project = createProject("批量生图进度测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft =
+      "【人物】林晚：白衬衫，站在夜市摊前，神情警觉。\n【人物】顾玄：黑色战斗长衣，右手持长刀。";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚在夜市遇见顾玄，顾玄拔刀挡住追兵。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成全部" }));
+
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      resolveFirst("https://img.example.com/lin-wan.png");
+    });
+
+    expect(await screen.findByRole("img", { name: "林晚 生图结果 1" })).toBeInTheDocument();
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(2));
+
+    expect(screen.getByText("生成 2/2")).toBeInTheDocument();
+    expect(screen.queryByText("生图完成")).not.toBeInTheDocument();
+    const progressValue = Number(screen.getByRole("progressbar", { name: "生成进度" }).getAttribute("aria-valuenow"));
+    expect(progressValue).toBeLessThan(100);
   });
 
   it("adds generated images to the asset library from the result area", async () => {

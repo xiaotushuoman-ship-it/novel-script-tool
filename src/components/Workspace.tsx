@@ -239,6 +239,7 @@ export function Workspace({
   const [previewScale, setPreviewScale] = useState(1);
   const [progress, setProgress] = useState<GenerationProgress | null>(null);
   const imageProgressTimerRef = useRef<number | null>(null);
+  const activeAssetImageIdsRef = useRef<Set<string>>(new Set());
   const storyboardImageProgressTimerRef = useRef<number | null>(null);
   const textProgressTimerRefs = useRef<Partial<Record<TemplateId, number>>>({});
   const imageResultIdRef = useRef(0);
@@ -910,6 +911,19 @@ export function Workspace({
       window.clearInterval(imageProgressTimerRef.current);
       imageProgressTimerRef.current = null;
     }
+  }
+
+  function markAssetImageGenerationStarted(assetId: string) {
+    activeAssetImageIdsRef.current = new Set([...activeAssetImageIdsRef.current, assetId]);
+    setGeneratingAssets((current) => ({ ...current, [assetId]: true }));
+  }
+
+  function markAssetImageGenerationFinished(assetId: string): boolean {
+    const nextActiveIds = new Set(activeAssetImageIdsRef.current);
+    nextActiveIds.delete(assetId);
+    activeAssetImageIdsRef.current = nextActiveIds;
+    setGeneratingAssets((current) => ({ ...current, [assetId]: false }));
+    return nextActiveIds.size === 0;
   }
 
   function stopStoryboardImageProgressTimer() {
@@ -1957,7 +1971,7 @@ export function Workspace({
   async function runImageGeneration(asset?: ExtractedAsset) {
     const generationAsset = asset ? withEditedAssetDescription(asset) : undefined;
     if (asset) {
-      setGeneratingAssets((current) => ({ ...current, [asset.id]: true }));
+      markAssetImageGenerationStarted(asset.id);
     } else {
       setIsGeneratingImage(true);
     }
@@ -1999,15 +2013,25 @@ export function Workspace({
         if (!generationAsset) return images;
         return [...current.filter((item) => item.assetName !== generationAsset.name), ...images];
       });
-      setProgress({ label: "生图完成", percent: 100 });
-      setStatus(images.length > 0 ? "生图结果已生成，可预览和下载" : NO_PREVIEWABLE_IMAGE_MESSAGE);
+      if (!asset || activeAssetImageIdsRef.current.size <= 1) {
+        setProgress({ label: "生图完成", percent: 100 });
+        setStatus(images.length > 0 ? "生图结果已生成，可预览和下载" : NO_PREVIEWABLE_IMAGE_MESSAGE);
+      } else {
+        setProgress({ label: `仍有 ${activeAssetImageIdsRef.current.size - 1} 个资产生图中`, percent: 96 });
+        setStatus(images.length > 0 ? `已生成“${generationAsset?.name ?? "资产"}”，还有资产正在生成...` : NO_PREVIEWABLE_IMAGE_MESSAGE);
+      }
     } catch (error) {
-      stopImageProgressTimer();
-      setProgress({ label: "生图失败", percent: 100 });
+      if (!asset || activeAssetImageIdsRef.current.size <= 1) stopImageProgressTimer();
+      if (!asset || activeAssetImageIdsRef.current.size <= 1) {
+        setProgress({ label: "生图失败", percent: 100 });
+      } else {
+        setProgress({ label: `仍有 ${activeAssetImageIdsRef.current.size - 1} 个资产生图中`, percent: 96 });
+      }
       setStatus(error instanceof Error ? error.message : "生图调用失败");
     } finally {
       if (asset) {
-        setGeneratingAssets((current) => ({ ...current, [asset.id]: false }));
+        const isLastActiveAsset = markAssetImageGenerationFinished(asset.id);
+        if (isLastActiveAsset) stopImageProgressTimer();
       } else {
         setIsGeneratingImage(false);
       }
