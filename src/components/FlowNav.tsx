@@ -24,6 +24,7 @@ const PRIMARY_STEP_IDS: TemplateId[] = [
   "seedance-video",
   "custom-image",
   "script-polish",
+  "director-desk",
 ];
 
 export function FlowNav({

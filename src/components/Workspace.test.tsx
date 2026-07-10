@@ -36,6 +36,10 @@ vi.mock("../domain/zzdhClient", () => ({
   sendAssetsToZzdh: (...args: unknown[]) => sendAssetsToZzdhMock(...args),
 }));
 
+vi.mock("./DirectorDeskStep", () => ({
+  DirectorDeskStep: () => <section aria-label="3D导演台">3D导演台</section>,
+}));
+
 vi.mock("../domain/aistarslabVideo", async () => {
   const actual = await vi.importActual<typeof import("../domain/aistarslabVideo")>("../domain/aistarslabVideo");
   return {
@@ -52,6 +56,24 @@ afterEach(() => {
 });
 
 describe("Workspace progress", () => {
+  it("renders the embedded 3D director desk for step 11", () => {
+    const project = createProject("3D导演台工作区测试");
+    project.currentStep = "director-desk";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    expect(screen.getByLabelText("3D导演台")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "调用 AI 生成" })).not.toBeInTheDocument();
+  });
+
   it("blocks AI generation when required fields are missing", () => {
     const project = createProject("必填校验测试");
 

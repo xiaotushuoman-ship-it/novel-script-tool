@@ -1,5 +1,6 @@
 ﻿import { Bot, Clipboard, Download, FileImage, FileUp, Play, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DirectorDeskStep } from "./DirectorDeskStep";
 import { callAi, callAiStream, callImageGeneration, type AiSettings } from "../domain/aiClient";
 import {
   createAistarsLabVideoTask,
@@ -157,6 +158,7 @@ const STEP_NAME_BY_ID: Record<TemplateId, string> = {
   "seedance-video": "SEEDANCE2.0 视频生成",
   "custom-image": "自定义参考图出图",
   "script-polish": "剧本一键洗稿",
+  "director-desk": "3D导演台",
 };
 
 const NO_PREVIEWABLE_IMAGE_MESSAGE = "模型已响应，但没有返回可预览图片。请换生图模型或检查该模型是否支持图片输出。";
@@ -3393,6 +3395,10 @@ export function Workspace({
         <textarea className="result-editor" placeholder="整理后的视频提示词会显示在这里，也可以手动粘贴。" value={visibleDraft} onChange={(event) => updateDraft(event.target.value)} />
       </section>
     );
+  }
+
+  if (project.currentStep === "director-desk") {
+    return <DirectorDeskStep />;
   }
 
   return (

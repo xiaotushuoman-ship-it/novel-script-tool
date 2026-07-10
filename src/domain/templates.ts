@@ -12,7 +12,8 @@ export type TemplateId =
   | "xiaotu-skill"
   | "seedance-video"
   | "custom-image"
-  | "script-polish";
+  | "script-polish"
+  | "director-desk";
 
 export type TemplateField = {
   key: string;
@@ -1754,6 +1755,13 @@ ${MALE_FREQUENCY_SCRIPT_POLISH_RULES}
 3. 若参考内容篇幅很长，优先完整覆盖主线，不要只改第一段后停止；确实超长时按章或段落连续输出，保持编号清楚。
 4. 去AI感：不要模板腔、总结腔、说明书腔、网络热词堆砌、空泛价值观口号；对白要像真人在当下情绪里说出来。
 5. 所有章节都要服务当下抖音爆款短剧逻辑：开头第一句话有钩子，2S有冲突，5S有继续看的理由，章尾有反转或未解决问题。`,
+  },
+  {
+    id: "director-desk",
+    name: "3D导演台",
+    description: "内置 3D 分镜导演台，支持搭建角色、机位、场景和截图预演。",
+    fields: [],
+    body: "",
   },
 ];
 

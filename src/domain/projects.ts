@@ -40,6 +40,7 @@ const STEP_IDS: TemplateId[] = [
   "seedance-video",
   "custom-image",
   "script-polish",
+  "director-desk",
 ];
 
 function createEmptyStep(): StepState {

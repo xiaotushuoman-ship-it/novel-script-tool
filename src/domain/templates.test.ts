@@ -16,6 +16,7 @@ describe("template catalog", () => {
       "seedance-video",
       "custom-image",
       "script-polish",
+      "director-desk",
     ]);
   });
 });

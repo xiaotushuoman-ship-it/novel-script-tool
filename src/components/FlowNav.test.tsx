@@ -55,4 +55,27 @@ describe("FlowNav", () => {
     fireEvent.click(button);
     expect(onSelectStep).toHaveBeenCalledWith("script-polish");
   });
+
+  it("shows the 3D director desk entry as step 11", () => {
+    const project = createProject("3D导演台测试");
+    const onSelectStep = vi.fn();
+
+    render(
+      <FlowNav
+        activeProjectId={project.id}
+        activeStep={project.currentStep}
+        projects={[project]}
+        onCreateProject={() => undefined}
+        onOpenSettings={() => undefined}
+        onSelectProject={() => undefined}
+        onSelectStep={onSelectStep}
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: /3D导演台/ });
+    expect(button).toHaveTextContent("11");
+
+    fireEvent.click(button);
+    expect(onSelectStep).toHaveBeenCalledWith("director-desk");
+  });
 });
