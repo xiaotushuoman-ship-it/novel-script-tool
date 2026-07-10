@@ -11,6 +11,7 @@ type Props = {
 
 const TEXT_MODEL_OPTIONS = [
   "gpt-5.5",
+  "gpt-5.6-sol",
   "gemini-3.1-pro-preview",
   "deepseek-v4-pro",
   "qwen3.7-plus",

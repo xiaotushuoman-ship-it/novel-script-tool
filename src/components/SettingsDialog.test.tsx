@@ -58,4 +58,18 @@ describe("SettingsDialog", () => {
 
     expect(screen.getByRole("option", { name: "gemini-3.1-flash-lite-image" })).toBeInTheDocument();
   });
+
+  it("includes gpt-5.6-sol while keeping gpt-5.6-sol selected by default", () => {
+    render(
+      <SettingsDialog
+        open
+        settings={DEFAULT_AI_SETTINGS}
+        onChange={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(screen.getByRole("option", { name: "gpt-5.6-sol" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "模型名" })).toHaveValue("gpt-5.5");
+  });
 });
