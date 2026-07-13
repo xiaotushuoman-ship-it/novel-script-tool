@@ -18,6 +18,7 @@ describe("AI settings", () => {
     expect(settings.model).toBe("gpt-5.5");
     expect(settings.apiKeySource).toBe("primary");
     expect(settings.apiKeySecondary).toBe("");
+    expect(settings.geminiTextApiKey).toBe("");
     expect(settings.claudeApiKey).toBe("");
     expect(settings.modelApiKeySources).toEqual({});
     expect(settings.geminiImageEndpoint).toBe("https://timeai.chat/v1");
@@ -104,6 +105,12 @@ describe("AI settings", () => {
         "deepseek-v4-pro": "secondary",
       },
     });
+  });
+
+  it("trims the dedicated Gemini text API key", () => {
+    expect(normalizeAiSettings({ geminiTextApiKey: " sk-gemini-text " }).geminiTextApiKey).toBe(
+      "sk-gemini-text",
+    );
   });
 
   it("filters unsupported model key sources while preserving valid ones", () => {

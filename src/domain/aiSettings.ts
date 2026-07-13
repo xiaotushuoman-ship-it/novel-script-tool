@@ -9,6 +9,7 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   endpoint: DEFAULT_TIMEAI_ENDPOINT,
   apiKey: PROXY_API_KEY_PLACEHOLDER,
   apiKeySecondary: "",
+  geminiTextApiKey: "",
   claudeApiKey: "",
   apiKeySource: "primary",
   modelApiKeySources: {},
@@ -32,6 +33,7 @@ export function normalizeAiSettingsForRuntime(
   const geminiImageEndpoint = normalizeDisplayEndpoint(settings?.geminiImageEndpoint);
   const geminiImageApiKey = settings?.geminiImageApiKey?.trim();
   const apiKeySecondary = settings?.apiKeySecondary?.trim();
+  const geminiTextApiKey = settings?.geminiTextApiKey?.trim();
   const claudeApiKey = settings?.claudeApiKey?.trim();
   const apiKeySource = settings?.apiKeySource === "secondary" ? "secondary" : "primary";
   const modelApiKeySources = settings?.modelApiKeySources;
@@ -41,6 +43,7 @@ export function normalizeAiSettingsForRuntime(
     endpoint,
     apiKey: settings?.apiKey?.trim() || DEFAULT_AI_SETTINGS.apiKey,
     apiKeySecondary: apiKeySecondary || DEFAULT_AI_SETTINGS.apiKeySecondary,
+    geminiTextApiKey: geminiTextApiKey || DEFAULT_AI_SETTINGS.geminiTextApiKey,
     claudeApiKey: claudeApiKey || DEFAULT_AI_SETTINGS.claudeApiKey,
     apiKeySource,
     modelApiKeySources:

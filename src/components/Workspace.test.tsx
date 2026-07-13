@@ -1,6 +1,6 @@
 ﻿import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { useState } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { StrictMode, useState } from "react";
 import { createProject } from "../domain/projects";
 import { Workspace } from "./Workspace";
 import { within } from "@testing-library/react";
@@ -13,6 +13,9 @@ const sendAssetsToZzdhMock = vi.fn();
 const uploadAistarsLabMaterialMock = vi.fn();
 const createAistarsLabVideoTaskMock = vi.fn();
 const fetchAistarsLabVideoTaskMock = vi.fn();
+const { readImportedDocumentMock } = vi.hoisted(() => ({
+  readImportedDocumentMock: vi.fn(),
+}));
 
 function mockStreamTextOnce(text: string) {
   callAiStreamMock.mockImplementationOnce(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
@@ -36,6 +39,10 @@ vi.mock("../domain/zzdhClient", () => ({
   sendAssetsToZzdh: (...args: unknown[]) => sendAssetsToZzdhMock(...args),
 }));
 
+vi.mock("../domain/documentImport", () => ({
+  readImportedDocument: (...args: unknown[]) => readImportedDocumentMock(...args),
+}));
+
 vi.mock("./DirectorDeskStep", () => ({
   DirectorDeskStep: () => <section aria-label="3D导演台">3D导演台</section>,
 }));
@@ -48,6 +55,18 @@ vi.mock("../domain/aistarslabVideo", async () => {
     fetchAistarsLabVideoTask: (...args: unknown[]) => fetchAistarsLabVideoTaskMock(...args),
     uploadAistarsLabMaterial: (...args: unknown[]) => uploadAistarsLabMaterialMock(...args),
   };
+});
+
+beforeEach(() => {
+  readImportedDocumentMock.mockImplementation(
+    (file: File) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(file);
+      }),
+  );
 });
 
 afterEach(() => {
@@ -340,6 +359,8 @@ describe("Workspace progress", () => {
     const project = createProject("洗稿流式测试");
     project.currentStep = "script-polish";
     project.steps["script-polish"].inputs.sourceText = "女主被全家看不起，拿到证据后当众反击。";
+    project.steps["script-polish"].inputs.targetLength = "自定义章数";
+    project.steps["script-polish"].inputs.extraRequirement = "只生成1章，台词口语化。";
     const onStepDraftChange = vi.fn();
 
     render(
@@ -377,6 +398,89 @@ describe("Workspace progress", () => {
     expect(screen.getByPlaceholderText("把 AI 输出粘贴到这里，或点击“调用 AI 生成”。确认后点击“保存结果”。")).toHaveValue(
       "【制作规格】\n总时长：30分钟\n预计总集数：15集\n【成品短剧剧本】\n【第1集】女主当众拿出证据反击。",
     );
+  });
+
+  it("generates script polish chapters in complete-content batches instead of degrading into outlines", async () => {
+    mockStreamTextOnce(["【制作规格】", "【成品短剧剧本】", "【第1集】完整场次一。", "【第2集】完整场次二。", "【第3集】完整场次三。"].join("\n"));
+    mockStreamTextOnce(["【第4集】完整场次四。", "【第5集】完整场次五。", "【第6集】完整场次六。"].join("\n"));
+    mockStreamTextOnce(["【第7集】完整场次七。", "【第8集】完整场次八。", "【第9集】完整场次九。"].join("\n"));
+    mockStreamTextOnce("【第10集】完整场次十，主线收束。");
+    const project = createProject("洗稿完整剧本分批测试");
+    project.currentStep = "script-polish";
+    project.steps["script-polish"].inputs = {
+      ...project.steps["script-polish"].inputs,
+      sourceText: "女主拿到关键证据后开始反击。",
+      outputForm: "短剧剧本",
+      targetLength: "10章",
+      chapterWords: "2000字左右",
+      endingMode: "完结",
+    };
+    const onStepDraftChange = vi.fn();
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+        onStepDraftChange={onStepDraftChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
+
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(4));
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("本次只输出第1章到第3章的完整短剧剧本");
+    expect(callAiStreamMock.mock.calls[1][1]).toContain("从第4章继续写到第6章");
+    expect(callAiStreamMock.mock.calls[1][1]).toContain("不得输出分集大纲、分章大纲、章节摘要或剧情概述");
+    expect(callAiStreamMock.mock.calls[3][1]).toContain("从第10章继续写到第10章");
+    await waitFor(() =>
+      expect(onStepDraftChange).toHaveBeenLastCalledWith(
+        project.id,
+        "script-polish",
+        expect.stringContaining("【第10集】完整场次十，主线收束。"),
+      ),
+    );
+  });
+
+  it("rewrites a script polish batch when the model returns an outline instead of complete chapters", async () => {
+    mockStreamTextOnce(["【制作规格】", "【成品短剧剧本】", "【第1集】完整场次一。", "【第2集】完整场次二。", "【第3集】完整场次三。"].join("\n"));
+    mockStreamTextOnce(["【分集大纲】", "【第4集】本集发生冲突。", "【第5集】主角寻找证据。", "【第6集】反派受到反击。"].join("\n"));
+    mockStreamTextOnce(["【第4集】完整场次四。", "【第5集】完整场次五。", "【第6集】完整场次六。"].join("\n"));
+    const project = createProject("洗稿大纲自动重写测试");
+    project.currentStep = "script-polish";
+    project.steps["script-polish"].inputs = {
+      ...project.steps["script-polish"].inputs,
+      sourceText: "女主拿到关键证据后开始反击。",
+      outputForm: "短剧剧本",
+      targetLength: "自定义章数",
+      chapterWords: "2000字左右",
+      endingMode: "完结",
+      extraRequirement: "只生成6章。",
+    };
+    const onStepDraftChange = vi.fn();
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+        onStepDraftChange={onStepDraftChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
+
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(3));
+    expect(callAiStreamMock.mock.calls[2][1]).toContain("上一版错误地输出了大纲、摘要或缺少本批章节");
+    await waitFor(() => {
+      const finalDraft = String(onStepDraftChange.mock.calls.at(-1)?.[2] ?? "");
+      expect(finalDraft).toContain("【第6集】完整场次六。");
+      expect(finalDraft).not.toContain("【分集大纲】");
+    });
   });
 
   it("continues chapter split generation until the requested total chapters are present", async () => {
@@ -2035,6 +2139,11 @@ describe("Workspace writing flow", () => {
     await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
     expect(callAiStreamMock.mock.calls[0][1]).toContain("续写第2章");
     expect(callAiStreamMock.mock.calls[0][1]).toContain("单章目标字数：2500");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("继承前文主要人物的语言指纹");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("姓名互换后仍成立的台词必须重写");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("不得用对白复述前文");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("单次发言不得超过20个汉字");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("标点符号不计入字数");
     await waitFor(() =>
       expect(onStepDraftChange).toHaveBeenLastCalledWith(
         project.id,
@@ -2073,6 +2182,12 @@ describe("Workspace writing flow", () => {
 
     await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
     expect(callAiStreamMock.mock.calls[0][1]).toContain("优化第1章");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("机械对白");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("人物声音同质化");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("潜台词");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("万能模板句");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("单次发言不得超过20个汉字");
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("拆成自然的多轮短句");
     await waitFor(() =>
       expect(onStepDraftChange).toHaveBeenLastCalledWith(
         project.id,
@@ -2646,6 +2761,90 @@ describe("Workspace asset extraction image generation", () => {
     );
   });
 
+  it("advertises and imports DOCX only for asset extraction", async () => {
+    readImportedDocumentMock.mockResolvedValue("第一幕\n\n顾玄进入祭坛。");
+    const project = createProject("资产 DOCX 导入测试");
+    project.currentStep = "asset-extraction";
+    const onProjectChange = vi.fn();
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={onProjectChange}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    const input = screen.getByLabelText("导入文档");
+    expect(input).toHaveAttribute("accept", expect.stringContaining(".docx"));
+    expect(screen.getByText("支持 DOCX / TXT / MD / CSV / JSON / SRT 等文档，也可以拖拽到这里。")).toBeInTheDocument();
+
+    const file = new File([new Uint8Array([80, 75, 3, 4])], "assets.docx", {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(readImportedDocumentMock).toHaveBeenCalledWith(file, { allowDocx: true }));
+    expect(onProjectChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        steps: expect.objectContaining({
+          "asset-extraction": expect.objectContaining({
+            inputs: expect.objectContaining({ sourceText: "第一幕\n\n顾玄进入祭坛。" }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("keeps other document import controls text-only", () => {
+    const project = createProject("小说改剧本 DOCX 范围测试");
+    project.currentStep = "novel-to-script";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    expect(screen.getByLabelText("导入文档")).not.toHaveAttribute("accept", expect.stringContaining(".docx"));
+    expect(screen.getByText("支持 TXT / MD / CSV / JSON / SRT 等文本文件，也可以拖拽到这里。")).toBeInTheDocument();
+  });
+
+  it("keeps existing asset text when DOCX parsing fails", async () => {
+    readImportedDocumentMock.mockRejectedValue(new Error("DOCX 文档解析失败"));
+    const project = createProject("资产 DOCX 失败保护测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].inputs.sourceText = "旧内容";
+
+    function StatefulWorkspace() {
+      const [currentProject, setCurrentProject] = useState(project);
+      return (
+        <Workspace
+          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+          project={currentProject}
+          onAiSettingsChange={() => undefined}
+          onProjectChange={setCurrentProject}
+          onSaveVersion={() => undefined}
+        />
+      );
+    }
+
+    render(<StatefulWorkspace />);
+    const file = new File([new Uint8Array([80, 75, 3, 4])], "broken.docx", {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+    fireEvent.change(screen.getByLabelText("导入文档"), { target: { files: [file] } });
+
+    expect(await screen.findByText("导入失败：DOCX 文档解析失败")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("旧内容")).toBeInTheDocument();
+  });
+
   it("builds an asset extraction prompt that only asks for the selected asset type", async () => {
     mockStreamTextOnce("【场景】破碎祭坛：月光、石柱、暗红符文。");
     const project = createProject("资产类型提取测试");
@@ -2771,8 +2970,17 @@ describe("Workspace asset extraction image generation", () => {
     expect(prompt).toContain("整体风格：3D国漫风格");
     expect(prompt).toContain("指定画风：3D国漫风格");
     expect(prompt).toContain("图片的结构：左边人物正面近景肖像");
+    expect(prompt).toContain("人物三视图生产参考图");
+    expect(prompt).toContain("上方三分之一为正面脸部近景头像");
+    expect(prompt).toContain("下方三分之二严格分成三个等比例竖向面板");
+    expect(prompt).toContain("颈部以下到脚部的正面、侧面、背面身体视图");
+    expect(prompt).toContain("下方三块不出现头部和五官");
+    expect(prompt).toContain("双手自然下垂");
+    expect(prompt).toContain("双脚完整可见");
     expect(prompt).toContain("不是信息图、不是表格、不是PPT、不是教学海报、不是英文语法图");
-    expect(prompt).toContain("绝对不要把这些英文或中文说明画进图片里");
+    expect(prompt).not.toContain("人物统一后缀：2x2同一人角色设定图");
+    expect(prompt).not.toContain("FULL BODY NECK DOWN, NO FACE");
+    expect(prompt).not.toContain("Top-left");
     expect(prompt).not.toContain("Hyperrealistic photographic");
     expect(prompt).not.toContain("NOT 3D");
     expect(prompt).not.toContain("完整原文背景：林晚在夜市摊前抬头");
@@ -3396,6 +3604,55 @@ describe("Workspace asset extraction image generation", () => {
     expect(screen.getByText("已删除图片")).toBeInTheDocument();
   });
 
+  it("revokes only the desktop drag URL owned by removed generated images", async () => {
+    callImageGenerationMock
+      .mockResolvedValueOnce("data:image/png;base64,bGluLXdhbg==")
+      .mockResolvedValueOnce("data:image/png;base64,Z3UteHVhbg==");
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const originalRevokeObjectUrl = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn().mockReturnValueOnce("blob:lin-wan").mockReturnValueOnce("blob:gu-xuan");
+    URL.revokeObjectURL = vi.fn();
+    const project = createProject("单图拖拽地址释放测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft =
+      "【人物】林晚：白衬衫，站在夜市摊前，神情警觉。\n【人物】顾玄：黑色战斗长衣，右手持长刀。";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚在夜市遇见顾玄。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    try {
+      render(
+        <Workspace
+          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+          project={project}
+          onAiSettingsChange={() => undefined}
+          onProjectChange={() => undefined}
+          onSaveVersion={() => undefined}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "生成全部" }));
+      await screen.findByRole("img", { name: "林晚 生图结果 1" });
+      await screen.findByRole("img", { name: "顾玄 生图结果 1" });
+      await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(2));
+
+      fireEvent.click(screen.getByRole("button", { name: "删除图片 1" }));
+      await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:lin-wan"));
+      expect(URL.revokeObjectURL).not.toHaveBeenCalledWith("blob:gu-xuan");
+
+      fireEvent.click(screen.getByRole("button", { name: "清除资产图片" }));
+      await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:gu-xuan"));
+    } finally {
+      URL.createObjectURL = originalCreateObjectUrl;
+      URL.revokeObjectURL = originalRevokeObjectUrl;
+    }
+  });
+
   it("deletes one extracted asset from the result draft and removes its generated images", async () => {
     callImageGenerationMock
       .mockResolvedValueOnce("https://img.example.com/lin-wan.png")
@@ -3748,9 +4005,17 @@ describe("Workspace asset extraction image generation", () => {
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
     const prompt = callImageGenerationMock.mock.calls[0][1] as string;
     expect(prompt).toContain("女性，黑色风衣");
-    expect(prompt).toContain("人物统一后缀：2x2同一人角色设定图。");
-    expect(prompt).toContain("FULL BODY NECK DOWN, NO FACE");
+    expect(prompt).toContain("人物统一后缀：人物三视图生产参考图，纯白背景。");
+    expect(prompt).toContain("上方三分之一为正面脸部近景头像");
+    expect(prompt).toContain("下方三分之二严格分成三个等比例竖向面板");
+    expect(prompt).toContain("颈部以下到脚部的正面、侧面、背面身体视图");
+    expect(prompt).toContain("下方三块不出现头部和五官");
+    expect(prompt).toContain("双手自然下垂");
+    expect(prompt).toContain("双脚完整可见");
     expect(prompt).toContain("优先遵循“该资产的提取内容”中的人物外貌、整体风格、人物身份和图片结构");
+    expect(prompt).not.toContain("人物统一后缀：2x2同一人角色设定图");
+    expect(prompt).not.toContain("FULL BODY NECK DOWN, NO FACE");
+    expect(prompt).not.toContain("Top-left");
     expect(prompt).toContain("不要表格，不要信息图，不要教育海报，不要英文单词排版");
     expect(await screen.findByRole("img", { name: "林晚 生图结果 1" })).toHaveAttribute(
       "src",
@@ -3841,6 +4106,84 @@ describe("Workspace asset extraction image generation", () => {
     );
     expect(dataTransfer.setData).not.toHaveBeenCalledWith("text/uri-list", imageSrc);
     expect(dataTransfer.items.add).not.toHaveBeenCalled();
+  });
+
+  it("drags base64 generated images from thumbnails and previews to the desktop as PNG files", async () => {
+    const imageSrc = "data:image/png;base64,aGVsbG8=";
+    callImageGenerationMock.mockResolvedValue(imageSrc);
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const originalRevokeObjectUrl = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn(() => "blob:generated-image-drag");
+    URL.revokeObjectURL = vi.fn();
+    const project = createProject("拖拽图片测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = "【人物】林晚：白衬衫，站在夜市摊前。";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚站在夜市摊前。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    try {
+      render(
+        <StrictMode>
+          <Workspace
+            aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+            project={project}
+            onAiSettingsChange={() => undefined}
+            onProjectChange={() => undefined}
+            onSaveVersion={() => undefined}
+          />
+        </StrictMode>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+      const thumbnail = await screen.findByRole("img", { name: "林晚 生图结果 1" });
+      await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(1));
+
+      const thumbnailTransfer = {
+        effectAllowed: "",
+        items: { add: vi.fn() },
+        setData: vi.fn(),
+      };
+      fireEvent.dragStart(thumbnail, { dataTransfer: thumbnailTransfer });
+
+      expect(thumbnailTransfer.setData).toHaveBeenCalledWith(
+        "DownloadURL",
+        "image/png:拖拽图片测试-剧本资产提取-林晚-image-1.png:blob:generated-image-drag",
+      );
+      expect(thumbnailTransfer.setData).toHaveBeenCalledWith("text/uri-list", "blob:generated-image-drag");
+      expect(thumbnailTransfer.setData).toHaveBeenCalledWith(
+        "application/x-xiaotu-asset-image",
+        expect.stringContaining('"assetName":"林晚"'),
+      );
+
+      fireEvent.click(thumbnail);
+      const preview = await screen.findByRole("img", { name: "高清预览：林晚 生图结果 1" });
+      expect(preview).toHaveAttribute("draggable", "true");
+      const previewTransfer = {
+        effectAllowed: "",
+        items: { add: vi.fn() },
+        setData: vi.fn(),
+      };
+      fireEvent.dragStart(preview, { dataTransfer: previewTransfer });
+
+      expect(previewTransfer.setData).toHaveBeenCalledWith(
+        "DownloadURL",
+        "image/png:拖拽图片测试-剧本资产提取-林晚-image-1.png:blob:generated-image-drag",
+      );
+      expect(previewTransfer.setData).toHaveBeenCalledWith("text/uri-list", "blob:generated-image-drag");
+      expect(previewTransfer.setData).toHaveBeenCalledWith(
+        "application/x-xiaotu-asset-image",
+        expect.stringContaining('"assetName":"林晚"'),
+      );
+    } finally {
+      URL.createObjectURL = originalCreateObjectUrl;
+      URL.revokeObjectURL = originalRevokeObjectUrl;
+    }
   });
 
   it("keeps large data-url image drags lightweight so previews remain clickable", async () => {

@@ -23,6 +23,7 @@ import {
   type AssetLibraryItem,
   type AssetLibraryType,
 } from "../domain/assetLibrary";
+import { readImportedDocument } from "../domain/documentImport";
 import type { Project } from "../domain/projects";
 import { checkSeedanceSafety, type SeedanceSafetyReport } from "../domain/seedanceSafety";
 import {
@@ -84,6 +85,10 @@ type ChapterOption = {
 
 const MAX_SYNC_DRAG_DATA_URL_LENGTH = 2_000_000;
 const MAX_INLINE_PREVIEW_DATA_URL_LENGTH = 1_000_000;
+
+function isInlineImageDataUrl(src: string) {
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(src);
+}
 
 type TopicRecommendationState = {
   isLoading: boolean;
@@ -246,6 +251,10 @@ export function Workspace({
   const textProgressTimerRefs = useRef<Partial<Record<TemplateId, number>>>({});
   const imageResultIdRef = useRef(0);
   const previewObjectUrlRef = useRef<string | null>(null);
+  const generatedImageDragUrlsRef = useRef<Map<string, string>>(new Map());
+  const pendingGeneratedImageDragUrlsRef = useRef<Set<string>>(new Set());
+  const activeGeneratedImageSourcesRef = useRef<Set<string>>(new Set());
+  const isWorkspaceMountedRef = useRef(true);
   const seedancePromptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const currentGeneration = generationByStep[project.currentStep] ?? {
     isCalling: false,
@@ -301,6 +310,55 @@ export function Workspace({
   }, [previewImage]);
 
   useEffect(() => () => revokePreviewObjectUrl(), []);
+
+  useEffect(() => {
+    const activeSources = new Set(
+      [...assetImageResults, ...storyboardImageResults, ...customImageResults].map((image) => image.src),
+    );
+    activeGeneratedImageSourcesRef.current = activeSources;
+
+    for (const [src, objectUrl] of generatedImageDragUrlsRef.current) {
+      if (activeSources.has(src)) continue;
+      URL.revokeObjectURL?.(objectUrl);
+      generatedImageDragUrlsRef.current.delete(src);
+    }
+
+    if (typeof URL.createObjectURL !== "function") return;
+
+    for (const src of activeSources) {
+      if (!isInlineImageDataUrl(src)) continue;
+      if (generatedImageDragUrlsRef.current.has(src) || pendingGeneratedImageDragUrlsRef.current.has(src)) continue;
+
+      pendingGeneratedImageDragUrlsRef.current.add(src);
+      void fetch(src)
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.blob();
+        })
+        .then((blob) => {
+          if (!isWorkspaceMountedRef.current || !activeGeneratedImageSourcesRef.current.has(src)) return;
+          generatedImageDragUrlsRef.current.set(src, URL.createObjectURL(blob));
+        })
+        .catch(() => undefined)
+        .finally(() => pendingGeneratedImageDragUrlsRef.current.delete(src));
+    }
+  }, [assetImageResults, storyboardImageResults, customImageResults]);
+
+  useEffect(
+    () => {
+      isWorkspaceMountedRef.current = true;
+      return () => {
+        isWorkspaceMountedRef.current = false;
+        activeGeneratedImageSourcesRef.current.clear();
+        pendingGeneratedImageDragUrlsRef.current.clear();
+        for (const objectUrl of generatedImageDragUrlsRef.current.values()) {
+          URL.revokeObjectURL?.(objectUrl);
+        }
+        generatedImageDragUrlsRef.current.clear();
+      };
+    },
+    [],
+  );
 
   useEffect(() => {
     if (project.currentStep !== "seedance-video" || !seedanceVideoConfig) return;
@@ -696,7 +754,10 @@ export function Workspace({
         `单章目标字数：${chapterWords}`,
         `文风：${step.inputs.style || "贴合大纲气质"}`,
         `叙事视角：${step.inputs.perspective || "第三人称"}`,
-        "自我评分目标：主流商业小说95分以上，低于95分请自动精修后再输出。",
+        "对白连续性：继承前文主要人物的语言指纹，包括词汇、句长、称呼、礼貌程度、攻击/回避方式和情绪失控点；不能在续写中突然换成同一种AI口吻。",
+        "对白推进：每轮重要对话必须推动事件、暴露信息、改变关系或迫使人物做选择；不得用对白复述前文或解释双方都知道的信息。",
+        "对白质检：姓名互换后仍成立的台词必须重写；删除万能狠话、机械问答、说明书腔和不影响剧情的空对白。",
+        "对白长度：每个角色单次发言不得超过20个汉字，标点符号不计入字数；超长内容必须保留原意和关键信息，结合动作、打断或回应拆成自然的多轮短句。",
         "",
         "故事大纲：",
         outline,
@@ -704,7 +765,7 @@ export function Workspace({
         "已生成正文：",
         step.draft || "尚未生成正文，请从第1章开始。",
         "",
-        "输出要求：只输出本次续写的单章正文，不要重复前文；章节标题必须以“第N章：”开头；末尾保留“本章自评分：95+”。",
+        "输出要求：只输出本次续写的单章完整成品，不要重复前文；章节标题必须以“第N章：”开头；不要输出自检、评分、语言指纹或重写说明。",
       ].join("\n");
       updateStepGeneration(runStepId, { progress: { label: "等待模型续写", percent: 65 } });
       startTextProgressTimer(runStepId, "等待模型续写", 65, 92);
@@ -755,8 +816,10 @@ export function Workspace({
         `优化第${chapterNumber}章。`,
         `单章目标字数：${step.inputs.chapterWords || "2500"}`,
         `文风：${step.inputs.style || "贴合大纲气质"}`,
-        "目标：把该章优化到主流商业小说95分以上。",
-        "优化重点：强钩子、冲突压迫、爽点递进、人物动机、对话自然、结尾留钩、减少废话。",
+        "目标：把该章优化成自然、可读、可表演且符合当前题材的完整成品。",
+        "优化重点：强钩子、冲突压迫、爽点递进、人物动机、结尾留钩、减少废话；重点重写机械对白、人物声音同质化、缺少潜台词、剧情复述、万能模板句和作者说教。",
+        "对白要求：保持人物既有身份与关系，使用具体目的、信息差、试探、回避、改口、动作和停顿推进；姓名互换后仍成立的台词必须重写。",
+        "对白长度：每个角色单次发言不得超过20个汉字，标点符号不计入字数；超长内容必须保留原意和关键信息，结合动作、打断或回应拆成自然的多轮短句。",
         "",
         "全书大纲：",
         step.inputs.outline || "",
@@ -764,7 +827,7 @@ export function Workspace({
         "当前需要优化的章节：",
         chapterBlock,
         "",
-        "输出要求：只输出优化后的本章完整正文，标题仍以“第N章：”开头；不要输出解释；末尾保留“本章自评分：95+”。",
+        "输出要求：只输出优化后的本章完整成品，标题仍以“第N章：”开头；不要输出解释、自检、评分、语言指纹或重写说明。",
       ].join("\n");
       updateStepGeneration(runStepId, { progress: { label: "等待模型优化", percent: 65 } });
       startTextProgressTimer(runStepId, "等待模型优化", 65, 92);
@@ -1544,10 +1607,11 @@ export function Workspace({
         filename,
       }),
     );
-    if (/^https?:\/\//i.test(image.src)) {
-      event.dataTransfer.setData("text/uri-list", image.src);
-      event.dataTransfer.setData("text/plain", image.src);
-      event.dataTransfer.setData("DownloadURL", `image/png:${filename}:${image.src}`);
+    const dragUrl = /^https?:\/\//i.test(image.src) ? image.src : generatedImageDragUrlsRef.current.get(image.src);
+    if (dragUrl) {
+      event.dataTransfer.setData("text/uri-list", dragUrl);
+      event.dataTransfer.setData("text/plain", dragUrl);
+      event.dataTransfer.setData("DownloadURL", `image/png:${filename}:${dragUrl}`);
       return;
     }
 
@@ -1625,16 +1689,6 @@ export function Workspace({
     throw new Error("生图调用失败");
   }
 
-  function readTextFile(file: File) {
-    if (typeof file.text === "function") return file.text();
-    return new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result ?? ""));
-      reader.onerror = () => reject(reader.error);
-      reader.readAsText(file);
-    });
-  }
-
   function fileToDataUrl(file: File) {
     return new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -1644,11 +1698,16 @@ export function Workspace({
     });
   }
 
-  async function importTextFile(file: File | undefined, targetField = "scriptText") {
+  async function importTextFile(file: File | undefined, targetField = "scriptText", allowDocx = false) {
     if (!file) return;
-    const content = await readTextFile(file);
-    updateInput(targetField, content);
-    setStatus(`已导入：${file.name}`);
+    try {
+      const content = await readImportedDocument(file, { allowDocx });
+      updateInput(targetField, content);
+      setStatus(`已导入：${file.name}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      setStatus(`导入失败：${message}`);
+    }
   }
 
   function getMissingRequiredFields() {
@@ -1688,6 +1747,131 @@ export function Workspace({
       start: missingNumbers[0],
       end: missingNumbers[missingNumbers.length - 1],
     };
+  }
+
+  function getScriptPolishTargetCount(inputs: Record<string, string>) {
+    const selectedLength = String(inputs.targetLength ?? "");
+    const selectedCount = Number.parseInt(selectedLength, 10);
+    if (Number.isFinite(selectedCount) && selectedCount > 0) return selectedCount;
+
+    const customMatch = String(inputs.extraRequirement ?? "").match(/(\d+)\s*[章节集]/);
+    const customCount = customMatch ? Number.parseInt(customMatch[1], 10) : 20;
+    return Number.isFinite(customCount) && customCount > 0 ? customCount : 20;
+  }
+
+  function getScriptPolishBatchSize(inputs: Record<string, string>) {
+    const chapterWords = Number.parseInt(String(inputs.chapterWords ?? "2000"), 10);
+    return Number.isFinite(chapterWords) && chapterWords >= 2500 ? 2 : 3;
+  }
+
+  function shouldBatchScriptPolish(inputs: Record<string, string>) {
+    return inputs.outputForm === "短剧剧本" || inputs.outputForm === "小说正文";
+  }
+
+  function buildScriptPolishBatchPrompt(originalPrompt: string, inputs: Record<string, string>, start: number, end: number) {
+    const outputForm = inputs.outputForm === "小说正文" ? "小说正文" : "短剧剧本";
+    return [
+      originalPrompt,
+      "",
+      "# 当前批次最高优先级指令",
+      `总目标为${getScriptPolishTargetCount(inputs)}章，本次只输出第${start}章到第${end}章的完整${outputForm}。`,
+      "每一章都必须达到所选单章字数和完整成品的信息密度，包含真实推进、动作/叙事、台词或人物反应以及章末钩子。",
+      "不得输出本批范围之外的后续章节，不得提前罗列后续安排。",
+      "不得输出分集大纲、分章大纲、章节摘要或剧情概述，不得用几句话代替任何一章正文。",
+    ].join("\n");
+  }
+
+  function isCompleteScriptPolishBatch(value: string, start: number, end: number) {
+    if (/【\s*(?:分集大纲|分章大纲|章节大纲|剧情概述|章节摘要)\s*】/.test(value)) return false;
+    const generatedNumbers = new Set(
+      extractChapterOptions(value)
+        .map((chapter) => Number.parseInt(chapter.number, 10))
+        .filter((number) => Number.isFinite(number)),
+    );
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index).every((number) => generatedNumbers.has(number));
+  }
+
+  async function rewriteIncompleteScriptPolishBatch(
+    rejectedResult: string,
+    continuationPrompt: string,
+    inputs: Record<string, string>,
+    start: number,
+    end: number,
+    onPartial?: (partial: string) => void,
+  ) {
+    const rewritePrompt = [
+      continuationPrompt,
+      "",
+      "上一版错误地输出了大纲、摘要或缺少本批章节，必须整批重写。",
+      "错误版本仅用于识别问题，不得复用其大纲格式：",
+      rejectedResult,
+      "",
+      `重新完整输出第${start}章到第${end}章。只输出逐章完整${inputs.outputForm === "小说正文" ? "小说正文" : "短剧剧本"}，不要解释。`,
+    ].join("\n");
+    return streamAiText(getTextAiSettings(), rewritePrompt, onPartial);
+  }
+
+  async function ensureCompleteScriptPolish(
+    initialResult: string,
+    originalPrompt: string,
+    inputs: Record<string, string>,
+    stepId: TemplateId,
+    onCombinedResult?: (combinedResult: string) => void,
+  ) {
+    if (!shouldBatchScriptPolish(inputs)) return initialResult;
+
+    const targetCount = getScriptPolishTargetCount(inputs);
+    const batchSize = getScriptPolishBatchSize(inputs);
+    let combinedResult = initialResult.trim();
+
+    for (let start = batchSize + 1; start <= targetCount; start += batchSize) {
+      const end = Math.min(start + batchSize - 1, targetCount);
+      updateStepGeneration(stepId, {
+        progress: { label: `生成第${start}-${end}章完整成品`, percent: Math.min(70 + Math.floor((start / targetCount) * 20), 90) },
+        status: `正在继续生成第${start}章到第${end}章完整内容...`,
+      });
+
+      const continuityContext = combinedResult.slice(-16000);
+      const continuationPrompt = [
+        "继续第10项一键洗稿的完整成品，严格承接前文，不重新开故事。",
+        "",
+        "原始创作要求：",
+        originalPrompt,
+        "",
+        "前文末尾承接内容：",
+        continuityContext,
+        "",
+        `从第${start}章继续写到第${end}章，逐章输出完整${inputs.outputForm === "小说正文" ? "小说正文" : "短剧剧本"}。`,
+        "不要重复【制作规格】、爆点拆解、重构策略或已经生成的章节，只输出本批新章节。",
+        "每章必须有完整事件推进、人物行动、对白/叙事和章末钩子，信息密度与前文一致。",
+        "不得输出分集大纲、分章大纲、章节摘要或剧情概述，不得用几句话代替任何一章正文。",
+        end === targetCount && inputs.endingMode === "完结"
+          ? "这是最终批次，最后一章必须完成主线闭环、人物弧线和结局落地。"
+          : "本批结尾要留下能被下一批直接承接的具体钩子。",
+      ].join("\n");
+      const baseResult = combinedResult;
+      let continuationResult = await streamAiText(getTextAiSettings(), continuationPrompt, (partial) => {
+        onCombinedResult?.([baseResult, partial].filter(Boolean).join("\n\n"));
+      });
+      if (!isCompleteScriptPolishBatch(continuationResult, start, end)) {
+        updateStepGeneration(stepId, {
+          progress: { label: `重写第${start}-${end}章完整成品`, percent: Math.min(78 + Math.floor((start / targetCount) * 12), 92) },
+          status: `检测到第${start}章到第${end}章被简化为大纲，正在自动重写...`,
+        });
+        continuationResult = await rewriteIncompleteScriptPolishBatch(
+          continuationResult,
+          continuationPrompt,
+          inputs,
+          start,
+          end,
+          (partial) => onCombinedResult?.([baseResult, partial].filter(Boolean).join("\n\n")),
+        );
+      }
+      combinedResult = [combinedResult, continuationResult].filter(Boolean).join("\n\n");
+      onCombinedResult?.(combinedResult);
+    }
+
+    return combinedResult;
   }
 
   function cleanXiaotuSkillOutput(value: string) {
@@ -1876,7 +2060,16 @@ export function Workspace({
       updateStepGeneration(runStepId, { progress: { label: "等待模型生成", percent: 65 } });
       startTextProgressTimer(runStepId, "等待模型生成", 65, 92);
       const textAiSettings = getTextAiSettingsForStep(runStepId);
-      const initialResult = await streamAiText(textAiSettings, runPrompt, (partial) => {
+      const initialRunPrompt =
+        runStepId === "script-polish" && shouldBatchScriptPolish(runInputs)
+          ? buildScriptPolishBatchPrompt(
+              runPrompt,
+              runInputs,
+              1,
+              Math.min(getScriptPolishBatchSize(runInputs), getScriptPolishTargetCount(runInputs)),
+            )
+          : runPrompt;
+      const initialResult = await streamAiText(textAiSettings, initialRunPrompt, (partial) => {
         const visiblePartial = runStepId === "xiaotu-skill" ? cleanXiaotuSkillOutput(partial) : partial;
         if (visiblePartial.trim()) {
           writeDraftForStep(runProjectId, runStepId, visiblePartial);
@@ -1892,6 +2085,10 @@ export function Workspace({
           ? await ensureCompleteChapterSplit(cleanedInitialResult, runPrompt, runInputs, runStepId, (partial) => {
               writeDraftForStep(runProjectId, runStepId, partial);
             })
+          : runStepId === "script-polish"
+            ? await ensureCompleteScriptPolish(cleanedInitialResult, runPrompt, runInputs, runStepId, (partial) => {
+                writeDraftForStep(runProjectId, runStepId, partial);
+              })
           : cleanedInitialResult;
       if (!result.trim()) {
         throw new Error("AI 返回内容为空，请检查模型是否只返回了思考过程或更换模型重试。");
@@ -2562,12 +2759,12 @@ export function Workspace({
       !assetDescription && inputs.sourceText ? `完整原文背景：${inputs.sourceText}` : "",
       ...(assetType === "人物"
         ? [
-            "人物统一后缀：2x2同一人角色设定图。",
-            "图片结构强制：正脸特写+侧脸特写+脖子以下全身(脸裁出)+背面全身 + 四格同一人 + 左下格不露脸。",
+            "人物统一后缀：人物三视图生产参考图，纯白背景。",
+            "图片结构强制：上方三分之一为正面脸部近景头像；下方三分之二严格分成三个等比例竖向面板，依次展示从颈部以下到脚部的正面、侧面、背面身体视图。",
+            "下方身体视图要求：下方三块不出现头部和五官，双手自然下垂，双脚完整可见，三块比例一致、间距清楚。",
             `画风锁定：所有风格附加词必须跟随“${visualStyle}”，不要追加与该画风冲突的固定摄影类、真人类、通用写实类或三维排除类参数，除非该画风锚点本身明确需要。`,
-            "【Layout】2x2 grid：Top-left: FRONT FACE CLOSE-UP（正脸特写）；Top-right: SIDE FACE CLOSE-UP（侧脸特写）；Bottom-left: FULL BODY NECK DOWN, NO FACE（脖子以下全身，脸裁出画面）；Bottom-right: FULL BODY BACK VIEW（背面全身）。",
-            "Layout、Top-left、Top-right、Bottom-left、Bottom-right 只是内部构图指令，绝对不要把这些英文或中文说明画进图片里，不要生成任何文字栏、标题栏、表格线或说明卡片。",
-            "人物要求：四格必须是同一人、同一服装、同一风格、同一光影；优先遵循“该资产的提取内容”中的人物外貌、整体风格、人物身份和图片结构；不要字幕、水印、logo、编号或额外说明。",
+            "人物一致性要求：顶部头像与下方三视图必须是同一角色、同一服装、同一风格、同一光影，正侧背身体比例统一；优先遵循“该资产的提取内容”中的人物外貌、整体风格、人物身份和图片结构。",
+            "画面清洁要求：不要字幕、水印、logo、编号、面板标题、文字栏、表格线、说明卡片或多余文字。",
             "服装设计要求：像服装设计总监一样根据人物身份、职业、阶层、年龄、时代地域、生活状态和剧情处境设计服装；不要把所有人物默认生成西装、同款制服、同款黑衣或同一套现代通勤装，除非资产内容明确需要。必须体现剪裁、面料、颜色、磨损、配饰、鞋履或袖口领口等差异化识别点。",
             "脸部原创要求：人物长相必须原创、生活化、有辨识度，不得撞脸当红网红、明星、艺人、博主；不要网红脸、明星同款脸、精修模板脸、韩式爱豆脸或蛇精脸，五官、脸型、肤质和年龄感要服务角色身份。",
           ]
@@ -2726,6 +2923,7 @@ export function Workspace({
 
   function renderFieldControl(field: TemplateField) {
     const value = step.inputs[field.key] ?? field.defaultValue ?? "";
+    const supportsDocx = project.currentStep === "asset-extraction" && field.key === "sourceText";
 
     const canImportText =
       (project.currentStep === "outline-expansion" && field.key === "outline") ||
@@ -2744,7 +2942,7 @@ export function Workspace({
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
-            void importTextFile(event.dataTransfer.files[0], field.key);
+            void importTextFile(event.dataTransfer.files[0], field.key, supportsDocx);
           }}
         >
           <textarea value={value} onChange={(event) => updateInput(field.key, event.target.value)} />
@@ -2753,11 +2951,15 @@ export function Workspace({
               <FileUp size={16} />
               导入文档
               <input
-                accept=".txt,.md,.csv,.json,.srt,.vtt,.log,.text"
+                accept={
+                  supportsDocx
+                    ? ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.txt,.md,.csv,.json,.srt,.vtt,.log,.text"
+                    : ".txt,.md,.csv,.json,.srt,.vtt,.log,.text"
+                }
                 aria-label="导入文档"
                 type="file"
                 onChange={(event) => {
-                  void importTextFile(event.target.files?.[0], field.key);
+                  void importTextFile(event.target.files?.[0], field.key, supportsDocx);
                   event.currentTarget.value = "";
                 }}
               />
@@ -2766,7 +2968,11 @@ export function Workspace({
               <Trash2 size={16} />
               清除
             </button>
-            <span>支持 TXT / MD / CSV / JSON / SRT 等文本文件，也可以拖拽到这里。</span>
+            <span>
+              {supportsDocx
+                ? "支持 DOCX / TXT / MD / CSV / JSON / SRT 等文档，也可以拖拽到这里。"
+                : "支持 TXT / MD / CSV / JSON / SRT 等文本文件，也可以拖拽到这里。"}
+            </span>
           </div>
         </div>
       );
@@ -2839,7 +3045,7 @@ export function Workspace({
                   className="image-result-thumbnail"
                   draggable
                   src={image.src}
-                  title="左键预览，右键下载，拖拽到字字动画图片位"
+                  title="左键预览，右键下载，可拖到电脑桌面或字字动画图片位"
                   onClick={() => openImagePreview(image.src, imageAlt, imageFilename, image)}
                   onContextMenu={(event) => {
                     event.preventDefault();
@@ -3027,8 +3233,13 @@ export function Workspace({
                 {previewImage.previewSrc ? (
                   <img
                     alt={`高清预览：${previewImage.alt}`}
+                    draggable={Boolean(previewImage.image)}
                     src={previewImage.previewSrc}
                     style={{ transform: `scale(${previewScale})` }}
+                    title="可拖到电脑桌面或字字动画图片位"
+                    onDragStart={(event) => {
+                      if (previewImage.image) prepareImageDrag(event, previewImage.image, previewImage.filename);
+                    }}
                   />
                 ) : (
                   <p className="muted">正在准备高清预览...</p>
@@ -3993,8 +4204,13 @@ export function Workspace({
               {previewImage.previewSrc ? (
                 <img
                   alt={`高清预览：${previewImage.alt}`}
+                  draggable={Boolean(previewImage.image)}
                   src={previewImage.previewSrc}
                   style={{ transform: `scale(${previewScale})` }}
+                  title="可拖到电脑桌面或字字动画图片位"
+                  onDragStart={(event) => {
+                    if (previewImage.image) prepareImageDrag(event, previewImage.image, previewImage.filename);
+                  }}
                 />
               ) : (
                 <p className="muted">正在准备高清预览...</p>

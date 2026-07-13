@@ -2,6 +2,7 @@
   endpoint: string;
   apiKey: string;
   apiKeySecondary?: string;
+  geminiTextApiKey?: string;
   claudeApiKey?: string;
   apiKeySource?: "primary" | "secondary";
   modelApiKeySources?: Partial<Record<string, "primary" | "secondary" | "claude">>;
@@ -25,7 +26,7 @@ export async function callAi(
   fetchImpl: typeof fetch = fetch,
 ): Promise<string> {
   if (!settings.endpoint.trim()) throw new Error("请填写 API 地址");
-  const apiKey = resolveApiKey(settings);
+  const apiKey = resolveTextApiKey(settings);
   if (!apiKey.trim()) throw new Error("请填写 API Key");
   if (!settings.model.trim()) throw new Error("请填写模型名");
   const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint);
@@ -63,7 +64,7 @@ export async function callAiStream(
   fetchImpl: typeof fetch = fetch,
 ): Promise<string> {
   if (!settings.endpoint.trim()) throw new Error("请填写 API 地址");
-  const apiKey = resolveApiKey(settings);
+  const apiKey = resolveTextApiKey(settings);
   if (!apiKey.trim()) throw new Error("请填写 API Key");
   if (!settings.model.trim()) throw new Error("请填写模型名");
   const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint);
@@ -458,6 +459,21 @@ function resolveApiKey(settings: AiSettings): string {
   if (source === "claude") return settings.claudeApiKey?.trim() || settings.apiKey.trim();
   if (source === "secondary") return settings.apiKeySecondary?.trim() || settings.apiKey.trim();
   return settings.apiKey.trim();
+}
+
+function resolveTextApiKey(settings: AiSettings): string {
+  const model = settings.model.trim();
+  if (isGeminiTextModel(model)) return settings.geminiTextApiKey?.trim() || settings.apiKey.trim();
+  if (isGptTextModel(model)) return settings.apiKey.trim();
+  return resolveApiKey(settings);
+}
+
+function isGeminiTextModel(model: string): boolean {
+  return model.toLowerCase().startsWith("gemini-");
+}
+
+function isGptTextModel(model: string): boolean {
+  return /^gpt-?/i.test(model);
 }
 
 function resolveRuntimeEndpoint(endpoint: string): string {

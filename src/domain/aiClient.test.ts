@@ -79,6 +79,89 @@ describe("callAi", () => {
     expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(init.body as string).model)).toEqual(supportedModels);
   });
 
+  it("uses the dedicated Gemini text key for gemini-3.5-flash requests", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "接地气对白" } }] }),
+    });
+
+    await callAi(
+      {
+        endpoint: "https://timeai.chat/v1",
+        apiKey: "sk-primary",
+        apiKeySecondary: "sk-secondary",
+        geminiTextApiKey: "sk-gemini-text",
+        model: "gemini-3.5-flash",
+        modelApiKeySources: { "gemini-3.5-flash": "secondary" },
+      },
+      "对白精修",
+      fetchImpl,
+    );
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/timeai/v1/chat/completions",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer sk-gemini-text" }),
+      }),
+    );
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body as string)).toMatchObject({
+      model: "gemini-3.5-flash",
+    });
+  });
+
+  it("falls back to the primary key when the Gemini text key is blank", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "ok" } }] }),
+    });
+
+    await callAi(
+      {
+        endpoint: "https://timeai.chat/v1",
+        apiKey: "sk-primary",
+        apiKeySecondary: "sk-secondary",
+        geminiTextApiKey: "",
+        model: "gemini-3.1-pro-preview",
+        modelApiKeySources: { "gemini-3.1-pro-preview": "secondary" },
+      },
+      "prompt",
+      fetchImpl,
+    );
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/timeai/v1/chat/completions",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer sk-primary" }),
+      }),
+    );
+  });
+
+  it("always uses the primary key for GPT text models", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "ok" } }] }),
+    });
+
+    await callAi(
+      {
+        endpoint: "https://timeai.chat/v1",
+        apiKey: "sk-primary",
+        apiKeySecondary: "sk-secondary",
+        model: "gpt-5.6-sol",
+        modelApiKeySources: { "gpt-5.6-sol": "secondary" },
+      },
+      "prompt",
+      fetchImpl,
+    );
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/timeai/v1/chat/completions",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer sk-primary" }),
+      }),
+    );
+  });
+
   it("reads text from alternate third-party chat completion shapes", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
@@ -195,6 +278,49 @@ describe("callAiStream", () => {
 
     expect(seen).toEqual(["资产提示词", "故事板提示词"]);
     expect(result).toBe("资产提示词故事板提示词");
+  });
+
+  it("uses the dedicated Gemini text key for gemini-3.5-flash streaming requests", async () => {
+    const chunks = ['data: {"choices":[{"delta":{"content":"自然对白"}}]}\n\n', "data: [DONE]\n\n"];
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      body: {
+        getReader() {
+          let index = 0;
+          return {
+            read: async () => {
+              if (index >= chunks.length) return { done: true, value: undefined };
+              return { done: false, value: new TextEncoder().encode(chunks[index++]) };
+            },
+          };
+        },
+      },
+    });
+
+    await callAiStream(
+      {
+        endpoint: "https://timeai.chat/v1",
+        apiKey: "sk-primary",
+        apiKeySecondary: "sk-secondary",
+        geminiTextApiKey: "sk-gemini-text",
+        model: "gemini-3.5-flash",
+        modelApiKeySources: { "gemini-3.5-flash": "secondary" },
+      },
+      "对白精修",
+      () => undefined,
+      fetchImpl,
+    );
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/timeai/v1/chat/completions",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer sk-gemini-text" }),
+      }),
+    );
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body as string)).toMatchObject({
+      model: "gemini-3.5-flash",
+      stream: true,
+    });
   });
 
   it("streams data lines even when the proxy or upstream does not send blank SSE frame separators", async () => {

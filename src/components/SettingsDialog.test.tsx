@@ -72,4 +72,69 @@ describe("SettingsDialog", () => {
     expect(screen.getByRole("option", { name: "gpt-5.6-sol" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "模型名" })).toHaveValue("gpt-5.5");
   });
+
+  it("shows the Gemini text API key directly below the primary API key", () => {
+    render(
+      <SettingsDialog
+        open
+        settings={DEFAULT_AI_SETTINGS}
+        onChange={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+
+    const primaryKey = screen.getByText("主 API Key").closest("label")?.querySelector("input");
+    const geminiTextKey = screen.getByLabelText("Gemini 文本 API Key");
+
+    expect(primaryKey).not.toBeNull();
+    expect(primaryKey!.compareDocumentPosition(geminiTextKey) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("updates the dedicated Gemini text API key", () => {
+    const onChange = vi.fn();
+    render(
+      <SettingsDialog
+        open
+        settings={DEFAULT_AI_SETTINGS}
+        onChange={onChange}
+        onClose={() => undefined}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Gemini 文本 API Key"), {
+      target: { value: "sk-gemini-text" },
+    });
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        geminiTextApiKey: "sk-gemini-text",
+      }),
+    );
+  });
+
+  it("selects gemini-3.5-flash without creating a secondary mapping", () => {
+    const onChange = vi.fn();
+    render(
+      <SettingsDialog
+        open
+        settings={{
+          ...DEFAULT_AI_SETTINGS,
+          modelApiKeySources: { "deepseek-v4-pro": "secondary" },
+        }}
+        onChange={onChange}
+        onClose={() => undefined}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "模型名" }), {
+      target: { value: "gemini-3.5-flash" },
+    });
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gemini-3.5-flash",
+        modelApiKeySources: { "deepseek-v4-pro": "secondary" },
+      }),
+    );
+  });
 });

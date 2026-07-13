@@ -12,6 +12,7 @@ type Props = {
 const TEXT_MODEL_OPTIONS = [
   "gpt-5.5",
   "gpt-5.6-sol",
+  "gemini-3.5-flash",
   "gemini-3.1-pro-preview",
   "deepseek-v4-pro",
   "qwen3.7-plus",
@@ -74,6 +75,13 @@ export function SettingsDialog({
     });
   }
 
+  function updateTextModel(model: string) {
+    onChange({
+      ...settings,
+      model,
+    });
+  }
+
   return (
     <div className="dialog-backdrop" role="presentation">
       <section aria-label="API 设置" className="dialog">
@@ -104,7 +112,7 @@ export function SettingsDialog({
             <select
               aria-label="模型名"
               value={settings.model}
-              onChange={(event) => onChange({ ...settings, model: event.target.value })}
+              onChange={(event) => updateTextModel(event.target.value)}
             >
               {[settings.model, ...TEXT_MODEL_OPTIONS]
                 .filter((model, index, models) => model && models.indexOf(model) === index)
@@ -135,6 +143,18 @@ export function SettingsDialog({
             placeholder="sk-..."
           />
           <small className="field-hint">当前模型可在下面切换到不同分组；这里保留一把主 Key。</small>
+        </label>
+
+        <label>
+          <span>Gemini 文本 API Key</span>
+          <input
+            aria-label="Gemini 文本 API Key"
+            type="password"
+            value={settings.geminiTextApiKey ?? ""}
+            onChange={(event) => onChange({ ...settings, geminiTextApiKey: event.target.value })}
+            placeholder="sk-..."
+          />
+          <small className="field-hint">选择 Gemini 文本模型时自动使用，仅用于文本推理。</small>
         </label>
 
         <label>

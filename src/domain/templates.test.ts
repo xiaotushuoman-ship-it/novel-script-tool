@@ -101,7 +101,8 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("主角被赶出家门");
     expect(prompt).toContain("总章数：20");
     expect(prompt).toContain("单章目标字数：2500");
-    expect(prompt).toContain("95分");
+    expect(prompt).toContain("完整短剧剧本");
+    expect(prompt).not.toContain("本章自评分：95+");
   });
 
   it("tells one-click novel generation to infer missing outline details instead of asking follow-up questions", () => {
@@ -117,13 +118,49 @@ describe("buildPrompt", () => {
 
     expect(prompt).toContain("只要用户提供了故事大纲");
     expect(prompt).toContain("不得向用户追问");
-    expect(prompt).toContain("自动合理补齐");
-    expect(prompt).toContain("主角姓名、年龄、性别、职业");
-    expect(prompt).toContain("家族成员关系");
-    expect(prompt).toContain("父辈留下的核心资产");
-    expect(prompt).toContain("主要对手");
-    expect(prompt).toContain("故事发生的年代和地点");
-    expect(prompt).toContain("结局方向");
+    expect(prompt).toContain("根据题材自动补齐");
+    expect(prompt).toContain("只补全大纲未写明的必要信息");
+    expect(prompt).toContain("不得输出自检、评分、爆点拆解");
+  });
+
+  it("builds genre-adaptive short-drama scripts without exposing internal checks", () => {
+    const template = getTemplate("outline-expansion");
+    const prompt = buildPrompt(template, {
+      outline: "沈知意被逼嫁入侯府，却在洞房前发现未婚夫与长姐联手夺她兵符。",
+      totalChapters: "20",
+      chapterWords: "2500",
+      style: "古风权谋",
+      perspective: "第三人称",
+      autoContinue: "完结",
+    });
+
+    expect(prompt).toContain("都市爽文");
+    expect(prompt).toContain("情感女频");
+    expect(prompt).toContain("古风权谋");
+    expect(prompt).toContain("古风情感");
+    expect(prompt).toContain("场次标题");
+    expect(prompt).toContain("画面/动作");
+    expect(prompt).toContain("台词");
+    expect(prompt).toContain("音效/氛围");
+    expect(prompt).toContain("内部完成");
+    expect(prompt).toContain("不得输出自检");
+    expect(prompt).toContain("第一句话");
+    expect(prompt).toContain("小说叙事模式与短剧表达模式自动判断");
+    expect(prompt).toContain("人物语言指纹");
+    expect(prompt).toContain("姓名互换测试");
+    expect(prompt).toContain("潜台词");
+    expect(prompt).toContain("单次发言不得超过20个汉字");
+    expect(prompt).toContain("标点符号不计入字数");
+    expect(prompt).toContain("拆成自然的多轮短句");
+    expect(prompt).toContain("施压、试探、遮掩、套话、拒绝、交易、暴露、误判、反击、关系变化或行动决定");
+    expect(prompt).toContain("你听我解释");
+    expect(prompt).toContain("事情不是你想的那样");
+    expect(prompt).toContain("0-2秒");
+    expect(prompt).toContain("2-5秒");
+    expect(prompt).not.toContain("输出人物语言指纹");
+    expect(prompt).not.toContain("输出姓名互换测试结果");
+    expect(prompt).not.toContain("本章自评分：95+");
+    expect(prompt).toContain("不得输出自检、评分、爆点拆解");
   });
 
   it("configures the first step as one-click novel generation", () => {
@@ -417,6 +454,10 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("暴力美化与违法犯罪");
     expect(prompt).toContain("恶意丑化群体");
     expect(prompt).toContain("自动替换为同等戏剧功能");
+    expect(prompt).toContain("短剧剧本或小说正文必须逐章输出完整成品");
+    expect(prompt).toContain("不得用分章大纲、章节摘要、剧情概述代替后续章节正文");
+    expect(prompt).not.toContain("先完整输出总章纲，再输出当前可覆盖章节");
+    expect(prompt).not.toContain("成品内容和章节大纲必须按章编号输出");
     expect(prompt).toContain("不要输出 Mermaid 流程图");
     expect(prompt).not.toContain("graph TD");
     expect(prompt).not.toContain("ag_001");
@@ -584,6 +625,10 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("原文对白必须逐字保留");
     expect(prompt).toContain("不得改写、润色、缩写、合并、扩写或替换台词内容");
     expect(prompt).toContain("只能调整台词所在分镜、说话者动作、语气标注和听话者反应");
+    expect(prompt).toContain("最高优先级对白逐字锁定");
+    expect(prompt).toContain("原文台词的文字、标点、称呼、代词、语序和重复次数必须完全一致");
+    expect(prompt).toContain("合规改写、平台友好表达、节奏优化和口语化处理均不得作用于台词文字");
+    expect(prompt).toContain("只能调整非台词画面");
     expect(prompt).not.toContain("只保留必要短对白");
   });
 
@@ -702,11 +747,19 @@ describe("buildPrompt", () => {
     expect(template.body).toContain("{{assetCharacterStyleRule}}");
     expect(template.body).not.toContain("Hyperrealistic photographic 35mm film");
     expect(template.body).not.toContain("NOT 3D");
-    expect(template.body).toContain("【Layout】2x2 grid");
-    expect(template.body).toContain("FULL BODY NECK DOWN, NO FACE");
-    expect(template.body).toContain("左下格不露脸");
-    expect(template.body).toContain("必须使用2x2四宫格：左上（正脸特写）；右上（侧脸特写）；左下（脖子以下全身，脸裁出画面）；右下（背面全身）");
-    expect(template.body).toContain("四格必须是同一人、同一服装、同一风格、同一光影");
+    expect(template.body).toContain("人物三视图生产参考图");
+    expect(template.body).toContain("纯白背景");
+    expect(template.body).toContain("上方三分之一为正面脸部近景头像");
+    expect(template.body).toContain("下方三分之二严格分成三个等比例竖向面板");
+    expect(template.body).toContain("颈部以下到脚部的正面、侧面、背面身体视图");
+    expect(template.body).toContain("下方三块不出现头部和五官");
+    expect(template.body).toContain("双手自然下垂");
+    expect(template.body).toContain("双脚完整可见");
+    expect(template.body).toContain("顶部头像与下方三视图必须是同一角色");
+    expect(template.body).not.toContain("【Layout】2x2 grid");
+    expect(template.body).not.toContain("FULL BODY NECK DOWN, NO FACE");
+    expect(template.body).not.toContain("左下格不露脸");
+    expect(template.body).not.toContain("必须使用2x2四宫格");
     expect(template.body).toContain("不要字幕、水印、logo、编号或多余文字");
     expect(template.body).toContain("必须达到男女主角、重要反派或核心配角的精美角色标准");
     expect(template.body).toContain("不能是大众脸");
