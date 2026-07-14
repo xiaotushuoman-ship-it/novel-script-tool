@@ -588,6 +588,11 @@ describe("buildPrompt", () => {
     });
 
     expect(prompt).toContain("情绪导演2.0增强规则");
+    expect(prompt).toContain("触发事件 → 角色感知动作 → 微表情/生理反应 → 肢体动作 → 原文台词及说话语气");
+    expect(prompt).toContain("每次明显情绪变化前，必须先出现原剧情能够证明的前置触发原因");
+    expect(prompt).toContain("不得凭空产生情绪");
+    expect(prompt).toContain("不得新增原文没有的触发事件");
+    expect(prompt).toContain("不要输出“触发原因：”");
     expect(prompt).toContain("情绪曲线");
     expect(prompt).toContain("微动作、惯性动作、神经反应、失控反应");
     expect(prompt).toContain("动作四要素");
@@ -798,6 +803,46 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).not.toContain("写实质感");
     expect(assetOutputRules).not.toContain("影视写实");
     expect(assetOutputRules).toContain("当前画风锚点不属于真人摄影方向");
+  });
+
+  it("adapts the supplied male and female character rules for 3D Guoman assets", () => {
+    const template = getTemplate("asset-extraction");
+    const prompt = buildPrompt(template, {
+      sourceText: "古城议事堂内，女将军沈昭与年迈谋士顾衡并肩查看沙盘。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+    const assetOutputRules = prompt.slice(prompt.indexOf("按下面格式输出"));
+
+    expect(assetOutputRules).toContain("整体风格首句必须明确写出“画风锚点：3D国漫风格”");
+    expect(assetOutputRules).toContain("次世代高精度建模");
+    expect(assetOutputRules).toContain("PBR国风材质");
+    expect(assetOutputRules).toContain("鞋履完整包裹双脚");
+    expect(assetOutputRules).toContain("所有明确为成年女性的角色统一保持：饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿");
+    expect(assetOutputRules).toContain("服装精美华丽，以收腰剪裁和高开衩设计突出角色轮廓");
+    expect(assetOutputRules).toContain("未成年女性角色不得套用成人身体曲线或高开衩服装描述");
+    expect(assetOutputRules).toContain("男性角色的肩背、腰身、肌肉量和站姿必须服从年龄、身份、职业、时代与剧情");
+    expect(assetOutputRules).toContain("不得把老人、少年、病弱者、文职角色和劳动者统一写成宽肩窄腰的青年体型");
+  });
+
+  it("keeps non-3D character assets aligned with the selected style anchor", () => {
+    const template = getTemplate("asset-extraction");
+    const prompt = buildPrompt(template, {
+      sourceText: "雨巷里，沈昭撑伞回头看向顾衡。",
+      assetType: "人物",
+      visualStyle: "水墨国风动画",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+    const assetOutputRules = prompt.slice(prompt.indexOf("按下面格式输出"));
+
+    expect(assetOutputRules).toContain("整体风格首句必须明确写出“画风锚点：水墨国风动画”");
+    expect(assetOutputRules).toContain("只能使用水墨国风动画对应的材质、线条、色彩、光影和角色设计语言");
+    expect(assetOutputRules).toContain("禁止混入3D建模、PBR材质、真人摄影或影视写实描述");
   });
 
   it("allows realistic wording only when the asset style anchor is cinematic realism", () => {
