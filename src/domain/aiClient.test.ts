@@ -720,7 +720,7 @@ describe("callImageGeneration", () => {
     );
 
     expect(fetchImpl).toHaveBeenCalledWith(
-      "/api/timeai/v1/images/generations",
+      "https://timeai.chat/v1/images/generations",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -797,12 +797,12 @@ describe("callImageGeneration", () => {
     expect(result).toBe("https://img.example.com/from-chat.png");
     expect(fetchImpl).toHaveBeenNthCalledWith(
       1,
-      "/api/timeai/v1/images/generations",
+      "https://timeai.chat/v1/images/generations",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetchImpl).toHaveBeenNthCalledWith(
       2,
-      "/api/timeai/v1/chat/completions",
+      "https://timeai.chat/v1/chat/completions",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -904,7 +904,7 @@ describe("callImageGeneration", () => {
     expect(result).toBe("data:image/png;base64,third-party-base64");
     expect(fetchImpl).toHaveBeenNthCalledWith(
       3,
-      "/api/timeai/v1beta/models/gemini-3.1-flash-image-preview:generateContent",
+      "https://timeai.chat/v1beta/models/gemini-3.1-flash-image-preview:generateContent",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -959,7 +959,7 @@ describe("callImageGeneration", () => {
     expect(result).toBe("data:image/png;base64,flash-lite-third-party-base64");
     expect(fetchImpl).toHaveBeenNthCalledWith(
       3,
-      "/api/timeai/v1beta/models/gemini-3.1-flash-lite-image-preview:generateContent",
+      "https://timeai.chat/v1beta/models/gemini-3.1-flash-lite-image-preview:generateContent",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({

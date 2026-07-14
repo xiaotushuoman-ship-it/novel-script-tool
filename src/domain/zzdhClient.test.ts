@@ -2,6 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { parseStoryboardPanels, sendAssetsToZzdh, sendStoryboardToZzdh } from "./zzdhClient";
 
 describe("zzdhClient", () => {
+  it("shows a clear message when the local ZZDH service cannot be reached", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await expect(
+      sendAssetsToZzdh(
+        [{ name: "林晚舟", type: "人物", description: "夜市摊主。" }],
+        fetchMock as unknown as typeof fetch,
+      ),
+    ).rejects.toThrow("无法连接本机字字动画");
+  });
+
   it("creates extracted assets in ZZDH character location and item managers", async () => {
     const fetchMock = vi
       .fn()
@@ -32,6 +43,7 @@ describe("zzdhClient", () => {
     );
 
     const toolBodies = fetchMock.mock.calls.map((call) => JSON.parse(call[1].body as string));
+    expect(fetchMock.mock.calls.every((call) => call[0] === "http://127.0.0.1:8766/v1/tools/call")).toBe(true);
     expect(toolBodies.filter((body) => body.name === "zzdh_get_entity_list")).toHaveLength(3);
     const createBodies = toolBodies.filter((body) => body.name === "zzdh_create_entity");
     expect(createBodies).toHaveLength(2);

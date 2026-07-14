@@ -36,7 +36,7 @@ type ZzdhPanelInfo = {
 
 type ZzdhEntityType = "character" | "location" | "item";
 
-const ZZDH_TOOL_ENDPOINT = "/api/zzdh/v1/tools/call";
+const ZZDH_TOOL_ENDPOINT = "http://127.0.0.1:8766/v1/tools/call";
 
 export async function sendStoryboardToZzdh(
   projectName: string,
@@ -173,14 +173,22 @@ async function callZzdhTool(
   argumentsPayload: Record<string, unknown>,
   fetchImpl: typeof fetch,
 ): Promise<ZzdhToolResult> {
-  const response = await fetchImpl(ZZDH_TOOL_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name,
-      arguments: argumentsPayload,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetchImpl(ZZDH_TOOL_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        arguments: argumentsPayload,
+      }),
+    });
+  } catch (error) {
+    if (error instanceof TypeError && /fetch|network|load failed/i.test(error.message)) {
+      throw new Error("无法连接本机字字动画。请先启动字字动画，并确认本机 8766 服务正常运行后重试。");
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     throw new Error(buildZzdhHttpErrorMessage(response.status));

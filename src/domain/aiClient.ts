@@ -194,7 +194,7 @@ export async function callImageGeneration(
   const apiKey = resolveApiKey(settings);
   if (!apiKey.trim()) throw new Error("请填写 API Key");
   if (!imageModel.trim()) throw new Error("请选择生图模型");
-  const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint);
+  const runtimeEndpoint = resolveImageRuntimeEndpoint(settings.endpoint);
   const runtimeSettings = { ...settings, endpoint: runtimeEndpoint };
   const referenceImages = sanitizeReferenceImages(options.referenceImages);
 
@@ -480,6 +480,14 @@ function resolveRuntimeEndpoint(endpoint: string): string {
   const normalizedEndpoint = endpoint.trim().replace(/\/+$/, "");
   if (normalizedEndpoint === TIMEAI_ENDPOINT) {
     return TIMEAI_PROXY_ENDPOINT;
+  }
+  return endpoint;
+}
+
+function resolveImageRuntimeEndpoint(endpoint: string): string {
+  const normalizedEndpoint = endpoint.trim().replace(/\/+$/, "");
+  if (normalizedEndpoint === TIMEAI_ENDPOINT) {
+    return TIMEAI_ENDPOINT;
   }
   return endpoint;
 }
