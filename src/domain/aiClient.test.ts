@@ -201,9 +201,134 @@ describe("callAi", () => {
       ),
     ).rejects.toThrow("站内代理");
   });
+
+  it("retries TimeAI text requests directly when the HTTPS proxy has a network failure", async () => {
+    vi.stubGlobal("location", { protocol: "https:" });
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "连接正常" } }] }),
+      });
+
+    try {
+      const result = await callAi(
+        { endpoint: "https://timeai.chat/v1", apiKey: "key", model: "gemini-3.5-flash" },
+        "请只回复：连接正常",
+        fetchImpl,
+      );
+
+      expect(result).toBe("连接正常");
+      expect(fetchImpl).toHaveBeenNthCalledWith(
+        1,
+        "/api/timeai/v1/chat/completions",
+        expect.objectContaining({ method: "POST" }),
+      );
+      expect(fetchImpl).toHaveBeenNthCalledWith(
+        2,
+        "https://timeai.chat/v1/chat/completions",
+        expect.objectContaining({ method: "POST" }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("explains when both the deployed proxy and direct TimeAI fallback are unreachable", async () => {
+    vi.stubGlobal("location", { protocol: "https:" });
+    const fetchImpl = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+
+    try {
+      await expect(
+        callAi(
+          { endpoint: "https://timeai.chat/v1", apiKey: "key", model: "gemini-3.5-flash" },
+          "请只回复：连接正常",
+          fetchImpl,
+        ),
+      ).rejects.toThrow("站内代理和 TimeAI 直连均未返回结果");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not retry TimeAI text requests directly after an HTTP error", async () => {
+    vi.stubGlobal("location", { protocol: "https:" });
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 401 });
+
+    try {
+      await expect(
+        callAi(
+          { endpoint: "https://timeai.chat/v1", apiKey: "bad-key", model: "gemini-3.5-flash" },
+          "请只回复：连接正常",
+          fetchImpl,
+        ),
+      ).rejects.toThrow("HTTP 401");
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not bypass the local TimeAI proxy after a network failure", async () => {
+    vi.stubGlobal("location", { protocol: "http:" });
+    const fetchImpl = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+
+    try {
+      await expect(
+        callAi(
+          { endpoint: "https://timeai.chat/v1", apiKey: "key", model: "gemini-3.5-flash" },
+          "请只回复：连接正常",
+          fetchImpl,
+        ),
+      ).rejects.toThrow("站内代理");
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe("callAiStream", () => {
+  it("retries TimeAI streaming requests directly when the HTTPS proxy has a network failure", async () => {
+    vi.stubGlobal("location", { protocol: "https:" });
+    const encoder = new TextEncoder();
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce({
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"实时结果"}}]}\n\n'));
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+          },
+        }),
+      });
+    const seen: string[] = [];
+
+    try {
+      const result = await callAiStream(
+        { endpoint: "https://timeai.chat/v1", apiKey: "key", model: "gemini-3.5-flash" },
+        "生成正文",
+        (chunk) => seen.push(chunk),
+        fetchImpl,
+      );
+
+      expect(result).toBe("实时结果");
+      expect(seen).toEqual(["实时结果"]);
+      expect(fetchImpl).toHaveBeenNthCalledWith(
+        2,
+        "https://timeai.chat/v1/chat/completions",
+        expect.objectContaining({ body: expect.stringContaining('"stream":true') }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("streams text chunks from an SSE response before returning the full text", async () => {
     const chunks = [
       'data: {"choices":[{"delta":{"content":"第一段"}}]}\n\n',
