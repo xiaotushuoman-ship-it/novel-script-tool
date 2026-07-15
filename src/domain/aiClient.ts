@@ -30,21 +30,22 @@ export async function callAi(
   if (!apiKey.trim()) throw new Error("请填写 API Key");
   if (!settings.model.trim()) throw new Error("请填写模型名");
   const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint);
+  const requestInit: RequestInit = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: settings.model,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  };
 
   const response = await requestAi(
-    () =>
-      fetchImpl(resolveChatCompletionsEndpoint(runtimeEndpoint), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: settings.model,
-          messages: [{ role: "user", content: prompt }],
-        }),
-      }),
+    () => fetchImpl(resolveChatCompletionsEndpoint(runtimeEndpoint), requestInit),
     runtimeEndpoint,
+    buildDirectTimeAiTextFallback(settings.endpoint, runtimeEndpoint, fetchImpl, requestInit),
   );
 
   if (!response.ok) {
@@ -68,22 +69,23 @@ export async function callAiStream(
   if (!apiKey.trim()) throw new Error("请填写 API Key");
   if (!settings.model.trim()) throw new Error("请填写模型名");
   const runtimeEndpoint = resolveRuntimeEndpoint(settings.endpoint);
+  const requestInit: RequestInit = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: settings.model,
+      messages: [{ role: "user", content: prompt }],
+      stream: true,
+    }),
+  };
 
   const response = await requestAi(
-    () =>
-      fetchImpl(resolveChatCompletionsEndpoint(runtimeEndpoint), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: settings.model,
-          messages: [{ role: "user", content: prompt }],
-          stream: true,
-        }),
-      }),
+    () => fetchImpl(resolveChatCompletionsEndpoint(runtimeEndpoint), requestInit),
     runtimeEndpoint,
+    buildDirectTimeAiTextFallback(settings.endpoint, runtimeEndpoint, fetchImpl, requestInit),
   );
 
   if (!response.ok) {
@@ -492,11 +494,49 @@ function resolveImageRuntimeEndpoint(endpoint: string): string {
   return endpoint;
 }
 
-async function requestAi(fetcher: () => Promise<Response>, endpoint: string): Promise<Response> {
+type NetworkFallback = {
+  fetcher: () => Promise<Response>;
+  endpoint: string;
+};
+
+function buildDirectTimeAiTextFallback(
+  configuredEndpoint: string,
+  runtimeEndpoint: string,
+  fetchImpl: typeof fetch,
+  requestInit: RequestInit,
+): NetworkFallback | undefined {
+  const normalizedEndpoint = configuredEndpoint.trim().replace(/\/+$/, "");
+  if (
+    normalizedEndpoint !== TIMEAI_ENDPOINT ||
+    runtimeEndpoint !== TIMEAI_PROXY_ENDPOINT ||
+    globalThis.location?.protocol !== "https:"
+  ) {
+    return undefined;
+  }
+
+  return {
+    endpoint: TIMEAI_ENDPOINT,
+    fetcher: () => fetchImpl(resolveChatCompletionsEndpoint(TIMEAI_ENDPOINT), requestInit),
+  };
+}
+
+async function requestAi(fetcher: () => Promise<Response>, endpoint: string, fallback?: NetworkFallback): Promise<Response> {
   try {
     return await fetcher();
   } catch (error) {
     if (isNetworkFetchError(error)) {
+      if (fallback) {
+        try {
+          return await fallback.fetcher();
+        } catch (fallbackError) {
+          if (isNetworkFetchError(fallbackError)) {
+            throw new Error(
+              "AI 调用失败：网络请求未完成。站内代理和 TimeAI 直连均未返回结果。请使用 Chrome/Edge 等系统浏览器打开网页，或切换网络后重试。",
+            );
+          }
+          throw fallbackError;
+        }
+      }
       throw new Error(buildNetworkErrorMessage(endpoint));
     }
     throw error;
