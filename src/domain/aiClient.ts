@@ -487,7 +487,7 @@ function resolveRuntimeEndpoint(endpoint: string): string {
 function resolveImageRuntimeEndpoint(endpoint: string): string {
   const normalizedEndpoint = endpoint.trim().replace(/\/+$/, "");
   if (normalizedEndpoint === TIMEAI_ENDPOINT) {
-    return TIMEAI_ENDPOINT;
+    return globalThis.location?.protocol === "https:" ? TIMEAI_ENDPOINT : TIMEAI_PROXY_ENDPOINT;
   }
   return endpoint;
 }
