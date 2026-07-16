@@ -16,6 +16,7 @@ describe("desktop release configuration", () => {
       }),
     ]);
     expect(packageJson.build.win.artifactName).toBe("Xiaotu-Assistant-Setup-${version}.${ext}");
+    expect(packageJson.build.electronDist).toBeUndefined();
     expect(packageJson.build.files).toContain("electron/autoUpdate.mjs");
     expect(mainProcess).toContain('import electronUpdater from "electron-updater"');
     expect(mainProcess).not.toContain('import { autoUpdater } from "electron-updater"');
