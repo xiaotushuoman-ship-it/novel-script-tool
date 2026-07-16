@@ -36,7 +36,18 @@ type ZzdhPanelInfo = {
 
 type ZzdhEntityType = "character" | "location" | "item";
 
-const ZZDH_TOOL_ENDPOINT = "http://127.0.0.1:8766/v1/tools/call";
+const LOCAL_ZZDH_PROXY_ENDPOINT = "/api/zzdh/v1/tools/call";
+const DIRECT_ZZDH_TOOL_ENDPOINT = "http://127.0.0.1:8766/v1/tools/call";
+
+export function resolveZzdhToolEndpoint(pageUrl = globalThis.location?.href || "") {
+  try {
+    const hostname = new URL(pageUrl).hostname;
+    if (hostname === "127.0.0.1" || hostname === "localhost") return LOCAL_ZZDH_PROXY_ENDPOINT;
+  } catch {
+    return LOCAL_ZZDH_PROXY_ENDPOINT;
+  }
+  return DIRECT_ZZDH_TOOL_ENDPOINT;
+}
 
 export async function sendStoryboardToZzdh(
   projectName: string,
@@ -175,7 +186,7 @@ async function callZzdhTool(
 ): Promise<ZzdhToolResult> {
   let response: Response;
   try {
-    response = await fetchImpl(ZZDH_TOOL_ENDPOINT, {
+    response = await fetchImpl(resolveZzdhToolEndpoint(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

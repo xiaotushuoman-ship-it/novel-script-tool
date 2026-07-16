@@ -1120,13 +1120,192 @@ describe("Workspace progress", () => {
 
     render(<StatefulWorkspace />);
 
-    expect(screen.getByRole("heading", { name: "AI 随机推荐抖音爆款题材" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "AI 推荐 2026 近期爆款题材" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "刷新推荐" })).toBeInTheDocument();
+    const genreSelect = screen.getByRole("combobox", { name: "题材类型" });
     const recommendationStyleSelect = screen.getByRole("combobox", { name: "推荐文风" });
+    expect(genreSelect).toHaveValue("都市男频");
+    expect(recommendationStyleSelect).toHaveValue("都市爽文");
     expect(recommendationStyleSelect).toBeInTheDocument();
-    fireEvent.change(recommendationStyleSelect, { target: { value: "电影感写实" } });
-    expect(screen.getByRole("combobox", { name: "文风" })).toHaveValue("电影感写实");
+    fireEvent.change(genreSelect, { target: { value: "古风权谋" } });
+    expect(recommendationStyleSelect).toHaveValue("历史权谋");
+    expect(within(recommendationStyleSelect).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "历史权谋",
+      "仙侠古风",
+      "克制冷峻",
+      "电影感写实",
+    ]);
+    expect(screen.getByRole("combobox", { name: "文风" })).toHaveValue("历史权谋");
     expect(screen.getAllByRole("button", { name: "一键填入大纲" }).length).toBeGreaterThan(0);
+  });
+
+  it("restores fallback cards for the genre saved in an existing project", () => {
+    const project = createProject("已保存题材测试");
+    project.currentStep = "outline-expansion";
+    project.steps["outline-expansion"].inputs.topicGenre = "古风权谋";
+    project.steps["outline-expansion"].inputs.style = "历史权谋";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    expect(screen.getByRole("combobox", { name: "题材类型" })).toHaveValue("古风权谋");
+    expect(screen.getByText("盐仓旧账")).toBeInTheDocument();
+    expect(screen.queryByText("县城技能合伙人")).not.toBeInTheDocument();
+  });
+
+  it("keeps the recommendation style valid when the main form uses a cross-genre style", () => {
+    const project = createProject("跨类型文风测试");
+    project.currentStep = "outline-expansion";
+    project.steps["outline-expansion"].inputs.topicGenre = "都市男频";
+    project.steps["outline-expansion"].inputs.style = "古言甜宠";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    expect(screen.getByRole("combobox", { name: "文风" })).toHaveValue("古言甜宠");
+    expect(screen.getByRole("combobox", { name: "推荐文风" })).toHaveValue("都市爽文");
+  });
+
+  it("does not let an older online refresh overwrite cards after the genre changes", async () => {
+    let resolveRecommendation: ((value: string) => void) | undefined;
+    callAiMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveRecommendation = resolve;
+      }),
+    );
+    const project = createProject("题材刷新竞态测试");
+    project.currentStep = "outline-expansion";
+
+    function StatefulWorkspace() {
+      const [currentProject, setCurrentProject] = useState(project);
+      return (
+        <Workspace
+          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+          project={currentProject}
+          onAiSettingsChange={() => undefined}
+          onProjectChange={setCurrentProject}
+          onSaveVersion={() => undefined}
+        />
+      );
+    }
+
+    render(<StatefulWorkspace />);
+    fireEvent.click(screen.getByRole("button", { name: "刷新推荐" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "题材类型" }), { target: { value: "古风权谋" } });
+    resolveRecommendation?.(
+      JSON.stringify([
+        {
+          title: "过期都市推荐",
+          summary: "旧请求结果。",
+          outline: "不应覆盖古风权谋卡片。",
+          tags: ["旧请求"],
+          style: "都市爽文",
+          genre: "都市男频",
+        },
+      ]),
+    );
+
+    await waitFor(() => expect(screen.getByText("盐仓旧账")).toBeInTheDocument());
+    expect(screen.queryByText("过期都市推荐")).not.toBeInTheDocument();
+  });
+
+  it("does not let an older online refresh overwrite cards after switching projects", async () => {
+    let resolveRecommendation: ((value: string) => void) | undefined;
+    callAiMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveRecommendation = resolve;
+      }),
+    );
+    const firstProject = createProject("旧项目");
+    firstProject.currentStep = "outline-expansion";
+    const nextProject = createProject("新项目");
+    nextProject.currentStep = "outline-expansion";
+    nextProject.steps["outline-expansion"].inputs.topicGenre = "古风权谋";
+    nextProject.steps["outline-expansion"].inputs.style = "历史权谋";
+
+    const props = {
+      aiSettings: { endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" },
+      onAiSettingsChange: () => undefined,
+      onProjectChange: () => undefined,
+      onSaveVersion: () => undefined,
+    };
+    const { rerender } = render(<Workspace {...props} project={firstProject} />);
+    fireEvent.click(screen.getByRole("button", { name: "刷新推荐" }));
+    rerender(<Workspace {...props} project={nextProject} />);
+    resolveRecommendation?.(
+      JSON.stringify([
+        {
+          title: "旧项目推荐",
+          summary: "旧请求结果。",
+          outline: "不应覆盖新项目卡片。",
+          tags: ["旧项目"],
+          style: "都市爽文",
+          genre: "都市男频",
+        },
+      ]),
+    );
+
+    await waitFor(() => expect(screen.getByText("盐仓旧账")).toBeInTheDocument());
+    expect(screen.queryByText("旧项目推荐")).not.toBeInTheDocument();
+  });
+
+  it("refreshes only the selected 2026 genre and applies the returned outline with its matching style", async () => {
+    callAiMock.mockResolvedValue(
+      JSON.stringify([
+        {
+          title: "边城换防夜",
+          summary: "限时军政博弈。",
+          outline: "新任县令必须在天亮前辨认真伪军令。",
+          tags: ["边城", "权谋", "限时"],
+          style: "历史权谋",
+          genre: "古风权谋",
+        },
+      ]),
+    );
+    const project = createProject("题材类型联动测试");
+    project.currentStep = "outline-expansion";
+
+    function StatefulWorkspace() {
+      const [currentProject, setCurrentProject] = useState(project);
+      return (
+        <Workspace
+          aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+          project={currentProject}
+          onAiSettingsChange={() => undefined}
+          onProjectChange={setCurrentProject}
+          onSaveVersion={() => undefined}
+        />
+      );
+    }
+
+    render(<StatefulWorkspace />);
+    fireEvent.change(screen.getByRole("combobox", { name: "题材类型" }), { target: { value: "古风权谋" } });
+    fireEvent.click(screen.getByRole("button", { name: "刷新推荐" }));
+
+    await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(1));
+    const recommendationPrompt = String(callAiMock.mock.calls[0][1]);
+    expect(recommendationPrompt).toContain("题材类型：古风权谋");
+    expect(recommendationPrompt).toContain("最近30至90天");
+    expect(recommendationPrompt).toMatch(/当前日期：2026-07-1[67]/);
+    expect(await screen.findByText("边城换防夜")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "一键填入大纲" }));
+    expect(screen.getByRole("textbox", { name: /故事大纲/ })).toHaveValue("新任县令必须在天亮前辨认真伪军令。");
+    expect(screen.getByRole("combobox", { name: "文风" })).toHaveValue("历史权谋");
   });
 
   it("keeps local topic recommendations usable when online refresh fails", async () => {
@@ -1146,8 +1325,8 @@ describe("Workspace progress", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "刷新推荐" }));
 
-    expect(screen.getByText("正在在线刷新题材推荐...")).toBeInTheDocument();
-    expect(await screen.findByText("在线推荐暂不可用，已自动切换到本地爆款题材池。请确认 API Key、模型名和本地代理后可再次刷新。")).toBeInTheDocument();
+    expect(screen.getByText("正在联网分析都市男频近期趋势...")).toBeInTheDocument();
+    expect(await screen.findByText("联网推荐暂不可用，当前显示都市男频的本地 2026 趋势兜底。")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "一键填入大纲" }).length).toBeGreaterThan(0);
   });
 
@@ -1159,6 +1338,7 @@ describe("Workspace progress", () => {
           summary: "年轻摊主帮助老街小店重新被看见。",
           outline: "主角接手冷清夜市摊位，用短视频运营和真诚服务带动整条街复兴。",
           tags: ["现实主义", "烟火气"],
+          genre: "都市男频",
         },
       ]),
     );
@@ -1177,7 +1357,7 @@ describe("Workspace progress", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "刷新推荐" }));
 
-    expect(await screen.findByText("已使用 AI 在线更新题材推荐。")).toBeInTheDocument();
+    expect((await screen.findAllByText(/联网 AI 近期趋势推荐/)).length).toBeGreaterThan(0);
     expect(screen.getByText("夜市焕新")).toBeInTheDocument();
   });
 });

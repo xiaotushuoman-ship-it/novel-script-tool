@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import { parseStoryboardPanels, sendAssetsToZzdh, sendStoryboardToZzdh } from "./zzdhClient";
+import { parseStoryboardPanels, resolveZzdhToolEndpoint, sendAssetsToZzdh, sendStoryboardToZzdh } from "./zzdhClient";
 
 describe("zzdhClient", () => {
+  it("uses the local proxy in desktop or Vite and direct localhost access on the deployed website", () => {
+    expect(resolveZzdhToolEndpoint("http://127.0.0.1:5173/")).toBe("/api/zzdh/v1/tools/call");
+    expect(resolveZzdhToolEndpoint("http://localhost:5173/")).toBe("/api/zzdh/v1/tools/call");
+    expect(resolveZzdhToolEndpoint("https://novel-script-tool.vercel.app/")).toBe(
+      "http://127.0.0.1:8766/v1/tools/call",
+    );
+  });
+
   it("shows a clear message when the local ZZDH service cannot be reached", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
 
@@ -43,7 +51,7 @@ describe("zzdhClient", () => {
     );
 
     const toolBodies = fetchMock.mock.calls.map((call) => JSON.parse(call[1].body as string));
-    expect(fetchMock.mock.calls.every((call) => call[0] === "http://127.0.0.1:8766/v1/tools/call")).toBe(true);
+    expect(fetchMock.mock.calls.every((call) => call[0] === "/api/zzdh/v1/tools/call")).toBe(true);
     expect(toolBodies.filter((body) => body.name === "zzdh_get_entity_list")).toHaveLength(3);
     const createBodies = toolBodies.filter((body) => body.name === "zzdh_create_entity");
     expect(createBodies).toHaveLength(2);

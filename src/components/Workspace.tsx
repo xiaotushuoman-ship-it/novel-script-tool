@@ -29,14 +29,21 @@ import { checkSeedanceSafety, type SeedanceSafetyReport } from "../domain/seedan
 import {
   buildPrompt,
   getTemplate,
-  LOCAL_TREND_TOPIC_RECOMMENDATIONS,
   IMAGE_MODEL_OPTIONS,
   IMAGE_RESOLUTION_OPTIONS,
-  NOVEL_STYLE_OPTIONS,
-  type TopicRecommendation,
   type TemplateField,
   type TemplateId,
 } from "../domain/templates";
+import {
+  buildTopicTrendPrompt,
+  getDefaultTopicStyle,
+  getLocalTopicRecommendations,
+  getTopicStyles,
+  normalizeTopicRecommendations,
+  TOPIC_GENRE_OPTIONS,
+  type TopicGenre,
+  type TopicRecommendation,
+} from "../domain/topicTrends";
 import { sendAssetsToZzdh, sendStoryboardToZzdh } from "../domain/zzdhClient";
 
 type GenerationProgress = {
@@ -241,7 +248,7 @@ export function Workspace({
   const [topicRecommendations, setTopicRecommendations] = useState<TopicRecommendationState>({
     isLoading: false,
     source: "local",
-    items: LOCAL_TREND_TOPIC_RECOMMENDATIONS,
+    items: getLocalTopicRecommendations("都市男频"),
     message: "",
   });
   const [previewImage, setPreviewImage] = useState<PreviewImage | null>(null);
@@ -252,6 +259,7 @@ export function Workspace({
   const storyboardImageProgressTimerRef = useRef<number | null>(null);
   const textProgressTimerRefs = useRef<Partial<Record<TemplateId, number>>>({});
   const imageResultIdRef = useRef(0);
+  const topicRecommendationRequestIdRef = useRef(0);
   const previewObjectUrlRef = useRef<string | null>(null);
   const generatedImageDragUrlsRef = useRef<Map<string, string>>(new Map());
   const pendingGeneratedImageDragUrlsRef = useRef<Set<string>>(new Set());
@@ -266,6 +274,7 @@ export function Workspace({
   const visibleProgress = project.currentStep === "asset-extraction" && progress ? progress : currentGeneration.progress;
   const visibleStatus = currentGeneration.status || status;
   const visibleDraft = liveDraftByStep[project.currentStep] ?? step.draft;
+  const selectedTopicGenre = (step.inputs.topicGenre || "都市男频") as TopicGenre;
   const backgroundTasks = Object.entries(generationByStep)
     .filter(([, task]) => task?.progress || task?.status)
     .map(([stepId, task]) => ({
@@ -503,12 +512,27 @@ export function Workspace({
     });
   }, [assetLibrarySearch]);
 
+  useEffect(() => {
+    topicRecommendationRequestIdRef.current += 1;
+    if (project.currentStep !== "outline-expansion") return;
+    setTopicRecommendations({
+      isLoading: false,
+      source: "local",
+      items: getLocalTopicRecommendations(selectedTopicGenre),
+      message: "",
+    });
+  }, [project.currentStep, project.id, selectedTopicGenre]);
+
   function updateInput(key: string, value: string) {
+    updateInputs({ [key]: value });
+  }
+
+  function updateInputs(patch: Record<string, string>) {
     setLiveInputsByStep((current) => ({
       ...current,
       [project.currentStep]: {
         ...current[project.currentStep],
-        [key]: value,
+        ...patch,
       },
     }));
     onProjectChange({
@@ -517,7 +541,7 @@ export function Workspace({
         ...project.steps,
         [project.currentStep]: {
           ...step,
-          inputs: { ...step.inputs, [key]: value },
+          inputs: { ...step.inputs, ...patch },
         },
       },
     });
@@ -602,52 +626,64 @@ export function Workspace({
   }
 
   function applyTopicRecommendation(recommendation: TopicRecommendation) {
-    updateInput("outline", recommendation.outline);
+    updateInputs({ outline: recommendation.outline, style: recommendation.style });
     setStatus(`已填入题材：${recommendation.title}`);
   }
 
+  function updateTopicGenre(genre: TopicGenre) {
+    topicRecommendationRequestIdRef.current += 1;
+    const style = getDefaultTopicStyle(genre);
+    updateInputs({ topicGenre: genre, style });
+    setTopicRecommendations({
+      isLoading: false,
+      source: "local",
+      items: getLocalTopicRecommendations(genre),
+      message: `当前显示${genre}的本地 2026 趋势兜底。`,
+    });
+  }
+
   async function loadTopicRecommendations() {
-    const fallbackItems = LOCAL_TREND_TOPIC_RECOMMENDATIONS;
+    const requestId = topicRecommendationRequestIdRef.current + 1;
+    topicRecommendationRequestIdRef.current = requestId;
+    const genre = selectedTopicGenre;
+    const fallbackItems = getLocalTopicRecommendations(genre);
     setTopicRecommendations({
       isLoading: true,
       source: "local",
       items: fallbackItems,
-      message: "正在在线刷新题材推荐...",
+      message: `正在联网分析${genre}近期趋势...`,
     });
 
-    const prompt = [
-      "你是中文短剧和网文的题材策划助手。",
-      "请根据最近一个月抖音和红果平台的常见爆款趋势，生成 3-5 个适合中文小说和短剧改编的题材方向。",
-      "要求：必须与时俱进，优先现实主义、烟火气、年代家庭、系统打工升级、萌宝治愈、职场反杀、非遗文旅等正向题材；避免封建迷信、低俗擦边、暴力血腥、拜金炫富、校园早恋、悬疑犯罪主线。",
-      "输出 JSON 数组，每项包含 title, summary, outline, tags。不要输出解释，不要 Markdown。",
-    ].join("\n");
+    const prompt = buildTopicTrendPrompt(genre);
 
     try {
       const result = cleanAiTextOutput(await callAi(getTextAiSettings(), prompt));
-      const parsed = JSON.parse(result) as TopicRecommendation[];
-      const normalized = Array.isArray(parsed)
-        ? parsed
-            .map((item) => ({
-              title: String(item?.title || "").trim(),
-              summary: String(item?.summary || "").trim(),
-              outline: String(item?.outline || "").trim(),
-              tags: Array.isArray(item?.tags) ? item.tags.map((tag) => String(tag).trim()).filter(Boolean) : [],
-            }))
-            .filter((item) => item.title && item.summary && item.outline)
-        : [];
+      const normalized = normalizeTopicRecommendations(genre, JSON.parse(result));
+      if (requestId !== topicRecommendationRequestIdRef.current) return;
+      const generatedAt = new Intl.DateTimeFormat("zh-CN", {
+        timeZone: "Asia/Shanghai",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date());
 
       setTopicRecommendations({
         isLoading: false,
         source: normalized.length > 0 ? "ai" : "local",
         items: normalized.length > 0 ? normalized : fallbackItems,
-        message: normalized.length > 0 ? "已使用 AI 在线更新题材推荐。" : "AI 推荐结果为空，已切换到本地题材池。",
+        message:
+          normalized.length > 0
+            ? `联网 AI 近期趋势推荐 · ${genre} · ${generatedAt}`
+            : `在线结果无有效的${genre}题材，当前显示本地 2026 趋势兜底。`,
       });
-    } catch (error) {
+    } catch {
+      if (requestId !== topicRecommendationRequestIdRef.current) return;
       setTopicRecommendations({
         isLoading: false,
         source: "local",
         items: fallbackItems,
-        message: "在线推荐暂不可用，已自动切换到本地爆款题材池。请确认 API Key、模型名和本地代理后可再次刷新。",
+        message: `联网推荐暂不可用，当前显示${genre}的本地 2026 趋势兜底。`,
       });
     }
   }
@@ -3815,16 +3851,34 @@ export function Workspace({
       {project.currentStep === "outline-expansion" ? (
         <div className="topic-recommendation-panel">
           <div className="section-heading">
-            <h3>AI 随机推荐抖音爆款题材</h3>
+            <h3>AI 推荐 2026 近期爆款题材</h3>
             <div className="heading-actions">
+              <label className="inline-select-control">
+                <span>题材类型</span>
+                <select
+                  aria-label="题材类型"
+                  value={selectedTopicGenre}
+                  onChange={(event) => updateTopicGenre(event.target.value as TopicGenre)}
+                >
+                  {TOPIC_GENRE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="inline-select-control">
                 <span>推荐文风</span>
                 <select
                   aria-label="推荐文风"
-                  value={step.inputs.style ?? "贴合大纲气质"}
+                  value={
+                    getTopicStyles(selectedTopicGenre).includes(step.inputs.style)
+                      ? step.inputs.style
+                      : getDefaultTopicStyle(selectedTopicGenre)
+                  }
                   onChange={(event) => updateInput("style", event.target.value)}
                 >
-                  {NOVEL_STYLE_OPTIONS.map((option) => (
+                  {getTopicStyles(selectedTopicGenre).map((option) => (
                     <option key={option} value={option}>
                       {option}
                     </option>
@@ -3838,7 +3892,9 @@ export function Workspace({
             </div>
           </div>
           <p className="muted">
-            {topicRecommendations.source === "ai" ? "当前为 AI 在线更新推荐。" : "当前为本地兜底推荐，点击刷新可尝试在线更新。"}
+            {topicRecommendations.source === "ai"
+              ? "当前为联网 AI 近期趋势推荐。"
+              : "当前为本地 2026 趋势兜底，点击刷新可联网更新。"}
           </p>
           {topicRecommendations.message ? <div className="status-line">{topicRecommendations.message}</div> : null}
           <div className="topic-recommendation-grid">
@@ -3846,6 +3902,7 @@ export function Workspace({
               <article className="topic-recommendation-card" key={item.title}>
                 <div className="topic-recommendation-head">
                   <strong>{item.title}</strong>
+                  <small>{item.style}</small>
                 </div>
                 <p>{item.summary}</p>
                 <p className="topic-recommendation-outline">{item.outline}</p>

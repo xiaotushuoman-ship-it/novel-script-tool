@@ -1,0 +1,61 @@
+name: Release desktop app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-main
+  cancel-in-progress: false
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
+      - name: Test
+        run: npm test
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Set release version
+        shell: pwsh
+        run: |
+          $chinaTime = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId((Get-Date), 'China Standard Time')
+          $version = "$($chinaTime.Year).$($chinaTime.Month).${{ github.run_number }}"
+          npm version $version --no-git-tag-version
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Publish Windows installer
+        run: npx electron-builder --win nsis --x64 --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Xiaotu-Assistant-${{ env.APP_VERSION }}
+          path: |
+            release/Xiaotu-Assistant-Setup-*.exe
+            release/Xiaotu-Assistant-Setup-*.exe.blockmap
+            release/latest.yml
