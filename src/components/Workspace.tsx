@@ -168,6 +168,8 @@ const STEP_NAME_BY_ID: Record<TemplateId, string> = {
 
 const NO_PREVIEWABLE_IMAGE_MESSAGE = "模型已响应，但没有返回可预览图片。请换生图模型或检查该模型是否支持图片输出。";
 const SEEDANCE_VIDEO_MAX_POLL_ATTEMPTS = 402;
+const XIAOTU_SOURCE_BATCH_MAX_BLOCKS = 4;
+const XIAOTU_SOURCE_BATCH_MAX_CHARS = 2400;
 const DEFAULT_CUSTOM_IMAGE_PREFIX = [
   "人物结构：正脸特写+侧脸特写+脖子以下全身(脸裁出)+背面全身 + 四格同一人",
   "Hyperrealistic photographic 35mm film + NOT Caucasian + NOT 3D + 左下格不露脸",
@@ -1926,6 +1928,174 @@ export function Workspace({
       .trim();
   }
 
+  function splitXiaotuSourceIntoBatches(sourceText: string) {
+    const normalized = sourceText.replace(/\r\n?/g, "\n").trim();
+    if (!normalized) return [];
+
+    const lines = normalized.split("\n");
+    const headingPattern = /^\s*(?:#{1,6}\s*)?(?:\*{1,2})?\s*(?:(?:第\s*)?[一二三四五六七八九十百千万\d]+\s*(?:集|场|幕|章|节|段)|场景\s*[一二三四五六七八九十百千万\d]+)\s*[:：丨|]?/;
+    const headingCount = lines.filter((line) => headingPattern.test(line)).length;
+    const blocks: string[] = [];
+
+    if (headingCount >= 2) {
+      let current: string[] = [];
+      for (const line of lines) {
+        if (headingPattern.test(line) && current.some((item) => item.trim())) {
+          blocks.push(current.join("\n").trim());
+          current = [];
+        }
+        current.push(line);
+      }
+      if (current.some((item) => item.trim())) blocks.push(current.join("\n").trim());
+    } else {
+      blocks.push(...normalized.split(/\n\s*\n+/).map((block) => block.trim()).filter(Boolean));
+    }
+
+    const safeBlocks = blocks.flatMap((block) => splitOversizedXiaotuBlock(block));
+    const batches: string[] = [];
+    let currentBatch: string[] = [];
+    let currentLength = 0;
+
+    for (const block of safeBlocks) {
+      const separatorLength = currentBatch.length > 0 ? 2 : 0;
+      const exceedsBlockLimit = currentBatch.length >= XIAOTU_SOURCE_BATCH_MAX_BLOCKS;
+      const exceedsCharLimit = currentLength + separatorLength + block.length > XIAOTU_SOURCE_BATCH_MAX_CHARS;
+      if (currentBatch.length > 0 && (exceedsBlockLimit || exceedsCharLimit)) {
+        batches.push(currentBatch.join("\n\n"));
+        currentBatch = [];
+        currentLength = 0;
+      }
+      currentBatch.push(block);
+      currentLength += (currentBatch.length > 1 ? 2 : 0) + block.length;
+    }
+    if (currentBatch.length > 0) batches.push(currentBatch.join("\n\n"));
+    return batches;
+  }
+
+  function splitOversizedXiaotuBlock(block: string) {
+    if (block.length <= XIAOTU_SOURCE_BATCH_MAX_CHARS) return [block];
+    const pieces = block
+      .split(/(?<=[。！？!?；;])\s*|\n+/)
+      .map((piece) => piece.trim())
+      .filter(Boolean);
+    const chunks: string[] = [];
+    let current = "";
+
+    for (const piece of pieces.length > 0 ? pieces : [block]) {
+      if (piece.length > XIAOTU_SOURCE_BATCH_MAX_CHARS) {
+        if (current) {
+          chunks.push(current);
+          current = "";
+        }
+        for (let start = 0; start < piece.length; start += XIAOTU_SOURCE_BATCH_MAX_CHARS) {
+          chunks.push(piece.slice(start, start + XIAOTU_SOURCE_BATCH_MAX_CHARS));
+        }
+        continue;
+      }
+      const candidate = current ? `${current}\n${piece}` : piece;
+      if (candidate.length > XIAOTU_SOURCE_BATCH_MAX_CHARS) {
+        chunks.push(current);
+        current = piece;
+      } else {
+        current = candidate;
+      }
+    }
+    if (current) chunks.push(current);
+    return chunks;
+  }
+
+  function normalizeXiaotuBatchNumbers(value: string, startNumber: number, requireHeading: boolean) {
+    let nextNumber = startNumber;
+    const numbered = value.replace(
+      /(^|\n)(\s*)剧情\s*[一二三四五六七八九十百千万\d]+\s*[:：]/g,
+      (_match, lineStart, spacing) => `${lineStart}${spacing}剧情${nextNumber++}：`,
+    );
+    if (nextNumber > startNumber || !requireHeading || !numbered.trim()) {
+      return { text: numbered.trim(), count: nextNumber - startNumber };
+    }
+    return { text: `剧情${startNumber}：\n${numbered.trim()}`, count: 1 };
+  }
+
+  function buildXiaotuBatchPrompt(
+    inputs: Record<string, string>,
+    sourceBatch: string,
+    batchIndex: number,
+    batchCount: number,
+    previousResult: string,
+  ) {
+    const prompt = buildPrompt(getTemplate("xiaotu-skill"), { ...inputs, sourceText: sourceBatch });
+    if (batchCount === 1) return prompt;
+    return [
+      prompt,
+      "",
+      "# 当前源剧本批次（最高优先级）",
+      `这是完整源剧本预拆后的第${batchIndex + 1}/${batchCount}批。只转换本批<source_text>内的原文，不得补写其他批次、不得重复前文。`,
+      "本批内部从剧情1：开始编号；软件会在合并时自动改成整部剧连续编号。",
+      "本批所有原文台词必须逐字保留；不得因为分批改变人物、剧情顺序、场景事实或台词代词。",
+      batchIndex > 0
+        ? [
+            "上一批末尾仅用于继承人物音色、站位、道具、视线和动作余势，不得重复输出：",
+            previousResult.slice(-8000),
+          ].join("\n")
+        : "这是第一批，从原剧本开头开始。",
+    ].join("\n");
+  }
+
+  async function generateCompleteXiaotuSkill(
+    inputs: Record<string, string>,
+    settings: AiSettings,
+    projectId: string,
+    stepId: TemplateId,
+  ) {
+    const sourceBatches = splitXiaotuSourceIntoBatches(String(inputs.sourceText ?? ""));
+    if (sourceBatches.length === 0) return "";
+
+    let combinedResult = "";
+    let nextSegmentNumber = 1;
+    for (let batchIndex = 0; batchIndex < sourceBatches.length; batchIndex += 1) {
+      const batchNumber = batchIndex + 1;
+      if (sourceBatches.length > 1) {
+        updateStepGeneration(stepId, {
+          progress: {
+            label: `生成第${batchNumber}/${sourceBatches.length}批分镜`,
+            percent: Math.min(60 + Math.floor((batchNumber / sourceBatches.length) * 30), 90),
+          },
+          status: `正在按原剧本顺序生成第${batchNumber}/${sourceBatches.length}批...`,
+        });
+      }
+
+      const batchPrompt = buildXiaotuBatchPrompt(inputs, sourceBatches[batchIndex], batchIndex, sourceBatches.length, combinedResult);
+      const resultBeforeBatch = combinedResult;
+      const batchStartNumber = nextSegmentNumber;
+      let batchResult = "";
+      try {
+        batchResult = await streamAiText(settings, batchPrompt, (partial) => {
+          const cleanedPartial = cleanXiaotuSkillOutput(partial);
+          if (!cleanedPartial.trim()) return;
+          const normalizedPartial = normalizeXiaotuBatchNumbers(cleanedPartial, batchStartNumber, sourceBatches.length > 1);
+          writeDraftForStep(
+            projectId,
+            stepId,
+            [resultBeforeBatch, normalizedPartial.text].filter(Boolean).join("\n\n"),
+          );
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "AI 调用失败";
+        throw new Error(`第${batchNumber}/${sourceBatches.length}批生成失败，已保留前面完成的内容：${message}`);
+      }
+
+      const cleanedBatch = cleanXiaotuSkillOutput(batchResult);
+      if (!cleanedBatch.trim()) {
+        throw new Error(`第${batchNumber}/${sourceBatches.length}批返回内容为空，已保留前面完成的内容。`);
+      }
+      const normalizedBatch = normalizeXiaotuBatchNumbers(cleanedBatch, batchStartNumber, sourceBatches.length > 1);
+      combinedResult = [combinedResult, normalizedBatch.text].filter(Boolean).join("\n\n");
+      nextSegmentNumber += normalizedBatch.count;
+      writeDraftForStep(projectId, stepId, combinedResult);
+    }
+    return combinedResult;
+  }
+
   async function ensureCompleteChapterSplit(
     initialResult: string,
     originalPrompt: string,
@@ -2069,13 +2239,13 @@ export function Workspace({
               Math.min(getScriptPolishBatchSize(runInputs), getScriptPolishTargetCount(runInputs)),
             )
           : runPrompt;
-      const initialResult = await streamAiText(textAiSettings, initialRunPrompt, (partial) => {
-        const visiblePartial = runStepId === "xiaotu-skill" ? cleanXiaotuSkillOutput(partial) : partial;
-        if (visiblePartial.trim()) {
-          writeDraftForStep(runProjectId, runStepId, visiblePartial);
-        }
-      });
-      const cleanedInitialResult = runStepId === "xiaotu-skill" ? cleanXiaotuSkillOutput(initialResult) : initialResult;
+      const initialResult =
+        runStepId === "xiaotu-skill"
+          ? await generateCompleteXiaotuSkill(runInputs, textAiSettings, runProjectId, runStepId)
+          : await streamAiText(textAiSettings, initialRunPrompt, (partial) => {
+              if (partial.trim()) writeDraftForStep(runProjectId, runStepId, partial);
+            });
+      const cleanedInitialResult = initialResult;
       stopTextProgressTimer(runStepId);
       if (!cleanedInitialResult.trim()) {
         throw new Error("AI 返回内容为空，请检查模型是否只返回了思考过程或更换模型重试。");
