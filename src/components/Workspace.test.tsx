@@ -597,64 +597,115 @@ describe("Workspace progress", () => {
     expect(callAiStreamMock.mock.calls[0][1]).toContain("第2场");
   });
 
-  it("does not request long Xiaotu skill continuations", async () => {
-    mockStreamTextOnce(
-      [
-        "【段落1｜15秒｜多机位分镜】",
-        "【基础设定】许燃站在客厅门口。",
-        "【画面内容】分镜1丨对峙丨0-15s丨许燃看向宋叔亭。",
-      ].join("\n"),
-    );
-    const project = createProject("小兔skill长剧本分批补齐测试");
+  it("pre-splits a long Xiaotu script and keeps sequential segment numbers across streamed batches", async () => {
+    callAiStreamMock.mockImplementation(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
+      const result = [
+        "剧情1：",
+        "许燃：站在客厅门口。",
+        "【氛围与画质】甲组画质。",
+        "【声音】保留同期声。",
+        "【画面内容】分镜1丨推进丨0-15s丨许燃推进当前剧情。",
+        "不要出现字幕，不要BGM",
+        "剧情2：",
+        "宋叔亭：站在茶几旁。",
+        "【氛围与画质】乙组画质。",
+        "【声音】保留同期声。",
+        "【画面内容】分镜1丨回应丨0-15s丨宋叔亭回应当前剧情。",
+        "不要出现字幕，不要BGM",
+      ].join("\n");
+      onChunk(result);
+      return result;
+    });
+    const project = createProject("小兔skill长剧本预拆批次测试");
     project.currentStep = "xiaotu-skill";
     project.steps["xiaotu-skill"].inputs.sourceText = Array.from(
-      { length: 62 },
-      (_, index) => `第${index + 1}场：许燃和宋叔亭推进第${index + 1}个剧情节点。`,
+      { length: 8 },
+      (_, index) => `第${index + 1}场：许燃和宋叔亭推进唯一标记${index + 1}。`,
     ).join("\n");
     project.steps["xiaotu-skill"].inputs.mode = "多机位分镜";
     project.steps["xiaotu-skill"].inputs.segmentSeconds = "15";
+    const onStepDraftChange = vi.fn();
 
     render(
       <Workspace
-        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gemini-3.5-flash" }}
         project={project}
         onAiSettingsChange={() => undefined}
         onProjectChange={() => undefined}
         onSaveVersion={() => undefined}
+        onStepDraftChange={onStepDraftChange}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
-    expect(callAiStreamMock.mock.calls[0][1]).toContain("严禁只输出【段落1】后停止");
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(2));
+    expect(callAiStreamMock.mock.calls[0][1]).toContain("唯一标记1");
+    expect(callAiStreamMock.mock.calls[0][1]).not.toContain("唯一标记8");
+    expect(callAiStreamMock.mock.calls[1][1]).toContain("唯一标记8");
+    expect(callAiStreamMock.mock.calls[1][1]).not.toContain("唯一标记1");
+
+    const finalDraft = String(onStepDraftChange.mock.calls.at(-1)?.[2] ?? "");
+    expect(finalDraft.match(/^剧情\d+：/gm)).toEqual(["剧情1：", "剧情2：", "剧情3：", "剧情4："]);
+    expect(finalDraft).toContain("甲组画质");
+    expect(finalDraft).toContain("乙组画质");
   });
 
-  it("does not start a second Xiaotu skill request based on episode count", async () => {
-    mockStreamTextOnce("【段落1｜15秒｜多机位分镜】\n【基础设定】许燃站在客厅门口。");
-    const longEpisodeText = "许燃站在客厅门口，宋叔亭站在茶几旁压低声音追问，许燃沉默后移开视线。".repeat(10);
-    const project = createProject("小兔skill集数不是段落数测试");
+  it("streams later Xiaotu batches into the existing result instead of replacing earlier batches", async () => {
+    let releaseSecondBatch: (() => void) | undefined;
+    callAiStreamMock
+      .mockImplementationOnce(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
+        const result = "剧情1：\n【画面内容】分镜1丨前组丨0-15s丨前组结果。";
+        onChunk(result);
+        return result;
+      })
+      .mockImplementationOnce(async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
+        await new Promise<void>((resolve) => {
+          releaseSecondBatch = resolve;
+        });
+        const result = "剧情1：\n【画面内容】分镜1丨后组丨0-15s丨后组结果。";
+        onChunk(result);
+        return result;
+      });
+    const project = createProject("小兔skill多批实时累计测试");
     project.currentStep = "xiaotu-skill";
     project.steps["xiaotu-skill"].inputs.sourceText = Array.from(
-      { length: 20 },
-      (_, index) => `第${index + 1}集：${longEpisodeText}`,
+      { length: 8 },
+      (_, index) => `第${index + 1}场：许燃推进第${index + 1}个剧情节点。`,
     ).join("\n");
     project.steps["xiaotu-skill"].inputs.mode = "多机位分镜";
     project.steps["xiaotu-skill"].inputs.segmentSeconds = "15";
+    const onStepDraftChange = vi.fn();
 
     render(
       <Workspace
-        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gemini-3.5-flash" }}
         project={project}
         onAiSettingsChange={() => undefined}
         onProjectChange={() => undefined}
         onSaveVersion={() => undefined}
+        onStepDraftChange={onStepDraftChange}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
 
-    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(2));
+    expect(onStepDraftChange).toHaveBeenCalledWith(project.id, "xiaotu-skill", expect.stringContaining("前组结果"));
+
+    await act(async () => releaseSecondBatch?.());
+
+    await waitFor(() =>
+      expect(onStepDraftChange).toHaveBeenLastCalledWith(
+        project.id,
+        "xiaotu-skill",
+        expect.stringContaining("后组结果"),
+      ),
+    );
+    const finalDraft = String(onStepDraftChange.mock.calls.at(-1)?.[2] ?? "");
+    expect(finalDraft).toContain("前组结果");
+    expect(finalDraft).toContain("后组结果");
+    expect(finalDraft.match(/^剧情\d+：/gm)).toEqual(["剧情1：", "剧情2："]);
   });
 
   it("streams Xiaotu skill chunks into the result area during the single model request", async () => {
@@ -732,7 +783,7 @@ describe("Workspace progress", () => {
     const project = createProject("小兔skill解释过滤测试");
     project.currentStep = "xiaotu-skill";
     project.steps["xiaotu-skill"].inputs.sourceText = Array.from(
-      { length: 62 },
+      { length: 3 },
       (_, index) => `第${index + 1}场：许燃和宋叔亭推进第${index + 1}个剧情节点。`,
     ).join("\n");
     project.steps["xiaotu-skill"].inputs.mode = "多机位分镜";
