@@ -31,6 +31,8 @@ describe("desktop release configuration", () => {
     expect(workflow).toContain("npm test");
     expect(workflow).toContain("npm run build");
     expect(workflow).toContain("github.run_number");
+    expect(workflow).toContain('git tag "v$env:APP_VERSION"');
+    expect(workflow).toContain('git push origin "v$env:APP_VERSION"');
     expect(workflow).toContain("--publish always");
     expect(workflow).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}");
   });
