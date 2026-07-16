@@ -33,7 +33,9 @@ describe("desktop release configuration", () => {
     expect(workflow).toContain("github.run_number");
     expect(workflow).toContain('git tag "v$env:APP_VERSION"');
     expect(workflow).toContain('git push origin "v$env:APP_VERSION"');
-    expect(workflow).toContain("--publish always");
+    expect(workflow).toContain("--publish never");
+    expect(workflow).toContain("gh release create");
+    expect(workflow).toContain("release/latest.yml");
     expect(workflow).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}");
   });
 });
