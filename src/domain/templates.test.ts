@@ -825,7 +825,7 @@ describe("buildPrompt", () => {
     expect(simulationPrompt).toContain("整体风格：根据画风锚点3D仿真精致角色");
     expect(simulationPrompt).toContain("人物的身份：");
     expect(simulationPrompt).toContain("人物三视图生产参考图");
-    expect(simulationPrompt).toContain("所有明确为成年女性的角色保持：饱满S曲线");
+    expect(simulationPrompt).toContain("普通成年女性在不属于未成年人、老人、病弱、残障或其他明确特殊身份例外时保持：饱满S曲线");
     expect(simulationPrompt).toContain("清透裸妆");
     expect(simulationPrompt).toContain("【人物】林晚：");
     expect(simulationPrompt).toContain("人物格式示例只展示字段结构，示例人物的年龄、肤色、体态、职业和造型不得复制给原文角色");
@@ -873,12 +873,12 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("次表面散射");
     expect(assetOutputRules).toContain("PBR织物材质");
     expect(assetOutputRules).toContain("普通成年配角保持协调、自然、有辨识度");
-    expect(assetOutputRules).toContain("老人、儿童、病弱者及特殊身份角色");
+    expect(assetOutputRules).toContain("老人、儿童、病弱者、残障者及特殊身份角色");
     expect(assetOutputRules).toContain("不得套用年轻主角体态、华丽服饰或高开衩设计");
-    expect(assetOutputRules).toContain("所有明确为成年女性的角色保持：饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿");
+    expect(assetOutputRules).toContain("普通成年女性在不属于未成年人、老人、病弱、残障或其他明确特殊身份例外时保持：饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿");
     expect(assetOutputRules).toContain("服装设计目标保持精美华丽");
     expect(assetOutputRules).toContain("不得要求每个角色使用同一套或同时使用全部元素");
-    expect(assetOutputRules).toContain("具体款式、露肤度、颜色及收腰/高开衩/薄纱/刺绣/鎏金的组合必须服从原文、年龄、身份、时代、场景和剧情");
+    expect(assetOutputRules).toContain("在不取消上述产品审美目标前提下，具体款式、露肤度、颜色及收腰/高开衩/薄纱/刺绣/鎏金的组合必须服从年龄、身份、时代、场景和剧情");
     expect(assetOutputRules).toContain("所有未成年人不得套用成年身体曲线、成人化露肤或高开衩设计");
     expect(assetOutputRules).toContain("女性角色长相必须完全区分");
     expect(assetOutputRules).toContain("根据剧情时代与题材选择古风、玄幻或现代国漫造型");
@@ -943,7 +943,7 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("冷白细腻肤质");
     expect(assetOutputRules).toContain("高挑比例");
     expect(assetOutputRules).toContain("肩宽腰窄");
-    expect(assetOutputRules).toContain("原文明确的矮壮、魁梧、瘦小、年长、普通职业等体态、年龄和身份优先，不得被冷白、高挑、肩宽腰窄等候选覆盖");
+    expect(assetOutputRules).toContain("男性角色原文明确的矮壮、魁梧、瘦小、年长、普通职业等体态、年龄和身份优先，不得被冷白、高挑、肩宽腰窄等候选覆盖");
     expect(assetOutputRules).toContain("男性或贵族造型可根据原文、身份和剧情使用提花、缎面、藤蔓刺绣、胸针、银链、领结、腰饰、手套和皮靴");
     expect(assetOutputRules).toContain("暗黑贵族造型只能在剧情或身份支持时使用");
     expect(assetOutputRules).toContain("哥特设定仅在原文、身份或用户选择支持时使用");
@@ -977,13 +977,30 @@ describe("buildPrompt", () => {
 
     expect(simulationPrompt).toContain("原文明确的深肤色、健康小麦色、风霜肤色，以及老人、儿童的肤色必须保持，不得被候选肤色覆盖");
     expect(simulationPrompt).toContain("瓷白或冷白仅可作为原文未明确肤色、适龄且角色定位适用的精致主角候选");
-    expect(otomePrompt).toContain("原文明确的矮壮、魁梧、瘦小、年长、普通职业等体态、年龄和身份优先，不得被冷白、高挑、肩宽腰窄等候选覆盖");
+    expect(otomePrompt).toContain("男性角色原文明确的矮壮、魁梧、瘦小、年长、普通职业等体态、年龄和身份优先，不得被冷白、高挑、肩宽腰窄等候选覆盖");
     expect(otomePrompt).toContain("高级3D乙游主角标准仅可作为原文未规定、适龄的男主角、重要男性或乙游定位角色候选");
     for (const prompt of [simulationPrompt, otomePrompt]) {
-      expect(prompt).toContain("原文明确的人物年龄、脸型、五官、发型、发色、妆容、服装、饰品和身份优先，不得被模板覆盖");
+      expect(prompt).toContain("原文明确的人物年龄、脸型、五官、发型、发色、妆容、饰品和身份优先，不得被模板覆盖");
       expect(prompt).toContain("所有未成年人不得套用成年身体曲线、成人化露肤或高开衩设计");
-      expect(prompt).toContain("老人、儿童、病弱者及特殊身份角色必须按年龄和剧情塑造");
+      expect(prompt).toContain("老人、儿童、病弱者、残障者及特殊身份角色必须按年龄、身体状况和剧情塑造");
     }
+  });
+
+  it("keeps ordinary adult women on the product beauty target while preserving male body types", () => {
+    const template = getTemplate("asset-extraction");
+    const prompt = buildPrompt(template, {
+      sourceText: "普通成年女店员身材矮壮肥胖，穿朴素宽松棉衣；普通成年男搬运工身材矮壮。",
+      assetType: "人物",
+      visualStyle: "现代甜酷3D乙游",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+
+    expect(prompt).toContain("普通成年女性除未成年人、老人、病弱、残障或其他明确特殊身份例外外，必须保持既定成年女性体态与精美华丽服装设计目标");
+    expect(prompt).toContain("原文中的朴素、宽松、普通职业服装，以及对普通成年女性的矮壮或肥胖描述，只能影响时代、身份、颜色和具体款式，不得取消饱满S曲线及收腰/高开衩/薄纱/刺绣/鎏金设计目标");
+    expect(prompt).toContain("未成年人、老人、病弱、残障及其他明确特殊身份仍按原文保护");
+    expect(prompt).toContain("男性角色原文明确的矮壮、魁梧、瘦小、年长、普通职业等体态、年龄和身份优先，不得被冷白、高挑、肩宽腰窄等候选覆盖");
   });
 
   it("keeps Pixar-style 3D animation vocabulary isolated", () => {
@@ -1058,15 +1075,15 @@ describe("buildPrompt", () => {
     });
     const assetOutputRules = prompt.slice(prompt.indexOf("按下面格式输出"));
 
-    expect(assetOutputRules).toContain("原文明确的人物年龄、脸型、五官、发型、发色、妆容、服装、饰品和身份优先，不得被模板覆盖");
-    expect(assetOutputRules).toContain("只有原文缺失时，才按人物身份和剧情差异化补全");
+    expect(assetOutputRules).toContain("原文明确的人物年龄、脸型、五官、发型、发色、妆容、饰品和身份优先，不得被模板覆盖");
+    expect(assetOutputRules).toContain("服装与体态按产品规则和例外身份分层处理，只有其他缺失信息才按人物身份和剧情差异化补全");
     expect(assetOutputRules).toContain("不同角色的脸型、骨相、眉眼、瞳色、鼻唇、发型发色、妆容、服装配色和饰品组合不得重复");
-    expect(assetOutputRules).toContain("所有明确为成年女性的角色保持：饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿");
+    expect(assetOutputRules).toContain("普通成年女性在不属于未成年人、老人、病弱、残障或其他明确特殊身份例外时保持：饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿");
     expect(assetOutputRules).toContain("服装设计目标保持精美华丽");
     expect(assetOutputRules).toContain("不得要求每个角色使用同一套或同时使用全部元素");
-    expect(assetOutputRules).toContain("具体款式、露肤度、颜色及收腰/高开衩/薄纱/刺绣/鎏金的组合必须服从原文、年龄、身份、时代、场景和剧情");
+    expect(assetOutputRules).toContain("在不取消上述产品审美目标前提下，具体款式、露肤度、颜色及收腰/高开衩/薄纱/刺绣/鎏金的组合必须服从年龄、身份、时代、场景和剧情");
     expect(assetOutputRules).toContain("所有未成年人不得套用成年身体曲线、成人化露肤或高开衩设计");
-    expect(assetOutputRules).toContain("老人、儿童、病弱者及特殊身份角色");
+    expect(assetOutputRules).toContain("老人、儿童、病弱者、残障者及特殊身份角色");
   });
 
   it("keeps non-3D character assets aligned with the selected style anchor", () => {
