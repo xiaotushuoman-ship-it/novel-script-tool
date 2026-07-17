@@ -739,6 +739,8 @@ describe("buildPrompt", () => {
     expect(fieldKeys).not.toContain("assetTarget");
     expect(fields.visualStyle.control).toBe("select");
     expect(fields.visualStyle.options).toContain("3D国漫风格");
+    expect(fields.visualStyle.options).toContain("3D仿真精致角色");
+    expect(fields.visualStyle.options).toContain("现代甜酷3D乙游");
     expect(fields.visualStyle.options).toContain("复古欧美原子朋克风格");
     expect(fields.imageModel.control).toBe("select");
     expect(fields.imageModel.options).toContain("gpt-image-2");

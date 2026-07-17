@@ -125,6 +125,8 @@ export const IMAGE_RESOLUTION_OPTIONS = ["1K", "2K", "4K"];
 
 export const STORYBOARD_STYLE_OPTIONS = [
   "3D国漫风格",
+  "3D仿真精致角色",
+  "现代甜酷3D乙游",
   "影视写实古风",
   "影视写实现代",
   "2D赛璐璐风格",
