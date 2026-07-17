@@ -30,8 +30,16 @@ describe("body standard constants", () => {
     );
   });
 
-  it("defines the exact neutral source-first rule", () => {
-    expect(NEUTRAL_BODY_STANDARD).toContain("体态严格服从原文年龄、身份和剧情，正侧背比例一致");
+  it("defines the complete exception standard", () => {
+    expect(EXCEPTION_BODY_STANDARD).toBe(
+      "体态标准：严格按原文年龄与身体状况塑造，原文体态优先，不强制套用成年男女统一比例，正面侧面背面保持原文设定一致。",
+    );
+  });
+
+  it("defines the complete neutral source-first standard", () => {
+    expect(NEUTRAL_BODY_STANDARD).toBe(
+      "体态标准：体态严格服从原文年龄、身份和剧情，正侧背比例一致；身份不明时保持中性，不猜测成年男女比例。",
+    );
   });
 });
 
@@ -57,8 +65,29 @@ describe("resolveAssetCharacterBodyStandard", () => {
     "性别：男；年龄：27岁；都市设计师",
     "男性，三十岁，职场通勤",
     "性别：男；年龄：59岁；现代职场",
+    "28岁男，当代职场",
+    "男，二十多岁，现今通勤",
+    "性别：男；年龄：35岁；如今都市",
   ])("routes %s to the modern adult male standard", (description) => {
     expect(resolveAssetCharacterBodyStandard(description)).toBe(MODERN_ADULT_MALE_BODY_STANDARD);
+  });
+
+  it.each([
+    "28岁女",
+    "女，三十岁",
+    "性别：女；年龄：28岁；时代：当代",
+  ])("recognizes bounded female wording in %s", (description) => {
+    expect(resolveAssetCharacterBodyStandard(description)).toBe(ADULT_FEMALE_BODY_STANDARD);
+  });
+
+  it.each([
+    "男女比例未注明，28岁，现代都市",
+    "女装设计师，28岁，现代都市",
+    "男装设计师，28岁，现代都市",
+    "女性化设计，28岁，现代都市",
+    "男性化剪裁，28岁，现代都市",
+  ])("does not infer gender from a word-internal marker in %s", (description) => {
+    expect(resolveAssetCharacterBodyStandard(description)).toBe(NEUTRAL_BODY_STANDARD);
   });
 
   it.each([
@@ -69,6 +98,12 @@ describe("resolveAssetCharacterBodyStandard", () => {
     "性别：女；年龄：60岁；时代：现代",
     "八十岁现代男性",
     "六旬女性",
+    "年龄：60周岁；性别：女；时代：现代",
+    "六十岁女性",
+    "七十八岁古代男性",
+    "九十多岁女性",
+    "一百岁女性",
+    "百岁老人",
   ])("routes senior age wording in %s to the exception standard", (description) => {
     const result = resolveAssetCharacterBodyStandard(description);
 
@@ -84,6 +119,13 @@ describe("resolveAssetCharacterBodyStandard", () => {
     "少年，18岁，现代都市",
     "少女，19岁，现代都市",
     "女性，十岁，都市设计师",
+    "未满十八岁女性，现代都市",
+    "不满十八岁男性，古代将军",
+    "未满18岁女性，现代都市",
+    "不满18岁男性，古代将军",
+    "18岁以下女性，现代都市",
+    "未到18岁男性，古代将军",
+    "未成年女性，18岁，现代都市",
   ])("keeps explicit child or minor wording exceptional in %s", (description) => {
     const result = resolveAssetCharacterBodyStandard(description);
 

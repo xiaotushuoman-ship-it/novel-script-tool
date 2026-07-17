@@ -16,14 +16,17 @@ export const NEUTRAL_BODY_STANDARD =
 const BODY_STANDARD_FIELD_PATTERN = /(^|\r?\n|[；;])([ \t]*)(体态标准[ \t]*[:：][^\r\n；;]*)/;
 const EXCEPTION_PATTERN =
   /儿童|未成年|少年|少女|男孩|女孩|小孩|幼儿|婴儿|老人|老者|老妪|老年|年迈|病弱|病人|重病|残障|残疾|特殊身份|孕妇|怀孕|截肢|轮椅|失明|盲人|聋哑|瘸腿|驼背|畸形/;
+const EXPLICIT_MINOR_PATTERN = /(?:未满|不满)(?:18|十八)岁|(?:18|十八)岁以下|未到(?:18|十八)岁/;
 const CHINESE_MINOR_AGE_PATTERN = /(?<![一二三四五六七八九十])(?:[一二三四五六七八九]岁|十岁|十[一二三四五六七]岁)/;
 const CHINESE_ADULT_AGE_PATTERN = /十[八九]岁|[二三四五]十(?:多|[一二三四五六七八九])?岁/;
-const CHINESE_SENIOR_AGE_PATTERN = /[六七八九]十(?:多|[一二三四五六七八九])?岁|[六七八九]旬/;
-const FEMALE_PATTERN = /性别[ \t]*[:：][ \t]*女|女性|女人|女子|成年女/;
-const MALE_PATTERN = /性别[ \t]*[:：][ \t]*男|男性|男人|男子|成年男/;
+const CHINESE_SENIOR_AGE_PATTERN = /[六七八九]十(?:多|[一二三四五六七八九])?岁|[六七八九]旬|一?百(?:多)?岁/;
+const FEMALE_PATTERN =
+  /性别[ \t]*[:：][ \t]*女(?:$|[\s,，;；。])|(?:女性|女人|女子)(?:$|[\s,，;；。])|成年女|(?:^|[\s,，;；。])女(?:$|[\s,，;；。])|\d{1,3}(?:周岁|岁)女(?:$|[\s,，;；。])/;
+const MALE_PATTERN =
+  /性别[ \t]*[:：][ \t]*男(?:$|[\s,，;；。])|(?:男性|男人|男子)(?:$|[\s,，;；。])|成年男|(?:^|[\s,，;；。])男(?:$|[\s,，;；。])|\d{1,3}(?:周岁|岁)男(?:$|[\s,，;；。])/;
 const EXPLICIT_MALE_BODY_TERMS = ["矮壮", "魁梧", "瘦小", "年长"] as const;
 const ANCIENT_PATTERN = /古风|仙侠|玄幻|权谋|武侠|古代|将军|长袍|战袍|锦衣/;
-const MODERN_PATTERN = /现代|都市|职场|校园成年|西装|通勤|街头|工装|设计师/;
+const MODERN_PATTERN = /现代|当代|现今|如今|都市|职场|校园成年|西装|通勤|街头|工装|设计师/;
 
 type BodyStandardFieldMatch = {
   field: string;
@@ -49,18 +52,18 @@ function findBodyStandardField(description: string): BodyStandardFieldMatch | nu
 }
 
 function hasExplicitMinorAge(description: string): boolean {
-  if (CHINESE_MINOR_AGE_PATTERN.test(description)) return true;
-  return Array.from(description.matchAll(/(\d{1,3})[ \t]*岁/g)).some((match) => Number(match[1]) < 18);
+  if (EXPLICIT_MINOR_PATTERN.test(description) || CHINESE_MINOR_AGE_PATTERN.test(description)) return true;
+  return Array.from(description.matchAll(/(\d{1,3})[ \t]*(?:周岁|岁)/g)).some((match) => Number(match[1]) < 18);
 }
 
 function hasExplicitSeniorAge(description: string): boolean {
   if (CHINESE_SENIOR_AGE_PATTERN.test(description)) return true;
-  return Array.from(description.matchAll(/(\d{1,3})[ \t]*岁/g)).some((match) => Number(match[1]) >= 60);
+  return Array.from(description.matchAll(/(\d{1,3})[ \t]*(?:周岁|岁)/g)).some((match) => Number(match[1]) >= 60);
 }
 
 function hasExplicitAdultAge(description: string): boolean {
   if (/成年/.test(description) || CHINESE_ADULT_AGE_PATTERN.test(description)) return true;
-  return Array.from(description.matchAll(/(\d{1,3})[ \t]*岁/g)).some((match) => {
+  return Array.from(description.matchAll(/(\d{1,3})[ \t]*(?:周岁|岁)/g)).some((match) => {
     const age = Number(match[1]);
     return age >= 18 && age < 60;
   });
@@ -114,8 +117,8 @@ export const ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS = `人物资产必须独
 - 儿童、未成年、老人、病弱、残障或特殊身份：${EXCEPTION_BODY_STANDARD}
 - 男性原文体态优先：男性被明确写成矮壮、魁梧、瘦小或年长时，提取原文体态词，写成“严格保持原文明确体态，正侧背比例一致”，不强制统一男性比例。
 - 身份、性别或时代不明：${NEUTRAL_BODY_STANDARD}
-- 古风线索包括古风、仙侠、玄幻、权谋、武侠、古代、将军、长袍、战袍、锦衣；现代线索包括现代、都市、职场、校园成年、西装、通勤、街头、工装、设计师。
-- 年龄识别：儿童、未成年、少年、少女和未满18岁的明确年龄优先按例外处理；老人、老者、老妪、60岁及以上、六十多岁以及六旬、七旬、八旬、九旬等明确高龄表达也按例外处理；只有18至59岁可作为普通成年候选。
+- 古风线索包括古风、仙侠、玄幻、权谋、武侠、古代、将军、长袍、战袍、锦衣；现代线索包括现代、当代、现今、如今、都市、职场、校园成年、西装、通勤、街头、工装、设计师。
+- 年龄识别：儿童、未成年、少年、少女、未满或不满十八岁、18岁以下、未到18岁和未满18岁的明确年龄优先按例外处理；老人、老者、老妪、60岁及以上、六十多岁、一百岁以及六旬、七旬、八旬、九旬等明确高龄表达也按例外处理；只有18至59岁可作为普通成年候选。
 - 风格适配总则：体态控制轮廓比例，画风控制材质；画风仅控制材质、皮肤、建模、线条、色彩和光影，两者分工明确，不能串材质，也不能让画风覆盖体态标准。
 - 3D国漫使用国漫次世代人体和材质语言表达同一体态轮廓。
 - 3D仿真使用高精度仿真人体与皮肤材质语言表达同一体态轮廓。
