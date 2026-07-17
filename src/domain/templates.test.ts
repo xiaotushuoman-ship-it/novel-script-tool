@@ -844,7 +844,9 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("普通成年配角保持协调、自然、有辨识度");
     expect(assetOutputRules).toContain("老人、儿童、病弱者及特殊身份角色");
     expect(assetOutputRules).toContain("不得套用年轻主角体态、华丽服饰或高开衩设计");
-    expect(assetOutputRules).not.toContain("所有明确为成年女性的角色统一保持");
+    expect(assetOutputRules).toContain("所有明确为成年女性的角色保持：饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿");
+    expect(assetOutputRules).toContain("服装精美华丽，采用收腰、高开衩、薄纱、刺绣和鎏金材质");
+    expect(assetOutputRules).toContain("女性角色长相必须完全区分");
   });
 
   it("keeps non-3D character assets aligned with the selected style anchor", () => {

@@ -9,6 +9,7 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const { autoUpdater } = electronUpdater;
 let desktopServer;
 let mainWindow;
+let updateController;
 
 async function createMainWindow() {
   const distDir = app.isPackaged ? path.join(app.getAppPath(), "dist") : path.resolve(currentDir, "..", "dist");
@@ -34,8 +35,20 @@ async function createMainWindow() {
     return { action: "deny" };
   });
   mainWindow.once("ready-to-show", () => mainWindow?.show());
+  mainWindow.on("focus", () => {
+    void updateController?.checkNow();
+  });
   await mainWindow.loadURL(desktopServer.url);
-  setupAutoUpdate({ isPackaged: app.isPackaged, updater: autoUpdater, dialog });
+  if (!updateController) {
+    updateController = setupAutoUpdate({
+      isPackaged: app.isPackaged,
+      updater: autoUpdater,
+      dialog,
+      getWindow: () => mainWindow,
+    });
+  } else {
+    void updateController.checkNow();
+  }
 }
 
 app.whenReady().then(async () => {
