@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StrictMode, useState } from "react";
 import { createProject } from "../domain/projects";
-import { Workspace } from "./Workspace";
+import { removeStaleCharacterStyleField, Workspace } from "./Workspace";
 import { within } from "@testing-library/react";
 
 const callAiMock = vi.fn();
@@ -72,6 +72,42 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
+});
+
+describe("removeStaleCharacterStyleField", () => {
+  it.each([
+    {
+      source: "整体风格：old；饰品：银耳坠；人物的身份：设计师",
+      expected: "饰品：银耳坠；人物的身份：设计师",
+    },
+    {
+      source: "整体风格：old；发型：黑色长卷发；妆容：清透裸妆；服装：黑色皮衣",
+      expected: "发型：黑色长卷发；妆容：清透裸妆；服装：黑色皮衣",
+    },
+    {
+      source: "人物外貌：瓜子脸；整体风格：old；备注：左眼泪痣；人物的身份：设计师",
+      expected: "人物外貌：瓜子脸；备注：左眼泪痣；人物的身份：设计师",
+    },
+  ])("removes only the stale style field and keeps following fields", ({ source, expected }) => {
+    expect(removeStaleCharacterStyleField(source)).toBe(expected);
+  });
+
+  it.each([
+    "；人物外貌：瓜子脸；；备注：左眼泪痣;服装：黑色皮衣",
+    "人物外貌：瓜子脸;备注：她认为整体风格需要克制；人物的身份：设计师",
+    "整体风格需要克制；人物的身份：设计师",
+  ])("returns unmatched text exactly as provided", (source) => {
+    expect(removeStaleCharacterStyleField(source)).toBe(source);
+  });
+
+  it("removes a CRLF style line without leaving an extra blank line", () => {
+    const source =
+      "人物外貌：瓜子脸\r\n整体风格：old\r\n人物的身份：设计师\r\n服装：黑色皮衣";
+
+    expect(removeStaleCharacterStyleField(source)).toBe(
+      "人物外貌：瓜子脸\r\n人物的身份：设计师\r\n服装：黑色皮衣",
+    );
+  });
 });
 
 describe("Workspace progress", () => {

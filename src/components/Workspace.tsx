@@ -98,20 +98,31 @@ function isInlineImageDataUrl(src: string) {
   return /^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(src);
 }
 
-const CHARACTER_ASSET_FIELD_LABEL =
-  "(?:角色等级|人物外貌|人物的身份|人物身份|角色身份|图片的结构|图片结构|服装)";
-const STALE_CHARACTER_STYLE_FIELD = new RegExp(
-  `(^|[；;])\\s*整体风格[：:]\\s*[^\\r\\n]*?(?=[；;]\\s*${CHARACTER_ASSET_FIELD_LABEL}[：:]|\\r?$)`,
-  "gm",
-);
+const STALE_CHARACTER_STYLE_START = /(^|[；;]|\r\n|\n|\r)[ \t]*整体风格[：:][ \t]*/m;
+const NEXT_CHARACTER_FIELD_BOUNDARY =
+  /(\r\n|\n|\r)|([；;])(?=[ \t]*[A-Za-z\u3400-\u9FFF][A-Za-z0-9\u3400-\u9FFF _-]{0,19}[：:])/g;
 
-function removeStaleCharacterStyleField(description: string) {
-  return description
-    .replace(STALE_CHARACTER_STYLE_FIELD, "")
-    .replace(/^[ \t]*[；;][ \t]*/gm, "")
-    .replace(/[；;][ \t]*[；;]+/g, "；")
-    .replace(/[ \t]+$/gm, "")
-    .trim();
+export function removeStaleCharacterStyleField(description: string) {
+  let cleaned = description;
+
+  while (true) {
+    const styleStart = STALE_CHARACTER_STYLE_START.exec(cleaned);
+    if (!styleStart) return cleaned;
+
+    const leadingBoundary = styleStart[1];
+    NEXT_CHARACTER_FIELD_BOUNDARY.lastIndex = styleStart.index + styleStart[0].length;
+    const nextBoundary = NEXT_CHARACTER_FIELD_BOUNDARY.exec(cleaned);
+
+    if (!nextBoundary) {
+      cleaned = cleaned.slice(0, styleStart.index);
+      continue;
+    }
+
+    cleaned =
+      cleaned.slice(0, styleStart.index) +
+      leadingBoundary +
+      cleaned.slice(nextBoundary.index + nextBoundary[0].length);
+  }
 }
 
 type TopicRecommendationState = {
