@@ -1439,9 +1439,15 @@ describe("Workspace progress", () => {
 
     await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(1));
     const recommendationPrompt = String(callAiMock.mock.calls[0][1]);
+    const currentBeijingDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
     expect(recommendationPrompt).toContain("题材类型：古风家业");
     expect(recommendationPrompt).toContain("最近30至90天");
-    expect(recommendationPrompt).toMatch(/当前日期：2026-07-1[67]/);
+    expect(recommendationPrompt).toContain(`当前日期：${currentBeijingDate}`);
     expect(await screen.findByText("边城换防夜")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "一键填入大纲" }));
