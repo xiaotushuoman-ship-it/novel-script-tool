@@ -48,6 +48,8 @@ describe("resolveAssetCharacterBodyStandard", () => {
     "成年女性，都市设计师",
     "性别：女；年龄：28岁；时代：现代",
     "女性，二十多岁，都市设计师",
+    "女性角色，二十岁",
+    "性别：女；年龄：十八周岁；时代：现代",
   ])("routes %s to the adult female standard", (description) => {
     expect(resolveAssetCharacterBodyStandard(description)).toBe(ADULT_FEMALE_BODY_STANDARD);
   });
@@ -76,8 +78,17 @@ describe("resolveAssetCharacterBodyStandard", () => {
     "28岁女",
     "女，三十岁",
     "性别：女；年龄：28岁；时代：当代",
+    "女性角色，28岁",
+    "28岁的女性角色",
   ])("recognizes bounded female wording in %s", (description) => {
     expect(resolveAssetCharacterBodyStandard(description)).toBe(ADULT_FEMALE_BODY_STANDARD);
+  });
+
+  it.each([
+    "男性角色，28岁，现代职场",
+    "28岁的男性角色，黑色西装",
+  ])("recognizes bounded male role wording in %s", (description) => {
+    expect(resolveAssetCharacterBodyStandard(description)).toBe(MODERN_ADULT_MALE_BODY_STANDARD);
   });
 
   it.each([
@@ -104,6 +115,9 @@ describe("resolveAssetCharacterBodyStandard", () => {
     "九十多岁女性",
     "一百岁女性",
     "百岁老人",
+    "六十周岁女性",
+    "一百零一岁女性",
+    "一百二十岁男性",
   ])("routes senior age wording in %s to the exception standard", (description) => {
     const result = resolveAssetCharacterBodyStandard(description);
 
@@ -126,6 +140,11 @@ describe("resolveAssetCharacterBodyStandard", () => {
     "18岁以下女性，现代都市",
     "未到18岁男性，古代将军",
     "未成年女性，18岁，现代都市",
+    "零岁女，现代都市",
+    "不满 18 岁女性，现代都市",
+    "未满18周岁男性，古代将军",
+    "18 周岁以下女性，现代都市",
+    "未到 18 周岁男性，古代将军",
   ])("keeps explicit child or minor wording exceptional in %s", (description) => {
     const result = resolveAssetCharacterBodyStandard(description);
 
@@ -171,6 +190,24 @@ describe("resolveAssetCharacterBodyStandard", () => {
     "成年男性，武侠古代将军",
     "成年男性，长袍战袍锦衣",
   ])("recognizes ancient clues in %s", (description) => {
+    expect(resolveAssetCharacterBodyStandard(description)).toBe(ANCIENT_ADULT_MALE_BODY_STANDARD);
+  });
+
+  it.each([
+    "现代成年男性将军，黑色西装",
+    "时代：现代；成年男性；身份：古代将军；黑色西装",
+    "当代男性角色，28岁，将军",
+    "现今职场男性，三十岁，将军",
+    "如今都市男性，28岁，将军",
+  ])("prioritizes explicit or strong modern clues in %s", (description) => {
+    expect(resolveAssetCharacterBodyStandard(description)).toBe(MODERN_ADULT_MALE_BODY_STANDARD);
+  });
+
+  it.each([
+    "时代：古代；男性角色，28岁；都市设计师",
+    "时代：古风；男性角色，28岁；黑色西装",
+    "仙侠男性角色，28岁，现代职业",
+  ])("prioritizes explicit or strong ancient clues in %s", (description) => {
     expect(resolveAssetCharacterBodyStandard(description)).toBe(ANCIENT_ADULT_MALE_BODY_STANDARD);
   });
 

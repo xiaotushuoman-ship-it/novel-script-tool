@@ -16,17 +16,23 @@ export const NEUTRAL_BODY_STANDARD =
 const BODY_STANDARD_FIELD_PATTERN = /(^|\r?\n|[；;])([ \t]*)(体态标准[ \t]*[:：][^\r\n；;]*)/;
 const EXCEPTION_PATTERN =
   /儿童|未成年|少年|少女|男孩|女孩|小孩|幼儿|婴儿|老人|老者|老妪|老年|年迈|病弱|病人|重病|残障|残疾|特殊身份|孕妇|怀孕|截肢|轮椅|失明|盲人|聋哑|瘸腿|驼背|畸形/;
-const EXPLICIT_MINOR_PATTERN = /(?:未满|不满)(?:18|十八)岁|(?:18|十八)岁以下|未到(?:18|十八)岁/;
-const CHINESE_MINOR_AGE_PATTERN = /(?<![一二三四五六七八九十])(?:[一二三四五六七八九]岁|十岁|十[一二三四五六七]岁)/;
-const CHINESE_ADULT_AGE_PATTERN = /十[八九]岁|[二三四五]十(?:多|[一二三四五六七八九])?岁/;
-const CHINESE_SENIOR_AGE_PATTERN = /[六七八九]十(?:多|[一二三四五六七八九])?岁|[六七八九]旬|一?百(?:多)?岁/;
-const FEMALE_PATTERN =
-  /性别[ \t]*[:：][ \t]*女(?:$|[\s,，;；。])|(?:女性|女人|女子)(?:$|[\s,，;；。])|成年女|(?:^|[\s,，;；。])女(?:$|[\s,，;；。])|\d{1,3}(?:周岁|岁)女(?:$|[\s,，;；。])/;
-const MALE_PATTERN =
-  /性别[ \t]*[:：][ \t]*男(?:$|[\s,，;；。])|(?:男性|男人|男子)(?:$|[\s,，;；。])|成年男|(?:^|[\s,，;；。])男(?:$|[\s,，;；。])|\d{1,3}(?:周岁|岁)男(?:$|[\s,，;；。])/;
 const EXPLICIT_MALE_BODY_TERMS = ["矮壮", "魁梧", "瘦小", "年长"] as const;
-const ANCIENT_PATTERN = /古风|仙侠|玄幻|权谋|武侠|古代|将军|长袍|战袍|锦衣/;
-const MODERN_PATTERN = /现代|当代|现今|如今|都市|职场|校园成年|西装|通勤|街头|工装|设计师/;
+const EXPLICIT_MINOR_PATTERN = /(?:未满|不满|未到)(?:18|十八)(?:周岁|岁)|(?:18|十八)(?:周岁|岁)以下/;
+const CHINESE_NUMBER_PATTERN = /[零〇一二两三四五六七八九十百]+/g;
+const STRONG_ANCIENT_PATTERN = /古代|古风|仙侠|玄幻|权谋|武侠/;
+const STRONG_MODERN_PATTERN = /现代|当代|现今|如今|都市|职场|校园|西装/;
+const WEAK_ANCIENT_PATTERN = /将军|长袍|战袍|锦衣/;
+const WEAK_MODERN_PATTERN = /通勤|街头|工装|设计师/;
+
+type AgeGroup = "minor" | "adult" | "senior" | "unknown";
+type Gender = "female" | "male" | "unknown";
+type Era = "ancient" | "modern" | "unknown";
+
+type Demographics = {
+  ageGroup: AgeGroup;
+  gender: Gender;
+  era: Era;
+};
 
 type BodyStandardFieldMatch = {
   field: string;
@@ -51,22 +57,126 @@ function findBodyStandardField(description: string): BodyStandardFieldMatch | nu
   };
 }
 
-function hasExplicitMinorAge(description: string): boolean {
-  if (EXPLICIT_MINOR_PATTERN.test(description) || CHINESE_MINOR_AGE_PATTERN.test(description)) return true;
-  return Array.from(description.matchAll(/(\d{1,3})[ \t]*(?:周岁|岁)/g)).some((match) => Number(match[1]) < 18);
+function parseChineseNumber(value: string): number | null {
+  const digits: Record<string, number> = {
+    零: 0,
+    〇: 0,
+    一: 1,
+    二: 2,
+    两: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+  };
+
+  if (!value) return null;
+  if (!/[十百]/.test(value)) {
+    const digit = digits[value];
+    return digit === undefined ? null : digit;
+  }
+
+  let total = 0;
+  let remainder = value;
+  const hundredIndex = remainder.indexOf("百");
+  if (hundredIndex >= 0) {
+    const hundredText = remainder.slice(0, hundredIndex);
+    const hundreds = hundredText ? digits[hundredText] : 1;
+    if (hundreds === undefined) return null;
+    total += hundreds * 100;
+    remainder = remainder.slice(hundredIndex + 1).replace(/^零/, "");
+  }
+
+  const tenIndex = remainder.indexOf("十");
+  if (tenIndex >= 0) {
+    const tenText = remainder.slice(0, tenIndex);
+    const tens = tenText ? digits[tenText] : 1;
+    if (tens === undefined) return null;
+    total += tens * 10;
+    remainder = remainder.slice(tenIndex + 1);
+  }
+
+  if (remainder) {
+    const ones = digits[remainder];
+    if (ones === undefined) return null;
+    total += ones;
+  }
+  return total;
 }
 
-function hasExplicitSeniorAge(description: string): boolean {
-  if (CHINESE_SENIOR_AGE_PATTERN.test(description)) return true;
-  return Array.from(description.matchAll(/(\d{1,3})[ \t]*(?:周岁|岁)/g)).some((match) => Number(match[1]) >= 60);
+function extractAges(description: string): number[] {
+  const compact = description.replace(/\s+/g, "");
+  const ages = Array.from(compact.matchAll(/(\d{1,3})(?:周岁|岁)/g), (match) => Number(match[1]));
+
+  for (const match of compact.matchAll(new RegExp(`(${CHINESE_NUMBER_PATTERN.source})(?:多)?(?:周岁|岁)`, "g"))) {
+    const age = parseChineseNumber(match[1]);
+    if (age !== null) ages.push(age);
+  }
+  for (const match of compact.matchAll(/([六七八九])旬/g)) {
+    const decade = parseChineseNumber(match[1]);
+    if (decade !== null) ages.push(decade * 10);
+  }
+  return ages;
 }
 
-function hasExplicitAdultAge(description: string): boolean {
-  if (/成年/.test(description) || CHINESE_ADULT_AGE_PATTERN.test(description)) return true;
-  return Array.from(description.matchAll(/(\d{1,3})[ \t]*(?:周岁|岁)/g)).some((match) => {
-    const age = Number(match[1]);
-    return age >= 18 && age < 60;
-  });
+function parseAgeGroup(description: string): AgeGroup {
+  const compact = description.replace(/\s+/g, "");
+  if (EXCEPTION_PATTERN.test(description) || EXPLICIT_MINOR_PATTERN.test(compact)) return "minor";
+
+  const ages = extractAges(description);
+  if (ages.some((age) => age < 18)) return "minor";
+  if (ages.some((age) => age >= 60)) return "senior";
+  if (ages.some((age) => age >= 18 && age < 60) || /成年/.test(description)) return "adult";
+  return "unknown";
+}
+
+function parseGender(description: string): Gender {
+  const field = /性别\s*[:：]\s*(男|女)(?=$|[\s,，;；。])/.exec(description)?.[1];
+  if (field === "女") return "female";
+  if (field === "男") return "male";
+
+  const femalePatterns = [
+    /女性角色/,
+    /(?:女性|女人|女子)(?=$|[\s,，;；。])/,
+    /成年女性?/,
+    /(?:^|[\s,，;；。])女(?=$|[\s,，;；。])/,
+    /(?:\d{1,3}|[零〇一二两三四五六七八九十百]+)(?:周岁|岁)的?女性角色/,
+    /\d{1,3}(?:周岁|岁)女(?=$|[\s,，;；。])/,
+  ];
+  if (femalePatterns.some((pattern) => pattern.test(description))) return "female";
+
+  const malePatterns = [
+    /男性角色/,
+    /(?:男性|男人|男子)(?=$|[\s,，;；。])/,
+    /成年男性?/,
+    /(?:^|[\s,，;；。])男(?=$|[\s,，;；。])/,
+    /(?:\d{1,3}|[零〇一二两三四五六七八九十百]+)(?:周岁|岁)的?男性角色/,
+    /\d{1,3}(?:周岁|岁)男(?=$|[\s,，;；。])/,
+  ];
+  return malePatterns.some((pattern) => pattern.test(description)) ? "male" : "unknown";
+}
+
+function parseEra(description: string): Era {
+  const explicitEra = /时代\s*[:：]\s*([^\r\n；;,，。]+)/.exec(description)?.[1] ?? "";
+  if (STRONG_ANCIENT_PATTERN.test(explicitEra)) return "ancient";
+  if (STRONG_MODERN_PATTERN.test(explicitEra)) return "modern";
+
+  if (STRONG_ANCIENT_PATTERN.test(description)) return "ancient";
+  if (STRONG_MODERN_PATTERN.test(description)) return "modern";
+  if (WEAK_ANCIENT_PATTERN.test(description)) return "ancient";
+  if (WEAK_MODERN_PATTERN.test(description)) return "modern";
+  return "unknown";
+}
+
+function parseDemographics(description: string): Demographics {
+  return {
+    ageGroup: parseAgeGroup(description),
+    gender: parseGender(description),
+    era: parseEra(description),
+  };
 }
 
 function extractExplicitMaleBodyTerms(description: string): string[] {
@@ -95,18 +205,18 @@ export function resolveAssetCharacterBodyStandard(description: string): string {
   const existing = extractAssetCharacterBodyStandard(description);
   if (existing) return existing;
 
-  if (EXCEPTION_PATTERN.test(description) || hasExplicitMinorAge(description) || hasExplicitSeniorAge(description)) {
+  const demographics = parseDemographics(description);
+  if (demographics.ageGroup === "minor" || demographics.ageGroup === "senior") {
     return EXCEPTION_BODY_STANDARD;
   }
 
-  const isMale = MALE_PATTERN.test(description);
-  const explicitMaleBodyTerms = isMale ? extractExplicitMaleBodyTerms(description) : [];
+  const explicitMaleBodyTerms = demographics.gender === "male" ? extractExplicitMaleBodyTerms(description) : [];
   if (explicitMaleBodyTerms.length > 0) return buildExplicitMaleBodyStandard(explicitMaleBodyTerms);
 
-  if (!hasExplicitAdultAge(description)) return NEUTRAL_BODY_STANDARD;
-  if (FEMALE_PATTERN.test(description)) return ADULT_FEMALE_BODY_STANDARD;
-  if (isMale && ANCIENT_PATTERN.test(description)) return ANCIENT_ADULT_MALE_BODY_STANDARD;
-  if (isMale && MODERN_PATTERN.test(description)) return MODERN_ADULT_MALE_BODY_STANDARD;
+  if (demographics.ageGroup !== "adult") return NEUTRAL_BODY_STANDARD;
+  if (demographics.gender === "female") return ADULT_FEMALE_BODY_STANDARD;
+  if (demographics.gender === "male" && demographics.era === "ancient") return ANCIENT_ADULT_MALE_BODY_STANDARD;
+  if (demographics.gender === "male" && demographics.era === "modern") return MODERN_ADULT_MALE_BODY_STANDARD;
   return NEUTRAL_BODY_STANDARD;
 }
 
