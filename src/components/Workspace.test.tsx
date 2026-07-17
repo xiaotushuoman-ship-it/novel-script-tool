@@ -4782,6 +4782,13 @@ describe("Workspace asset extraction image generation", () => {
   });
 
   it("adds same-scene four-angle and white-background product constraints to image prompts", async () => {
+    const characterOnlyRules = [
+      "细腻超清皮肤纹理",
+      "饱满S曲线",
+      "高级3D乙游主角标准",
+      "皮革亮面与哑光拼接",
+      "人物三视图生产参考图",
+    ];
     callImageGenerationMock
       .mockResolvedValueOnce("https://img.example.com/scene.png")
       .mockResolvedValueOnce("https://img.example.com/prop.png");
@@ -4791,7 +4798,7 @@ describe("Workspace asset extraction image generation", () => {
     sceneProject.steps["asset-extraction"].inputs = {
       sourceText: "夜晚，旧码头夜市冷雨未停，摊位灯牌亮起。",
       assetType: "场景",
-      visualStyle: "影视写实现代",
+      visualStyle: "3D仿真精致角色",
       imageModel: "gpt-image-2",
       imageRatio: "16:9",
       imageResolution: "1K",
@@ -4816,6 +4823,9 @@ describe("Workspace asset extraction image generation", () => {
     expect(callImageGenerationMock.mock.calls[0][1]).toContain("3.左下：俯视全景");
     expect(callImageGenerationMock.mock.calls[0][1]).toContain("4.右下：反向全景");
     expect(callImageGenerationMock.mock.calls[0][1]).toContain("不要只拍单个物品");
+    for (const rule of characterOnlyRules) {
+      expect(callImageGenerationMock.mock.calls[0][1]).not.toContain(rule);
+    }
 
     const propProject = createProject("物品出图约束测试");
     propProject.currentStep = "asset-extraction";
@@ -4823,7 +4833,7 @@ describe("Workspace asset extraction image generation", () => {
     propProject.steps["asset-extraction"].inputs = {
       sourceText: "长刀放在案台上。",
       assetType: "物品",
-      visualStyle: "影视写实现代",
+      visualStyle: "现代甜酷3D乙游",
       imageModel: "gpt-image-2",
       imageRatio: "16:9",
       imageResolution: "1K",
@@ -4845,6 +4855,9 @@ describe("Workspace asset extraction image generation", () => {
     expect(callImageGenerationMock.mock.calls[1][1]).toContain("纯白背景");
     expect(callImageGenerationMock.mock.calls[1][1]).toContain("不要人物");
     expect(callImageGenerationMock.mock.calls[1][1]).toContain("不要场景环境");
+    for (const rule of characterOnlyRules) {
+      expect(callImageGenerationMock.mock.calls[1][1]).not.toContain(rule);
+    }
   });
 });
 
