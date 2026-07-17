@@ -125,8 +125,6 @@ export const IMAGE_RESOLUTION_OPTIONS = ["1K", "2K", "4K"];
 
 export const STORYBOARD_STYLE_OPTIONS = [
   "3D国漫风格",
-  "3D仿真精致角色",
-  "现代甜酷3D乙游",
   "影视写实古风",
   "影视写实现代",
   "2D赛璐璐风格",
@@ -152,6 +150,13 @@ export const STORYBOARD_STYLE_OPTIONS = [
   "未来科幻机甲风",
   "悬疑惊悚写实风",
   "温暖治愈家庭短剧风",
+];
+
+const ASSET_CHARACTER_STYLE_OPTIONS = [
+  "3D国漫风格",
+  "3D仿真精致角色",
+  "现代甜酷3D乙游",
+  ...STORYBOARD_STYLE_OPTIONS.slice(1),
 ];
 
 export const IMAGE_MODEL_OPTIONS = [
@@ -842,7 +847,7 @@ ${PLATFORM_REVIEW_RULES}
         label: "画风锚点",
         defaultValue: "3D国漫风格",
         control: "select",
-        options: STORYBOARD_STYLE_OPTIONS,
+        options: ASSET_CHARACTER_STYLE_OPTIONS,
       },
       {
         key: "imageModel",

@@ -369,6 +369,8 @@ describe("buildPrompt", () => {
     expect(fields.videoRatio.options).toContain("横屏16:9");
     expect(fields.videoRatio.options).toContain("电影宽屏21:9");
     expect(fields.visualStyle.options).toContain("3D国漫风格");
+    expect(fields.visualStyle.options).not.toContain("3D仿真精致角色");
+    expect(fields.visualStyle.options).not.toContain("现代甜酷3D乙游");
     expect(fields.visualStyle.options).toContain("复古欧美原子朋克风格");
     expect(fieldKeys).not.toContain("previousEnding");
     expect(fieldKeys).not.toContain("nextOpening");
@@ -686,6 +688,8 @@ describe("buildPrompt", () => {
 
     expect(template.name).toBe("GPT-image2 六宫格故事板");
     expect(template.description).toContain("图片提示词");
+    expect(fields.visualStyle.options).not.toContain("3D仿真精致角色");
+    expect(fields.visualStyle.options).not.toContain("现代甜酷3D乙游");
     expect(prompt).toContain("GPT-image-2");
     expect(prompt).toContain("_::~OUTPUT_START::~_");
     expect(prompt).toContain("_::~FIELD::~_");
