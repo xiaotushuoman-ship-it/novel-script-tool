@@ -1,4 +1,4 @@
-import { Bot, Clipboard, Download, FileImage, FileUp, Play, Save, Trash2 } from "lucide-react";
+﻿import { Bot, Clipboard, Download, FileImage, FileUp, Play, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DirectorDeskStep } from "./DirectorDeskStep";
 import { callAi, callAiStream, callImageGeneration, type AiSettings } from "../domain/aiClient";
