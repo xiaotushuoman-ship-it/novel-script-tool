@@ -11,75 +11,98 @@ import {
   resolveAssetCharacterBodyStandard,
 } from "./assetCharacterBodyStandards";
 
+describe("body standard constants", () => {
+  it("defines the complete adult female standard", () => {
+    expect(ADULT_FEMALE_BODY_STANDARD).toBe(
+      "体态标准：成年女性采用饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿，站姿自然挺拔，正面侧面背面比例一致。",
+    );
+  });
+
+  it("defines every ancient adult male requirement", () => {
+    expect(ANCIENT_ADULT_MALE_BODY_STANDARD).toBe(
+      "体态标准：古风成年男性采用标准宽肩窄腰、挺拔直角肩线、躯干修长匀称、线条利落干净、肌肉轮廓流畅不臃肿、身姿端正俊朗、笔直修长双腿，正面侧面背面比例一致。",
+    );
+  });
+
+  it("defines every modern adult male requirement", () => {
+    expect(MODERN_ADULT_MALE_BODY_STANDARD).toBe(
+      "体态标准：现代成年男性采用宽肩阔背、紧致窄腰、躯干挺拔匀称、体态干净利落、肌肉线条紧致自然、不夸张不臃肿、比例协调、修长笔直大长腿，正面侧面背面比例一致。",
+    );
+  });
+
+  it("defines the exact neutral source-first rule", () => {
+    expect(NEUTRAL_BODY_STANDARD).toContain("体态严格服从原文年龄、身份和剧情，正侧背比例一致");
+  });
+});
+
 describe("resolveAssetCharacterBodyStandard", () => {
-  it("returns the complete adult female standard for an adult urban designer", () => {
-    const result = resolveAssetCharacterBodyStandard("成年女性，都市设计师");
-
-    expect(result).toBe(ADULT_FEMALE_BODY_STANDARD);
-    expect(result).toContain("体态标准：");
-    expect(result).toContain("饱满S曲线");
-    expect(result).toContain("窄肩蜂腰");
-    expect(result).toContain("圆润胯部");
-    expect(result).toContain("前凸后翘");
-    expect(result).toContain("修长笔直大长腿");
-    expect(result).toContain("正面侧面背面比例一致");
+  it.each([
+    "成年女性，都市设计师",
+    "性别：女；年龄：28岁；时代：现代",
+    "女性，二十多岁，都市设计师",
+  ])("routes %s to the adult female standard", (description) => {
+    expect(resolveAssetCharacterBodyStandard(description)).toBe(ADULT_FEMALE_BODY_STANDARD);
   });
 
-  it("returns the complete ancient adult male standard for a general in battle robes", () => {
-    const result = resolveAssetCharacterBodyStandard("成年男性，古风将军，束腰战袍");
-
-    expect(result).toBe(ANCIENT_ADULT_MALE_BODY_STANDARD);
-    expect(result).toContain("标准宽肩窄腰");
-    expect(result).toContain("直角肩");
-    expect(result).toContain("修长躯干");
-    expect(result).toContain("流畅不臃肿肌肉");
-    expect(result).toContain("修长双腿");
+  it.each([
+    "成年男性，古风将军，束腰战袍",
+    "性别：男；年龄：32岁；时代：古代；身份：将军",
+    "男性，二十多岁，古代将军",
+  ])("routes %s to the ancient adult male standard", (description) => {
+    expect(resolveAssetCharacterBodyStandard(description)).toBe(ANCIENT_ADULT_MALE_BODY_STANDARD);
   });
 
-  it("returns the complete modern adult male standard for an urban man in a suit", () => {
-    const result = resolveAssetCharacterBodyStandard("成年男性，现代都市，黑色西装");
-
-    expect(result).toBe(MODERN_ADULT_MALE_BODY_STANDARD);
-    expect(result).toContain("宽肩阔背");
-    expect(result).toContain("紧致窄腰");
-    expect(result).toContain("挺拔躯干");
-    expect(result).toContain("自然不夸张肌肉");
-    expect(result).toContain("长腿");
+  it.each([
+    "成年男性，现代都市，黑色西装",
+    "性别：男；年龄：27岁；都市设计师",
+    "男性，三十岁，职场通勤",
+  ])("routes %s to the modern adult male standard", (description) => {
+    expect(resolveAssetCharacterBodyStandard(description)).toBe(MODERN_ADULT_MALE_BODY_STANDARD);
   });
 
-  it.each(["儿童", "未成年", "老人", "病弱", "残障", "特殊身份"])(
-    "keeps %s characters faithful to the source instead of applying adult standards",
-    (exception) => {
-      const result = resolveAssetCharacterBodyStandard(`${exception}，女性，现代都市设计师`);
-
-      expect(result).toBe(EXCEPTION_BODY_STANDARD);
-      expect(result).toContain("严格按原文年龄与身体状况塑造");
-      expect(result).not.toBe(ADULT_FEMALE_BODY_STANDARD);
-      expect(result).not.toBe(ANCIENT_ADULT_MALE_BODY_STANDARD);
-      expect(result).not.toBe(MODERN_ADULT_MALE_BODY_STANDARD);
-    },
-  );
-
-  it.each(["矮壮", "魁梧", "瘦小", "年长"])("prioritizes an explicit male %s body description", (bodyType) => {
-    const result = resolveAssetCharacterBodyStandard(`男性，现代都市西装，${bodyType}`);
+  it.each([
+    "儿童，性别：女；年龄：8岁；时代：现代",
+    "未成年男性，17岁，古代将军之子",
+    "少年，18岁，现代都市",
+    "少女，19岁，现代都市",
+    "女性，十岁，都市设计师",
+  ])("keeps explicit child or minor wording exceptional in %s", (description) => {
+    const result = resolveAssetCharacterBodyStandard(description);
 
     expect(result).toBe(EXCEPTION_BODY_STANDARD);
-    expect(result).toContain("原文体态优先");
+    expect(result).not.toBe(ADULT_FEMALE_BODY_STANDARD);
+    expect(result).not.toBe(ANCIENT_ADULT_MALE_BODY_STANDARD);
     expect(result).not.toBe(MODERN_ADULT_MALE_BODY_STANDARD);
   });
 
-  it("uses the neutral fallback when identity and era are unknown", () => {
-    const result = resolveAssetCharacterBodyStandard("神秘来客，身份不明");
-
-    expect(result).toBe(NEUTRAL_BODY_STANDARD);
-    expect(result).toContain("服从原文");
-    expect(result).toContain("正侧背一致");
+  it.each(["老人", "病弱", "残障", "特殊身份"])("keeps %s characters exceptional", (exception) => {
+    expect(resolveAssetCharacterBodyStandard(`${exception}，女性，28岁，现代都市设计师`)).toBe(
+      EXCEPTION_BODY_STANDARD,
+    );
   });
 
-  it("uses existing body standard fields before all inferred routes", () => {
-    expect(resolveAssetCharacterBodyStandard("成年女性；体态标准: 瘦高且轻微驼背；现代都市设计师")).toBe(
-      "体态标准：瘦高且轻微驼背",
+  it.each([
+    ["成年男性，古风护卫，身材矮壮", "矮壮"],
+    ["成年男性，古代将军，体格魁梧", "魁梧"],
+    ["男性，二十多岁，现代职场，身形瘦小", "瘦小"],
+    ["成年男性，现代西装，面相年长", "年长"],
+  ])("preserves the explicit male body type from %s", (description, bodyType) => {
+    const result = resolveAssetCharacterBodyStandard(description);
+
+    expect(result).toContain(bodyType);
+    expect(result).toContain("严格保持原文明确体态，正侧背比例一致");
+    expect(result).not.toBe(ANCIENT_ADULT_MALE_BODY_STANDARD);
+    expect(result).not.toBe(MODERN_ADULT_MALE_BODY_STANDARD);
+  });
+
+  it("uses existing fields before inferred routes and preserves them verbatim", () => {
+    expect(resolveAssetCharacterBodyStandard("成年女性；体态标准:  瘦高且轻微驼背  ；现代都市设计师")).toBe(
+      "体态标准:  瘦高且轻微驼背  ",
     );
+  });
+
+  it("uses the neutral fallback when identity and era are unknown", () => {
+    expect(resolveAssetCharacterBodyStandard("神秘来客，身份不明")).toBe(NEUTRAL_BODY_STANDARD);
   });
 
   it.each([
@@ -103,17 +126,27 @@ describe("resolveAssetCharacterBodyStandard", () => {
 
 describe("body standard fields", () => {
   it.each([
-    ["人物外貌：冷峻\n体态标准：瘦高，轻微驼背\n人物的身份：账房先生", "体态标准：瘦高，轻微驼背"],
-    ["人物外貌：冷峻；体态标准: 瘦高，轻微驼背；人物的身份：账房先生", "体态标准：瘦高，轻微驼背"],
+    ["人物外貌：冷峻\n体态标准： 瘦高，轻微驼背 \n人物的身份：账房先生", "体态标准： 瘦高，轻微驼背 "],
+    ["人物外貌：冷峻；体态标准:  瘦高，轻微驼背  ；人物的身份：账房先生", "体态标准:  瘦高，轻微驼背  "],
     ["人物外貌: 冷峻; body note；体态标准：瘦高; 人物的身份: 账房先生", "体态标准：瘦高"],
-  ])("extracts and normalizes body standards from supported separators", (description, expected) => {
+  ])("extracts body standards verbatim from supported separators", (description, expected) => {
     expect(extractAssetCharacterBodyStandard(description)).toBe(expected);
   });
 
-  it("removes only the body standard field and preserves other fields", () => {
-    expect(removeAssetCharacterBodyStandard("人物外貌：冷峻；体态标准: 瘦高；人物的身份：账房先生")).toBe(
-      "人物外貌：冷峻；人物的身份：账房先生",
-    );
+  it.each([
+    ["体态标准:  瘦高且轻微驼背  ", "体态标准:  瘦高且轻微驼背  "],
+    ["体态标准： 瘦高且轻微驼背 ", "体态标准： 瘦高且轻微驼背 "],
+  ])("preserves English and Chinese colon field forms in %s", (description, expected) => {
+    expect(extractAssetCharacterBodyStandard(description)).toBe(expected);
+    expect(resolveAssetCharacterBodyStandard(description)).toBe(expected);
+  });
+
+  it.each([
+    ["人物外貌：冷峻；体态标准:  瘦高  ；人物的身份：账房先生", "人物外貌：冷峻；人物的身份：账房先生"],
+    ["人物外貌：冷峻\n体态标准： 瘦高 \n人物的身份：账房先生", "人物外貌：冷峻\n人物的身份：账房先生"],
+    ["体态标准： 瘦高 ；人物的身份：账房先生", "人物的身份：账房先生"],
+  ])("removes only the body standard field from %s", (description, expected) => {
+    expect(removeAssetCharacterBodyStandard(description)).toBe(expected);
   });
 
   it("returns unmatched descriptions unchanged", () => {
@@ -125,13 +158,26 @@ describe("body standard fields", () => {
 });
 
 describe("ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS", () => {
-  it("fully documents standards, exceptions, source priority, and style boundaries", () => {
+  it("documents the complete standards and source priority", () => {
     expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain(ADULT_FEMALE_BODY_STANDARD);
     expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain(ANCIENT_ADULT_MALE_BODY_STANDARD);
     expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain(MODERN_ADULT_MALE_BODY_STANDARD);
     expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain(EXCEPTION_BODY_STANDARD);
     expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain("男性原文体态优先");
-    expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain("画风仅控制材质");
     expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain("不得写“按统一标准”“身材好”或省略");
+  });
+
+  it.each(["3D国漫", "3D仿真", "现代甜酷3D乙游", "皮克斯", "低多边形", "非3D"])(
+    "documents %s style adaptation",
+    (style) => {
+      expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain(style);
+    },
+  );
+
+  it("separates body silhouette rules from style materials without mixing materials", () => {
+    expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain("体态控制轮廓比例");
+    expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain("画风控制材质");
+    expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain("画风仅控制材质");
+    expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain("不能串材质");
   });
 });
