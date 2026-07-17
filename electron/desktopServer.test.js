@@ -37,7 +37,7 @@ describe("desktop server routes", () => {
     await writeFile(path.join(distDir, "index.html"), "<main>xiaotu desktop</main>", "utf8");
     cleanupTasks.push(() => rm(distDir, { recursive: true, force: true }));
 
-    const desktop = await startDesktopServer({ distDir });
+    const desktop = await startDesktopServer({ distDir, port: 0 });
     cleanupTasks.push(() => desktop.close());
 
     const response = await fetch(`${desktop.url}/project/example`);
@@ -63,7 +63,7 @@ describe("desktop server routes", () => {
       ),
     );
 
-    const desktop = await startDesktopServer({ distDir, fetchImpl });
+    const desktop = await startDesktopServer({ distDir, fetchImpl, port: 0 });
     cleanupTasks.push(() => desktop.close());
 
     const response = await fetch(`${desktop.url}/api/timeai/v1/chat/completions`, {

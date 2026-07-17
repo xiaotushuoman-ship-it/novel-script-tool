@@ -24,12 +24,13 @@ describe("topic trends", () => {
   });
 
   it("builds a date-aware prompt constrained to the selected genre and styles", () => {
-    const prompt = buildTopicTrendPrompt("古风权谋", new Date("2026-07-17T08:00:00+08:00"));
+    const prompt = buildTopicTrendPrompt("古风家业", new Date("2026-07-17T08:00:00+08:00"));
 
     expect(prompt).toContain("2026-07-17");
     expect(prompt).toContain("最近30至90天");
-    expect(prompt).toContain("题材类型：古风权谋");
-    expect(prompt).toContain("历史权谋");
+    expect(prompt).toContain("题材类型：古风家业");
+    expect(prompt).toContain("古风经营");
+    expect(prompt).toContain("不得涉及政治、军事、宗教、法律");
     expect(prompt).toContain("title, summary, outline, tags, style, genre");
   });
 
@@ -64,7 +65,7 @@ describe("topic trends", () => {
         outline: "这条结果必须被过滤。",
         tags: ["测试"],
         style: "都市爽文",
-        genre: "古风权谋",
+        genre: "古风家业",
       },
       { title: "缺少大纲", summary: "无效", tags: ["测试"], style: "都市爽文" },
     ]);

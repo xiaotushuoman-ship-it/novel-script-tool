@@ -123,10 +123,10 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("不得输出自检、评分、爆点拆解");
   });
 
-  it("builds genre-adaptive short-drama scripts without exposing internal checks", () => {
+  it("builds safe high-retention scripts without exposing internal checks or production specs", () => {
     const template = getTemplate("outline-expansion");
     const prompt = buildPrompt(template, {
-      outline: "沈知意被逼嫁入侯府，却在洞房前发现未婚夫与长姐联手夺她兵符。",
+      outline: "沈知意被迫交出祖传绣坊，却发现长姐早已调换账本。",
       totalChapters: "20",
       chapterWords: "2500",
       style: "古风权谋",
@@ -136,8 +136,14 @@ describe("buildPrompt", () => {
 
     expect(prompt).toContain("都市爽文");
     expect(prompt).toContain("情感女频");
-    expect(prompt).toContain("古风权谋");
     expect(prompt).toContain("古风情感");
+    expect(prompt).toContain("政治、军事、宗教、法律");
+    expect(prompt).toContain("必须转换为普通人的家庭、情感、邻里、普通职场、经营、手艺、成长或生活选择冲突");
+    expect(prompt).toContain("场景目标、现实阻力、结束时的价值变化");
+    expect(prompt).toContain("晚进早出");
+    expect(prompt).toContain("每8-12秒");
+    expect(prompt).toContain("翻译腔、舞台剧腔");
+    expect(prompt).toContain("生活梗");
     expect(prompt).toContain("场次标题");
     expect(prompt).toContain("画面/动作");
     expect(prompt).toContain("台词");
@@ -157,6 +163,9 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("事情不是你想的那样");
     expect(prompt).toContain("0-2秒");
     expect(prompt).toContain("2-5秒");
+    expect(prompt).toContain("直接从【第1章：章节名】开始");
+    expect(prompt).toContain("禁止输出【制作规格】");
+    expect(prompt).not.toContain("【制作规格】\n总章数");
     expect(prompt).not.toContain("输出人物语言指纹");
     expect(prompt).not.toContain("输出姓名互换测试结果");
     expect(prompt).not.toContain("本章自评分：95+");
@@ -175,6 +184,11 @@ describe("buildPrompt", () => {
     expect(fields.style.control).toBe("select");
     expect(fields.style.options).toContain("都市爽文");
     expect(fields.style.options).toContain("电影感写实");
+    expect(fields.style.options).toContain("古风家业");
+    expect(fields.style.options).toContain("古风经营");
+    expect(fields.style.options).toContain("生活悬念");
+    expect(fields.style.options).not.toContain("历史权谋");
+    expect(fields.style.options).not.toContain("悬疑刑侦");
     expect(fields.style.options).toContain("暗黑复仇");
     expect(fields.perspective.control).toBe("select");
     expect(fields.perspective.options).toContain("第三人称限知");

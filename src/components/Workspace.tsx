@@ -796,6 +796,9 @@ export function Workspace({
         "对白推进：每轮重要对话必须推动事件、暴露信息、改变关系或迫使人物做选择；不得用对白复述前文或解释双方都知道的信息。",
         "对白质检：姓名互换后仍成立的台词必须重写；删除万能狠话、机械问答、说明书腔和不影响剧情的空对白。",
         "对白长度：每个角色单次发言不得超过20个汉字，标点符号不计入字数；超长内容必须保留原意和关键信息，结合动作、打断或回应拆成自然的多轮短句。",
+        "题材边界：不得涉及政治、军事、宗教、法律、司法、执法、战争、官场或犯罪操作；相关冲突必须转为家庭、情感、邻里、普通职场、经营、手艺、成长或生活选择。",
+        "场景规则：每场必须有具体目标、现实阻力和结束时的价值变化；晚进早出，每8-12秒出现决定、揭露、误判、反转或压力升级。",
+        "语言规则：禁止翻译腔、舞台剧腔、法务腔和硬套热梗；生活梗只能来自人物身份与现场处境。",
         "",
         "故事大纲：",
         outline,
@@ -808,11 +811,11 @@ export function Workspace({
       updateStepGeneration(runStepId, { progress: { label: "等待模型续写", percent: 65 } });
       startTextProgressTimer(runStepId, "等待模型续写", 65, 92);
       const result = await streamAiText(getTextAiSettings(), continuationPrompt, (partial) => {
-        const nextDraft = [step.draft.trim(), partial].filter(Boolean).join("\n\n");
+        const nextDraft = [step.draft.trim(), cleanOutlineExpansionOutput(partial)].filter(Boolean).join("\n\n");
         writeDraftForStep(runProjectId, runStepId, nextDraft);
       });
       stopTextProgressTimer(runStepId);
-      const nextDraft = [step.draft.trim(), result].filter(Boolean).join("\n\n");
+      const nextDraft = [step.draft.trim(), cleanOutlineExpansionOutput(result)].filter(Boolean).join("\n\n");
       updateStepGeneration(runStepId, { progress: { label: "写入续写章节", percent: 90 } });
       writeDraftForStep(runProjectId, runStepId, nextDraft);
       updateStepGeneration(runStepId, {
@@ -858,6 +861,9 @@ export function Workspace({
         "优化重点：强钩子、冲突压迫、爽点递进、人物动机、结尾留钩、减少废话；重点重写机械对白、人物声音同质化、缺少潜台词、剧情复述、万能模板句和作者说教。",
         "对白要求：保持人物既有身份与关系，使用具体目的、信息差、试探、回避、改口、动作和停顿推进；姓名互换后仍成立的台词必须重写。",
         "对白长度：每个角色单次发言不得超过20个汉字，标点符号不计入字数；超长内容必须保留原意和关键信息，结合动作、打断或回应拆成自然的多轮短句。",
+        "题材边界：不得涉及政治、军事、宗教、法律、司法、执法、战争、官场或犯罪操作；相关冲突必须转为家庭、情感、邻里、普通职场、经营、手艺、成长或生活选择。",
+        "场景规则：每场必须有具体目标、现实阻力和结束时的价值变化；晚进早出，每8-12秒出现决定、揭露、误判、反转或压力升级。",
+        "语言规则：禁止翻译腔、舞台剧腔、法务腔和硬套热梗；生活梗只能来自人物身份与现场处境。",
         "",
         "全书大纲：",
         step.inputs.outline || "",
@@ -870,10 +876,14 @@ export function Workspace({
       updateStepGeneration(runStepId, { progress: { label: "等待模型优化", percent: 65 } });
       startTextProgressTimer(runStepId, "等待模型优化", 65, 92);
       const result = await streamAiText(getTextAiSettings(), revisionPrompt, (partial) => {
-        writeDraftForStep(runProjectId, runStepId, replaceNovelChapterBlock(step.draft, chapterNumber, partial));
+        writeDraftForStep(
+          runProjectId,
+          runStepId,
+          replaceNovelChapterBlock(step.draft, chapterNumber, cleanOutlineExpansionOutput(partial)),
+        );
       });
       stopTextProgressTimer(runStepId);
-      const nextDraft = replaceNovelChapterBlock(step.draft, chapterNumber, result);
+      const nextDraft = replaceNovelChapterBlock(step.draft, chapterNumber, cleanOutlineExpansionOutput(result));
       updateStepGeneration(runStepId, { progress: { label: "替换优化章节", percent: 90 } });
       writeDraftForStep(runProjectId, runStepId, nextDraft);
       updateStepGeneration(runStepId, {
@@ -1765,6 +1775,18 @@ export function Workspace({
       .trim();
   }
 
+  function cleanOutlineExpansionOutput(value: string) {
+    const cleaned = cleanAiTextOutput(value);
+    const chapterMatch = cleaned.match(/^\s*【?第\s*[0-9一二三四五六七八九十百]+\s*章[^\n]*】?/m);
+    if (chapterMatch?.index !== undefined) return cleaned.slice(chapterMatch.index).trim();
+    if (/【(?:制作规格|爆点分析|创作分析|人物表|题材判断|内部自检|自检|评分)】/.test(cleaned)) return "";
+    return cleaned;
+  }
+
+  function cleanTextOutputForStep(stepId: TemplateId, value: string) {
+    return stepId === "outline-expansion" ? cleanOutlineExpansionOutput(value) : cleanAiTextOutput(value);
+  }
+
   function getExpectedChapterCount(inputs: Record<string, string>) {
     const value = Number.parseInt(String(inputs.totalChapters ?? ""), 10);
     return Number.isFinite(value) && value > 0 ? value : null;
@@ -2279,9 +2301,10 @@ export function Workspace({
         runStepId === "xiaotu-skill"
           ? await generateCompleteXiaotuSkill(runInputs, textAiSettings, runProjectId, runStepId)
           : await streamAiText(textAiSettings, initialRunPrompt, (partial) => {
-              if (partial.trim()) writeDraftForStep(runProjectId, runStepId, partial);
+              const cleanedPartial = cleanTextOutputForStep(runStepId, partial);
+              if (cleanedPartial.trim()) writeDraftForStep(runProjectId, runStepId, cleanedPartial);
             });
-      const cleanedInitialResult = initialResult;
+      const cleanedInitialResult = cleanTextOutputForStep(runStepId, initialResult);
       stopTextProgressTimer(runStepId);
       if (!cleanedInitialResult.trim()) {
         throw new Error("AI 返回内容为空，请检查模型是否只返回了思考过程或更换模型重试。");

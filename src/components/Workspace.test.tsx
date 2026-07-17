@@ -1127,23 +1127,23 @@ describe("Workspace progress", () => {
     expect(genreSelect).toHaveValue("都市男频");
     expect(recommendationStyleSelect).toHaveValue("都市爽文");
     expect(recommendationStyleSelect).toBeInTheDocument();
-    fireEvent.change(genreSelect, { target: { value: "古风权谋" } });
-    expect(recommendationStyleSelect).toHaveValue("历史权谋");
+    fireEvent.change(genreSelect, { target: { value: "古风家业" } });
+    expect(recommendationStyleSelect).toHaveValue("古风经营");
     expect(within(recommendationStyleSelect).getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "历史权谋",
-      "仙侠古风",
+      "古风经营",
+      "古风家业",
       "克制冷峻",
-      "电影感写实",
+      "治愈温暖",
     ]);
-    expect(screen.getByRole("combobox", { name: "文风" })).toHaveValue("历史权谋");
+    expect(screen.getByRole("combobox", { name: "文风" })).toHaveValue("古风经营");
     expect(screen.getAllByRole("button", { name: "一键填入大纲" }).length).toBeGreaterThan(0);
   });
 
   it("restores fallback cards for the genre saved in an existing project", () => {
     const project = createProject("已保存题材测试");
     project.currentStep = "outline-expansion";
-    project.steps["outline-expansion"].inputs.topicGenre = "古风权谋";
-    project.steps["outline-expansion"].inputs.style = "历史权谋";
+    project.steps["outline-expansion"].inputs.topicGenre = "古风家业";
+    project.steps["outline-expansion"].inputs.style = "古风经营";
 
     render(
       <Workspace
@@ -1155,8 +1155,8 @@ describe("Workspace progress", () => {
       />,
     );
 
-    expect(screen.getByRole("combobox", { name: "题材类型" })).toHaveValue("古风权谋");
-    expect(screen.getByText("盐仓旧账")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "题材类型" })).toHaveValue("古风家业");
+    expect(screen.getByText("绣坊换账日")).toBeInTheDocument();
     expect(screen.queryByText("县城技能合伙人")).not.toBeInTheDocument();
   });
 
@@ -1205,13 +1205,13 @@ describe("Workspace progress", () => {
 
     render(<StatefulWorkspace />);
     fireEvent.click(screen.getByRole("button", { name: "刷新推荐" }));
-    fireEvent.change(screen.getByRole("combobox", { name: "题材类型" }), { target: { value: "古风权谋" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "题材类型" }), { target: { value: "古风家业" } });
     resolveRecommendation?.(
       JSON.stringify([
         {
           title: "过期都市推荐",
           summary: "旧请求结果。",
-          outline: "不应覆盖古风权谋卡片。",
+          outline: "不应覆盖古风家业卡片。",
           tags: ["旧请求"],
           style: "都市爽文",
           genre: "都市男频",
@@ -1219,7 +1219,7 @@ describe("Workspace progress", () => {
       ]),
     );
 
-    await waitFor(() => expect(screen.getByText("盐仓旧账")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("绣坊换账日")).toBeInTheDocument());
     expect(screen.queryByText("过期都市推荐")).not.toBeInTheDocument();
   });
 
@@ -1234,8 +1234,8 @@ describe("Workspace progress", () => {
     firstProject.currentStep = "outline-expansion";
     const nextProject = createProject("新项目");
     nextProject.currentStep = "outline-expansion";
-    nextProject.steps["outline-expansion"].inputs.topicGenre = "古风权谋";
-    nextProject.steps["outline-expansion"].inputs.style = "历史权谋";
+    nextProject.steps["outline-expansion"].inputs.topicGenre = "古风家业";
+    nextProject.steps["outline-expansion"].inputs.style = "古风经营";
 
     const props = {
       aiSettings: { endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" },
@@ -1259,7 +1259,7 @@ describe("Workspace progress", () => {
       ]),
     );
 
-    await waitFor(() => expect(screen.getByText("盐仓旧账")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("绣坊换账日")).toBeInTheDocument());
     expect(screen.queryByText("旧项目推荐")).not.toBeInTheDocument();
   });
 
@@ -1271,8 +1271,8 @@ describe("Workspace progress", () => {
           summary: "限时军政博弈。",
           outline: "新任县令必须在天亮前辨认真伪军令。",
           tags: ["边城", "权谋", "限时"],
-          style: "历史权谋",
-          genre: "古风权谋",
+          style: "古风经营",
+          genre: "古风家业",
         },
       ]),
     );
@@ -1293,19 +1293,19 @@ describe("Workspace progress", () => {
     }
 
     render(<StatefulWorkspace />);
-    fireEvent.change(screen.getByRole("combobox", { name: "题材类型" }), { target: { value: "古风权谋" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "题材类型" }), { target: { value: "古风家业" } });
     fireEvent.click(screen.getByRole("button", { name: "刷新推荐" }));
 
     await waitFor(() => expect(callAiMock).toHaveBeenCalledTimes(1));
     const recommendationPrompt = String(callAiMock.mock.calls[0][1]);
-    expect(recommendationPrompt).toContain("题材类型：古风权谋");
+    expect(recommendationPrompt).toContain("题材类型：古风家业");
     expect(recommendationPrompt).toContain("最近30至90天");
     expect(recommendationPrompt).toMatch(/当前日期：2026-07-1[67]/);
     expect(await screen.findByText("边城换防夜")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "一键填入大纲" }));
     expect(screen.getByRole("textbox", { name: /故事大纲/ })).toHaveValue("新任县令必须在天亮前辨认真伪军令。");
-    expect(screen.getByRole("combobox", { name: "文风" })).toHaveValue("历史权谋");
+    expect(screen.getByRole("combobox", { name: "文风" })).toHaveValue("古风经营");
   });
 
   it("keeps local topic recommendations usable when online refresh fails", async () => {
@@ -2313,6 +2313,45 @@ describe("Workspace storyboard controls", () => {
 });
 
 describe("Workspace writing flow", () => {
+  it("streams only chapter screenplay content for one-click novel generation", async () => {
+    callAiStreamMock.mockImplementationOnce(
+      async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
+        onChunk("【制作规格】\n总章数：20\n【爆点分析】先讲创作思路。\n");
+        onChunk("第1章：账本被换\n场景 1　内景　绣坊　日\n沈知意按住账本。\n沈知意：\"这不是我的账。\"");
+        return "【制作规格】\n总章数：20\n【爆点分析】先讲创作思路。\n第1章：账本被换\n场景 1　内景　绣坊　日\n沈知意按住账本。\n沈知意：\"这不是我的账。\"";
+      },
+    );
+    const project = createProject("一键小说纯剧本输出测试");
+    project.currentStep = "outline-expansion";
+    project.steps["outline-expansion"].inputs.outline = "沈知意发现祖传绣坊账本被长姐调换。";
+    const onStepDraftChange = vi.fn();
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+        onStepDraftChange={onStepDraftChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
+
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(onStepDraftChange).toHaveBeenLastCalledWith(
+        project.id,
+        "outline-expansion",
+        expect.stringContaining("第1章：账本被换"),
+      ),
+    );
+    const writtenDrafts = onStepDraftChange.mock.calls.map((call) => String(call[2]));
+    expect(writtenDrafts.some((draft) => draft.includes("【制作规格】"))).toBe(false);
+    expect(writtenDrafts.some((draft) => draft.includes("【爆点分析】"))).toBe(false);
+  });
+
   it("shows one-click novel controls and chapter maintenance actions on the first step", () => {
     const project = createProject("一键小说测试");
     project.currentStep = "outline-expansion";
