@@ -861,6 +861,124 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("所有明确为成年女性的角色保持：饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿");
     expect(assetOutputRules).toContain("服装精美华丽，采用收腰、高开衩、薄纱、刺绣和鎏金材质");
     expect(assetOutputRules).toContain("女性角色长相必须完全区分");
+    expect(assetOutputRules).toContain("根据剧情时代与题材选择古风、玄幻或现代国漫造型");
+    expect(assetOutputRules).toContain("不得固定为古装或哥特乙游造型");
+  });
+
+  it("routes simulated refined 3D characters through their dedicated profile", () => {
+    const template = getTemplate("asset-extraction");
+    const prompt = buildPrompt(template, {
+      sourceText: "现代疗愈中心里，造型师为年轻策展人整理耳饰。",
+      assetType: "人物",
+      visualStyle: "3D仿真精致角色",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+    const assetOutputRules = prompt.slice(prompt.indexOf("按下面格式输出"));
+
+    expect(assetOutputRules).toContain("画风锚点：3D仿真精致角色");
+    expect(assetOutputRules).toContain("瓷白或冷白肤色");
+    expect(assetOutputRules).toContain("细腻超清皮肤纹理");
+    expect(assetOutputRules).toContain("自然肌理");
+    expect(assetOutputRules).toContain("避免塑料皮");
+    expect(assetOutputRules).toContain("清透裸妆");
+    expect(assetOutputRules).toContain("发丝层次");
+    expect(assetOutputRules).toContain("精巧饰品");
+    expect(assetOutputRules).toContain("柔和侧光");
+    expect(assetOutputRules).toContain("面部聚焦");
+    expect(assetOutputRules).toContain("8K CG");
+    expect(assetOutputRules).toContain("原文没有规定时，才可根据身份与剧情分配妆容、发型、发色、饰品、动作和展示角度");
+    expect(assetOutputRules).not.toContain("皮克斯动画比例");
+    expect(assetOutputRules).not.toContain("低多边形几何切面");
+  });
+
+  it("routes modern sweet-cool 3D otome characters through their dedicated profile", () => {
+    const template = getTemplate("asset-extraction");
+    const prompt = buildPrompt(template, {
+      sourceText: "都市发布会后台，女设计师与男模特核对登台顺序。",
+      assetType: "人物",
+      visualStyle: "现代甜酷3D乙游",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+    const assetOutputRules = prompt.slice(prompt.indexOf("按下面格式输出"));
+
+    expect(assetOutputRules).toContain("画风锚点：现代甜酷3D乙游");
+    expect(assetOutputRules).toContain("皮革亮面与哑光拼接");
+    expect(assetOutputRules).toContain("蕾丝与金属饰品");
+    expect(assetOutputRules).toContain("女性甜酷造型必须随身份变化");
+    expect(assetOutputRules).toContain("男性采用高级3D乙游主角标准");
+    expect(assetOutputRules).toContain("利落骨相");
+    expect(assetOutputRules).toContain("冷白细腻肤质");
+    expect(assetOutputRules).toContain("高挑比例");
+    expect(assetOutputRules).toContain("肩宽腰窄");
+    expect(assetOutputRules).toContain("暗黑贵族或哥特造型只能在剧情或身份支持时使用");
+    expect(assetOutputRules).toContain("不能把所有男性固定成黑衣贵族");
+    expect(assetOutputRules).not.toContain("古风国漫服饰");
+    expect(assetOutputRules).not.toContain("皮克斯动画比例");
+    expect(assetOutputRules).not.toContain("低多边形几何切面");
+  });
+
+  it("keeps Pixar-style 3D animation vocabulary isolated", () => {
+    const template = getTemplate("asset-extraction");
+    const prompt = buildPrompt(template, {
+      sourceText: "烘焙教室里，店主举起刚出炉的面包。",
+      assetType: "人物",
+      visualStyle: "皮克斯式3D动画",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+    const assetOutputRules = prompt.slice(prompt.indexOf("按下面格式输出"));
+
+    expect(assetOutputRules).toContain("动画化比例");
+    expect(assetOutputRules).toContain("风格化材质");
+    expect(assetOutputRules).not.toContain("毛孔级仿真皮肤");
+    expect(assetOutputRules).not.toContain("真人摄影镜头");
+    expect(assetOutputRules).not.toContain("乙游写实骨相");
+  });
+
+  it("keeps low-poly game character vocabulary isolated", () => {
+    const template = getTemplate("asset-extraction");
+    const prompt = buildPrompt(template, {
+      sourceText: "荒原营地里，机械师背着工具包检查越野车。",
+      assetType: "人物",
+      visualStyle: "低多边形游戏风",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+    const assetOutputRules = prompt.slice(prompt.indexOf("按下面格式输出"));
+
+    expect(assetOutputRules).toContain("低多边形几何切面");
+    expect(assetOutputRules).toContain("简化体块");
+    expect(assetOutputRules).toContain("游戏角色配色");
+    expect(assetOutputRules).not.toContain("次表面散射");
+    expect(assetOutputRules).not.toContain("毛孔");
+    expect(assetOutputRules).not.toContain("摄影级发丝");
+  });
+
+  it("preserves source-first adaptive character design across 3D profiles", () => {
+    const template = getTemplate("asset-extraction");
+    const prompt = buildPrompt(template, {
+      sourceText: "原文明确写明姐姐黑色短发、淡妆、银色耳钉，弟弟棕色卷发、无饰品。",
+      assetType: "人物",
+      visualStyle: "3D仿真精致角色",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+    const assetOutputRules = prompt.slice(prompt.indexOf("按下面格式输出"));
+
+    expect(assetOutputRules).toContain("原文明确的人物年龄、脸型、五官、发型、发色、妆容、服装、饰品和身份优先，不得被模板覆盖");
+    expect(assetOutputRules).toContain("只有原文缺失时，才按人物身份和剧情差异化补全");
+    expect(assetOutputRules).toContain("不同角色的脸型、骨相、眉眼、瞳色、鼻唇、发型发色、妆容、服装配色和饰品组合不得重复");
+    expect(assetOutputRules).toContain("所有明确为成年女性的角色保持：饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿");
+    expect(assetOutputRules).toContain("服装精美华丽，采用收腰、高开衩、薄纱、刺绣和鎏金材质");
+    expect(assetOutputRules).toContain("未成年女性不得套用成年女性身体曲线");
+    expect(assetOutputRules).toContain("老人、儿童、病弱者及特殊身份角色");
   });
 
   it("keeps non-3D character assets aligned with the selected style anchor", () => {
@@ -898,12 +1016,12 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("影视写实");
   });
 
-  it("does not inject character beauty or rendering rules into scene extraction", () => {
+  it.each(["场景", "物品"])("does not inject 3D character profiles into %s extraction", (assetType) => {
     const template = getTemplate("asset-extraction");
     const prompt = buildPrompt(template, {
       sourceText: "雨夜古城的石桥与河岸灯笼。",
-      assetType: "场景",
-      visualStyle: "3D国漫风格",
+      assetType,
+      visualStyle: "3D仿真精致角色",
       imageModel: "gpt-image-2",
       imageRatio: "16:9",
       imageResolution: "1K",
@@ -912,5 +1030,9 @@ describe("buildPrompt", () => {
     expect(prompt).not.toContain("男女主角、核心反派和重要配角使用主角级美型标准");
     expect(prompt).not.toContain("次表面散射");
     expect(prompt).not.toContain("PBR织物材质");
+    expect(prompt).not.toContain("瓷白或冷白肤色");
+    expect(prompt).not.toContain("清透裸妆");
+    expect(prompt).not.toContain("男性采用高级3D乙游主角标准");
+    expect(prompt).not.toContain("低多边形几何切面");
   });
 });
