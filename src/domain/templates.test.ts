@@ -875,10 +875,16 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("老人、儿童、病弱者及特殊身份角色");
     expect(assetOutputRules).toContain("不得套用年轻主角体态、华丽服饰或高开衩设计");
     expect(assetOutputRules).toContain("所有明确为成年女性的角色保持：饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿");
-    expect(assetOutputRules).toContain("服装精美华丽，采用收腰、高开衩、薄纱、刺绣和鎏金材质");
+    expect(assetOutputRules).toContain("服装设计目标保持精美华丽");
+    expect(assetOutputRules).toContain("不得要求每个角色使用同一套或同时使用全部元素");
+    expect(assetOutputRules).toContain("具体款式、露肤度、颜色及收腰/高开衩/薄纱/刺绣/鎏金的组合必须服从原文、年龄、身份、时代、场景和剧情");
+    expect(assetOutputRules).toContain("所有未成年人不得套用成年身体曲线、成人化露肤或高开衩设计");
     expect(assetOutputRules).toContain("女性角色长相必须完全区分");
     expect(assetOutputRules).toContain("根据剧情时代与题材选择古风、玄幻或现代国漫造型");
     expect(assetOutputRules).toContain("不得固定为古装或哥特乙游造型");
+    expect(assetOutputRules).toContain("古风女性可根据原文、身份和剧情使用锦缎、渐变配色、腰封、金簪和刺绣鞋履");
+    expect(assetOutputRules).toContain("现代剧情不得套用古装");
+    expect(assetOutputRules).toContain("男性必须按仙侠、权谋、现代国漫等身份适配造型，不得固定为乙游哥特模板");
   });
 
   it("routes simulated refined 3D characters through their dedicated profile", () => {
@@ -898,12 +904,15 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("细腻超清皮肤纹理");
     expect(assetOutputRules).toContain("自然肌理");
     expect(assetOutputRules).toContain("避免塑料皮");
+    expect(assetOutputRules).toContain("精致立体五官、三庭五眼比例均衡、眼神有神");
     expect(assetOutputRules).toContain("清透裸妆");
     expect(assetOutputRules).toContain("发丝层次");
     expect(assetOutputRules).toContain("精巧饰品");
     expect(assetOutputRules).toContain("柔和侧光");
     expect(assetOutputRules).toContain("面部聚焦");
     expect(assetOutputRules).toContain("8K CG");
+    expect(assetOutputRules).toContain("姿态、表情、服装、露肤度必须服从年龄与剧情");
+    expect(assetOutputRules).toContain("“19岁少女”“娇羞”“天蓝色上衣”等只能在原文支持或原文缺失时作为受控参考，不得复制给所有人物");
     expect(assetOutputRules).toContain("原文没有规定时，才可根据身份与剧情分配妆容、发型、发色、饰品、动作和展示角度");
     expect(assetOutputRules).not.toContain("皮克斯动画比例");
     expect(assetOutputRules).not.toContain("低多边形几何切面");
@@ -925,13 +934,18 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("皮革亮面与哑光拼接");
     expect(assetOutputRules).toContain("蕾丝与金属饰品");
     expect(assetOutputRules).toContain("女性甜酷造型必须随身份变化");
+    expect(assetOutputRules).toContain("女性可根据原文、身份和剧情使用金属胸牌、流苏耳坠、多层项链、戒指、长袜和厚底鞋");
     expect(assetOutputRules).toContain("男性采用高级3D乙游主角标准");
     expect(assetOutputRules).toContain("利落骨相");
     expect(assetOutputRules).toContain("冷白细腻肤质");
     expect(assetOutputRules).toContain("高挑比例");
     expect(assetOutputRules).toContain("肩宽腰窄");
-    expect(assetOutputRules).toContain("暗黑贵族或哥特造型只能在剧情或身份支持时使用");
+    expect(assetOutputRules).toContain("男性或贵族造型可根据原文、身份和剧情使用提花、缎面、藤蔓刺绣、胸针、银链、领结、腰饰、手套和皮靴");
+    expect(assetOutputRules).toContain("暗黑贵族造型只能在剧情或身份支持时使用");
+    expect(assetOutputRules).toContain("哥特设定仅在原文、身份或用户选择支持时使用");
     expect(assetOutputRules).toContain("不能把所有男性固定成黑衣贵族");
+    expect(assetOutputRules).toContain("工业角色设定图排版感");
+    expect(assetOutputRules).toContain("不得出现图纸文字、尺寸标注、编号或水印");
     expect(assetOutputRules).not.toContain("古风国漫服饰");
     expect(assetOutputRules).not.toContain("皮克斯动画比例");
     expect(assetOutputRules).not.toContain("低多边形几何切面");
@@ -1007,8 +1021,10 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("只有原文缺失时，才按人物身份和剧情差异化补全");
     expect(assetOutputRules).toContain("不同角色的脸型、骨相、眉眼、瞳色、鼻唇、发型发色、妆容、服装配色和饰品组合不得重复");
     expect(assetOutputRules).toContain("所有明确为成年女性的角色保持：饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿");
-    expect(assetOutputRules).toContain("服装精美华丽，采用收腰、高开衩、薄纱、刺绣和鎏金材质");
-    expect(assetOutputRules).toContain("未成年女性不得套用成年女性身体曲线");
+    expect(assetOutputRules).toContain("服装设计目标保持精美华丽");
+    expect(assetOutputRules).toContain("不得要求每个角色使用同一套或同时使用全部元素");
+    expect(assetOutputRules).toContain("具体款式、露肤度、颜色及收腰/高开衩/薄纱/刺绣/鎏金的组合必须服从原文、年龄、身份、时代、场景和剧情");
+    expect(assetOutputRules).toContain("所有未成年人不得套用成年身体曲线、成人化露肤或高开衩设计");
     expect(assetOutputRules).toContain("老人、儿童、病弱者及特殊身份角色");
   });
 
