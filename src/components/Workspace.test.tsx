@@ -75,6 +75,16 @@ afterEach(() => {
 });
 
 describe("removeStaleCharacterStyleField", () => {
+  it("preserves the character role field after removing stale style", () => {
+    const result = removeStaleCharacterStyleField(
+      "整体风格：旧风格；角色身份：珠宝设计师；服装：黑色风衣",
+    );
+
+    expect(result).not.toContain("整体风格：旧风格");
+    expect(result).toContain("角色身份：珠宝设计师");
+    expect(result).toContain("服装：黑色风衣");
+  });
+
   it.each([
     {
       source: "整体风格：old；饰品：银耳坠；人物的身份：设计师",

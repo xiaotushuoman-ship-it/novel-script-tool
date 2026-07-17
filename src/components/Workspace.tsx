@@ -102,6 +102,7 @@ const CHARACTER_FIELD_SEPARATOR = "(?:\\r\\n|\\n|\\r|[；;。.!！?？,，、])"
 const CHARACTER_FIELD_NAMES = [
   "角色等级",
   "人物外貌",
+  "角色身份",
   "人物身份",
   "人物的身份",
   "身份",
