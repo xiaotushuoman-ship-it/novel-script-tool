@@ -369,8 +369,6 @@ describe("buildPrompt", () => {
     expect(fields.videoRatio.options).toContain("横屏16:9");
     expect(fields.videoRatio.options).toContain("电影宽屏21:9");
     expect(fields.visualStyle.options).toContain("3D国漫风格");
-    expect(fields.visualStyle.options).not.toContain("3D仿真精致角色");
-    expect(fields.visualStyle.options).not.toContain("现代甜酷3D乙游");
     expect(fields.visualStyle.options).toContain("复古欧美原子朋克风格");
     expect(fieldKeys).not.toContain("previousEnding");
     expect(fieldKeys).not.toContain("nextOpening");
@@ -378,6 +376,18 @@ describe("buildPrompt", () => {
     expect(fieldKeys).not.toContain("sceneAssets");
     expect(fieldKeys).not.toContain("propAssets");
   });
+
+  it.each(["storyboard-15s", "gpt-image2-storyboard", "xiaotu-skill", "seedance-video"] as const)(
+    "keeps character-only 3D styles out of %s",
+    (templateId) => {
+      const template = getTemplate(templateId);
+      const visualStyle = template.fields.find((field) => field.key === "visualStyle");
+
+      expect(visualStyle).toBeDefined();
+      expect(visualStyle?.options).not.toContain("3D仿真精致角色");
+      expect(visualStyle?.options).not.toContain("现代甜酷3D乙游");
+    },
+  );
 
   it("configures one-click script polish as a Douyin-safe rewrite workflow", () => {
     const template = getTemplate("script-polish");
@@ -688,8 +698,6 @@ describe("buildPrompt", () => {
 
     expect(template.name).toBe("GPT-image2 六宫格故事板");
     expect(template.description).toContain("图片提示词");
-    expect(fields.visualStyle.options).not.toContain("3D仿真精致角色");
-    expect(fields.visualStyle.options).not.toContain("现代甜酷3D乙游");
     expect(prompt).toContain("GPT-image-2");
     expect(prompt).toContain("_::~OUTPUT_START::~_");
     expect(prompt).toContain("_::~FIELD::~_");

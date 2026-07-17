@@ -156,7 +156,7 @@ const ASSET_CHARACTER_STYLE_OPTIONS = [
   "3D国漫风格",
   "3D仿真精致角色",
   "现代甜酷3D乙游",
-  ...STORYBOARD_STYLE_OPTIONS.slice(1),
+  ...STORYBOARD_STYLE_OPTIONS.filter((style) => style !== "3D国漫风格"),
 ];
 
 export const IMAGE_MODEL_OPTIONS = [
