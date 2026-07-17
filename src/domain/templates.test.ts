@@ -828,7 +828,8 @@ describe("buildPrompt", () => {
     expect(simulationPrompt).toContain("所有明确为成年女性的角色保持：饱满S曲线");
     expect(simulationPrompt).toContain("清透裸妆");
     expect(simulationPrompt).toContain("【人物】林晚：");
-    expect(otomePrompt).toContain("男性采用高级3D乙游主角标准");
+    expect(simulationPrompt).toContain("人物格式示例只展示字段结构，示例人物的年龄、肤色、体态、职业和造型不得复制给原文角色");
+    expect(otomePrompt).toContain("高级3D乙游主角标准仅可作为原文未规定、适龄的男主角、重要男性或乙游定位角色候选");
   });
 
   it("keeps non-realistic asset character style wording from polluting the image prompt", () => {
@@ -900,8 +901,10 @@ describe("buildPrompt", () => {
     const assetOutputRules = prompt.slice(prompt.indexOf("按下面格式输出"));
 
     expect(assetOutputRules).toContain("画风锚点：3D仿真精致角色");
-    expect(assetOutputRules).toContain("瓷白或冷白肤色");
+    expect(assetOutputRules).toContain("瓷白或冷白仅可作为原文未明确肤色、适龄且角色定位适用的精致主角候选");
+    expect(assetOutputRules).toContain("原文明确的深肤色、健康小麦色、风霜肤色，以及老人、儿童的肤色必须保持，不得被候选肤色覆盖");
     expect(assetOutputRules).toContain("细腻超清皮肤纹理");
+    expect(assetOutputRules).toContain("细腻超清皮肤纹理只表示渲染质量，不等于统一肤色");
     expect(assetOutputRules).toContain("自然肌理");
     expect(assetOutputRules).toContain("避免塑料皮");
     expect(assetOutputRules).toContain("精致立体五官、三庭五眼比例均衡、眼神有神");
@@ -933,13 +936,14 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("画风锚点：现代甜酷3D乙游");
     expect(assetOutputRules).toContain("皮革亮面与哑光拼接");
     expect(assetOutputRules).toContain("蕾丝与金属饰品");
-    expect(assetOutputRules).toContain("女性甜酷造型必须随身份变化");
+    expect(assetOutputRules).toContain("女性甜酷造型仅可作为原文未规定、适龄且身份定位适用的女性角色候选");
     expect(assetOutputRules).toContain("女性可根据原文、身份和剧情使用金属胸牌、流苏耳坠、多层项链、戒指、长袜和厚底鞋");
-    expect(assetOutputRules).toContain("男性采用高级3D乙游主角标准");
+    expect(assetOutputRules).toContain("高级3D乙游主角标准仅可作为原文未规定、适龄的男主角、重要男性或乙游定位角色候选");
     expect(assetOutputRules).toContain("利落骨相");
     expect(assetOutputRules).toContain("冷白细腻肤质");
     expect(assetOutputRules).toContain("高挑比例");
     expect(assetOutputRules).toContain("肩宽腰窄");
+    expect(assetOutputRules).toContain("原文明确的矮壮、魁梧、瘦小、年长、普通职业等体态、年龄和身份优先，不得被冷白、高挑、肩宽腰窄等候选覆盖");
     expect(assetOutputRules).toContain("男性或贵族造型可根据原文、身份和剧情使用提花、缎面、藤蔓刺绣、胸针、银链、领结、腰饰、手套和皮靴");
     expect(assetOutputRules).toContain("暗黑贵族造型只能在剧情或身份支持时使用");
     expect(assetOutputRules).toContain("哥特设定仅在原文、身份或用户选择支持时使用");
@@ -949,6 +953,37 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).not.toContain("古风国漫服饰");
     expect(assetOutputRules).not.toContain("皮克斯动画比例");
     expect(assetOutputRules).not.toContain("低多边形几何切面");
+  });
+
+  it("keeps explicit skin tone, body type, age, and role details above 3D profile candidates", () => {
+    const template = getTemplate("asset-extraction");
+    const sourceText = "深肤色女主与矮壮普通男性陪白发老人和儿童走进社区活动室。";
+    const simulationPrompt = buildPrompt(template, {
+      sourceText,
+      assetType: "人物",
+      visualStyle: "3D仿真精致角色",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+    const otomePrompt = buildPrompt(template, {
+      sourceText,
+      assetType: "人物",
+      visualStyle: "现代甜酷3D乙游",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+
+    expect(simulationPrompt).toContain("原文明确的深肤色、健康小麦色、风霜肤色，以及老人、儿童的肤色必须保持，不得被候选肤色覆盖");
+    expect(simulationPrompt).toContain("瓷白或冷白仅可作为原文未明确肤色、适龄且角色定位适用的精致主角候选");
+    expect(otomePrompt).toContain("原文明确的矮壮、魁梧、瘦小、年长、普通职业等体态、年龄和身份优先，不得被冷白、高挑、肩宽腰窄等候选覆盖");
+    expect(otomePrompt).toContain("高级3D乙游主角标准仅可作为原文未规定、适龄的男主角、重要男性或乙游定位角色候选");
+    for (const prompt of [simulationPrompt, otomePrompt]) {
+      expect(prompt).toContain("原文明确的人物年龄、脸型、五官、发型、发色、妆容、服装、饰品和身份优先，不得被模板覆盖");
+      expect(prompt).toContain("所有未成年人不得套用成年身体曲线、成人化露肤或高开衩设计");
+      expect(prompt).toContain("老人、儿童、病弱者及特殊身份角色必须按年龄和剧情塑造");
+    }
   });
 
   it("keeps Pixar-style 3D animation vocabulary isolated", () => {
