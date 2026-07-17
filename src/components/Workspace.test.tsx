@@ -4391,6 +4391,88 @@ describe("Workspace asset extraction image generation", () => {
     expect(prompt).not.toContain("PBR国风材质");
   });
 
+  it.each([
+    {
+      caseName: "after appearance and before identity",
+      description:
+        "人物外貌：二十岁出头，瓜子脸，黑色长卷发；整体风格：画风锚点：3D国漫风格，次表面散射，PBR国风材质；人物的身份：现代珠宝设计师；服装：酒红色短款皮夹克，黑色不对称长裙",
+    },
+    {
+      caseName: "before appearance, identity, and clothing",
+      description:
+        "整体风格：画风锚点：3D国漫风格，次表面散射，PBR国风材质；人物外貌：二十岁出头，瓜子脸，黑色长卷发；人物的身份：现代珠宝设计师；服装：酒红色短款皮夹克，黑色不对称长裙",
+    },
+  ])("filters stale inline character style fields $caseName", async ({ description }) => {
+    callImageGenerationMock.mockResolvedValue("https://img.example.com/inline-restyled-asset.png");
+    const project = createProject("人物单行画风过滤测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = `【人物】林晚：${description}`;
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚是现代珠宝设计师。",
+      assetType: "人物",
+      visualStyle: "现代甜酷3D乙游",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
+    const prompt = callImageGenerationMock.mock.calls[0][1] as string;
+    expect(prompt).toContain("指定画风：现代甜酷3D乙游");
+    expect(prompt).toContain("画风锚点：现代甜酷3D乙游");
+    expect(prompt).toContain("皮革亮面与哑光拼接");
+    expect(prompt).toContain("高级3D乙游主角标准");
+    expect(prompt).toContain("人物外貌：二十岁出头，瓜子脸，黑色长卷发");
+    expect(prompt).toContain("人物的身份：现代珠宝设计师");
+    expect(prompt).toContain("服装：酒红色短款皮夹克，黑色不对称长裙");
+    expect(prompt).not.toContain("画风锚点：3D国漫风格");
+    expect(prompt).not.toContain("次表面散射");
+    expect(prompt).not.toContain("PBR国风材质");
+  });
+
+  it("keeps ordinary character prose that mentions overall style", async () => {
+    callImageGenerationMock.mockResolvedValue("https://img.example.com/character-style-note.png");
+    const project = createProject("人物普通画风用语保留测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft =
+      "【人物】林晚：人物外貌：二十岁出头，瓜子脸；造型备注：她认为整体风格需要克制；人物的身份：现代珠宝设计师；服装：酒红色短款皮夹克";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚是现代珠宝设计师。",
+      assetType: "人物",
+      visualStyle: "现代甜酷3D乙游",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
+    expect(callImageGenerationMock.mock.calls[0][1]).toContain("造型备注：她认为整体风格需要克制");
+  });
+
   it("does not show 2K or 4K upscale controls in image result cards or preview dialog", async () => {
     callImageGenerationMock.mockResolvedValueOnce("https://img.example.com/preview.png");
     const project = createProject("预览内高清放大测试");

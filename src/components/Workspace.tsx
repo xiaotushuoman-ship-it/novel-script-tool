@@ -98,6 +98,22 @@ function isInlineImageDataUrl(src: string) {
   return /^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(src);
 }
 
+const CHARACTER_ASSET_FIELD_LABEL =
+  "(?:角色等级|人物外貌|人物的身份|人物身份|角色身份|图片的结构|图片结构|服装)";
+const STALE_CHARACTER_STYLE_FIELD = new RegExp(
+  `(^|[；;])\\s*整体风格[：:]\\s*[^\\r\\n]*?(?=[；;]\\s*${CHARACTER_ASSET_FIELD_LABEL}[：:]|\\r?$)`,
+  "gm",
+);
+
+function removeStaleCharacterStyleField(description: string) {
+  return description
+    .replace(STALE_CHARACTER_STYLE_FIELD, "")
+    .replace(/^[ \t]*[；;][ \t]*/gm, "")
+    .replace(/[；;][ \t]*[；;]+/g, "；")
+    .replace(/[ \t]+$/gm, "")
+    .trim();
+}
+
 type TopicRecommendationState = {
   isLoading: boolean;
   source: "local" | "ai";
@@ -2976,10 +2992,9 @@ export function Workspace({
     const imageResolution = (inputs.imageResolution ?? "1K").trim();
     const sourceText = (
       assetDescription
-        ? assetDescription
-            .split(/\r?\n/)
-            .filter((line) => !(assetType === "人物" && /^整体风格[：:]/.test(line.trim())))
-            .join("\n")
+        ? assetType === "人物"
+          ? removeStaleCharacterStyleField(assetDescription)
+          : assetDescription
         : inputs.sourceText || ""
     ).trim();
 
