@@ -1,9 +1,21 @@
 // @vitest-environment node
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
-import { forwardLocalTimeAiRequest } from "../../vite.config.ts";
+import { VITE_WATCH_IGNORED, forwardLocalTimeAiRequest } from "../../vite.config.ts";
 
 describe("Vite local TimeAI proxy", () => {
+  it("ignores generated installers and Electron caches that can be locked during updates", () => {
+    expect(VITE_WATCH_IGNORED).toEqual(
+      expect.arrayContaining([
+        "**/.electron-cache/**",
+        "**/.electron-builder-cache/**",
+        "**/release/**",
+        "**/dist/**",
+        "**/.installer-update-smoke/**",
+      ]),
+    );
+  });
+
   it("flushes streaming responses before the upstream finishes", async () => {
     const originalFetch = globalThis.fetch;
     const encoder = new TextEncoder();

@@ -1,4 +1,4 @@
-﻿import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StrictMode, useState } from "react";
 import { createProject } from "../domain/projects";
@@ -3237,7 +3237,7 @@ describe("Workspace asset extraction image generation", () => {
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
     const prompt = callImageGenerationMock.mock.calls[0][1] as string;
     expect(prompt).toContain("人物外貌：女性");
-    expect(prompt).toContain("整体风格：3D国漫风格");
+    expect(prompt).not.toContain("整体风格：3D国漫风格");
     expect(prompt).toContain("指定画风：3D国漫风格");
     expect(prompt).toContain("图片的结构：左边人物正面近景肖像");
     expect(prompt).toContain("人物三视图生产参考图");
@@ -4282,7 +4282,11 @@ describe("Workspace asset extraction image generation", () => {
     expect(prompt).toContain("下方三块不出现头部和五官");
     expect(prompt).toContain("双手自然下垂");
     expect(prompt).toContain("双脚完整可见");
-    expect(prompt).toContain("优先遵循“该资产的提取内容”中的人物外貌、整体风格、人物身份和图片结构");
+    expect(prompt).toContain("优先遵循“该资产的提取内容”中的角色等级、人物外貌、人物身份和图片结构");
+    expect(prompt).toContain("整体风格仅以当前指定画风为准");
+    expect(prompt).toContain("角色美型要求：严格保留该资产提取内容中的角色等级");
+    expect(prompt).toContain("风格材质只能由当前画风锚点决定");
+    expect(prompt).toContain("不得把普通配角、老人、儿童或病弱角色强行主角化");
     expect(prompt).not.toContain("人物统一后缀：2x2同一人角色设定图");
     expect(prompt).not.toContain("FULL BODY NECK DOWN, NO FACE");
     expect(prompt).not.toContain("Top-left");
@@ -4291,6 +4295,48 @@ describe("Workspace asset extraction image generation", () => {
       "src",
       "https://img.example.com/edited-asset.png",
     );
+  });
+
+  it("uses the currently selected style instead of stale extracted character style text", async () => {
+    callImageGenerationMock.mockResolvedValue("https://img.example.com/restyled-asset.png");
+    const project = createProject("人物切换画风测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = [
+      "【人物】林晚：",
+      "角色等级：女主角",
+      "人物外貌：二十岁出头，瓜子脸，眉眼清雅。",
+      "整体风格：画风锚点：3D国漫风格，次表面散射，PBR织物材质。",
+      "人物的身份：古城药师。",
+      "图片的结构：人物三视图生产参考图。",
+    ].join("\n");
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚是古城药师。",
+      assetType: "人物",
+      visualStyle: "水墨国风动画",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
+    const prompt = callImageGenerationMock.mock.calls[0][1] as string;
+    expect(prompt).toContain("角色等级：女主角");
+    expect(prompt).toContain("指定画风：水墨国风动画");
+    expect(prompt).not.toContain("画风锚点：3D国漫风格");
+    expect(prompt).not.toContain("次表面散射");
+    expect(prompt).not.toContain("PBR织物材质");
   });
 
   it("does not show 2K or 4K upscale controls in image result cards or preview dialog", async () => {

@@ -1,4 +1,4 @@
-﻿import { Bot, Clipboard, Download, FileImage, FileUp, Play, Save, Trash2 } from "lucide-react";
+import { Bot, Clipboard, Download, FileImage, FileUp, Play, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DirectorDeskStep } from "./DirectorDeskStep";
 import { callAi, callAiStream, callImageGeneration, type AiSettings } from "../domain/aiClient";
@@ -2968,12 +2968,19 @@ export function Workspace({
 
   function buildImageGenerationPrompt(inputs: Record<string, string>, asset?: ExtractedAsset) {
     const assetDescription = asset?.description?.trim() || "";
-    const sourceText = (assetDescription || inputs.sourceText || "").trim();
     const assetType = (asset?.type || inputs.assetType || "人物").trim();
     const assetTarget = (asset?.name || assetType).trim();
     const visualStyle = (inputs.visualStyle ?? "3D国漫风格").trim();
     const imageRatio = (inputs.imageRatio ?? "16:9").trim();
     const imageResolution = (inputs.imageResolution ?? "1K").trim();
+    const sourceText = (
+      assetDescription
+        ? assetDescription
+            .split(/\r?\n/)
+            .filter((line) => !(assetType === "人物" && /^整体风格[：:]/.test(line.trim())))
+            .join("\n")
+        : inputs.sourceText || ""
+    ).trim();
 
     return [
       "请严格按照以下内容生成单张图片，不要改写为其他题材，不要忽略风格。",
@@ -2992,7 +2999,8 @@ export function Workspace({
             "图片结构强制：上方三分之一为正面脸部近景头像；下方三分之二严格分成三个等比例竖向面板，依次展示从颈部以下到脚部的正面、侧面、背面身体视图。",
             "下方身体视图要求：下方三块不出现头部和五官，双手自然下垂，双脚完整可见，三块比例一致、间距清楚。",
             `画风锁定：所有风格附加词必须跟随“${visualStyle}”，不要追加与该画风冲突的固定摄影类、真人类、通用写实类或三维排除类参数，除非该画风锚点本身明确需要。`,
-            "人物一致性要求：顶部头像与下方三视图必须是同一角色、同一服装、同一风格、同一光影，正侧背身体比例统一；优先遵循“该资产的提取内容”中的人物外貌、整体风格、人物身份和图片结构。",
+            "人物一致性要求：顶部头像与下方三视图必须是同一角色、同一服装、同一风格、同一光影，正侧背身体比例统一；优先遵循“该资产的提取内容”中的角色等级、人物外貌、人物身份和图片结构；整体风格仅以当前指定画风为准。",
+            "角色美型要求：严格保留该资产提取内容中的角色等级、原创五官、气质、体态、发型、服装和身份记忆点；男女主角、核心反派和重要配角保持主角级精致度，普通配角与特殊年龄角色保持剧情真实度，不得把普通配角、老人、儿童或病弱角色强行主角化。风格材质只能由当前画风锚点决定。",
             "画面清洁要求：不要字幕、水印、logo、编号、面板标题、文字栏、表格线、说明卡片或多余文字。",
             "服装设计要求：像服装设计总监一样根据人物身份、职业、阶层、年龄、时代地域、生活状态和剧情处境设计服装；不要把所有人物默认生成西装、同款制服、同款黑衣或同一套现代通勤装，除非资产内容明确需要。必须体现剪裁、面料、颜色、磨损、配饰、鞋履或袖口领口等差异化识别点。",
             "脸部原创要求：人物长相必须原创、生活化、有辨识度，不得撞脸当红网红、明星、艺人、博主；不要网红脸、明星同款脸、精修模板脸、韩式爱豆脸或蛇精脸，五官、脸型、肤质和年龄感要服务角色身份。",

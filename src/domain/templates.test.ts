@@ -761,6 +761,7 @@ describe("buildPrompt", () => {
     expect(template.body).toContain("禁止所有人物默认统一穿西装");
     expect(template.body).toContain("不得撞脸当红网红、明星、艺人、博主");
     expect(template.body).toContain("人物外貌：");
+    expect(template.body).toContain("角色等级：");
     expect(template.body).toContain("整体风格：根据画风锚点{{visualStyle}}");
     expect(template.body).toContain("画风附加词必须由画风锚点{{visualStyle}}决定");
     expect(template.body).toContain("{{assetCharacterStyleRule}}");
@@ -835,11 +836,15 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("次世代高精度建模");
     expect(assetOutputRules).toContain("PBR国风材质");
     expect(assetOutputRules).toContain("鞋履完整包裹双脚");
-    expect(assetOutputRules).toContain("所有明确为成年女性的角色统一保持：饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿");
-    expect(assetOutputRules).toContain("服装精美华丽，以收腰剪裁和高开衩设计突出角色轮廓");
-    expect(assetOutputRules).toContain("未成年女性角色不得套用成人身体曲线或高开衩服装描述");
     expect(assetOutputRules).toContain("男性角色的肩背、腰身、肌肉量和站姿必须服从年龄、身份、职业、时代与剧情");
-    expect(assetOutputRules).toContain("不得把老人、少年、病弱者、文职角色和劳动者统一写成宽肩窄腰的青年体型");
+    expect(assetOutputRules).toContain("男女主角、核心反派和重要配角使用主角级美型标准");
+    expect(assetOutputRules).toContain("清雅、飒爽、温婉、冷艳、明艳等气质必须由剧情决定");
+    expect(assetOutputRules).toContain("次表面散射");
+    expect(assetOutputRules).toContain("PBR织物材质");
+    expect(assetOutputRules).toContain("普通成年配角保持协调、自然、有辨识度");
+    expect(assetOutputRules).toContain("老人、儿童、病弱者及特殊身份角色");
+    expect(assetOutputRules).toContain("不得套用年轻主角体态、华丽服饰或高开衩设计");
+    expect(assetOutputRules).not.toContain("所有明确为成年女性的角色统一保持");
   });
 
   it("keeps non-3D character assets aligned with the selected style anchor", () => {
@@ -857,6 +862,8 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("整体风格首句必须明确写出“画风锚点：水墨国风动画”");
     expect(assetOutputRules).toContain("只能使用水墨国风动画对应的材质、线条、色彩、光影和角色设计语言");
     expect(assetOutputRules).toContain("禁止混入3D建模、PBR材质、真人摄影或影视写实描述");
+    expect(assetOutputRules).not.toContain("次表面散射");
+    expect(assetOutputRules).not.toContain("PBR织物材质");
   });
 
   it("allows realistic wording only when the asset style anchor is cinematic realism", () => {
@@ -873,5 +880,21 @@ describe("buildPrompt", () => {
 
     expect(assetOutputRules).toContain("当前画风锚点属于影视写实方向");
     expect(assetOutputRules).toContain("影视写实");
+  });
+
+  it("does not inject character beauty or rendering rules into scene extraction", () => {
+    const template = getTemplate("asset-extraction");
+    const prompt = buildPrompt(template, {
+      sourceText: "雨夜古城的石桥与河岸灯笼。",
+      assetType: "场景",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+
+    expect(prompt).not.toContain("男女主角、核心反派和重要配角使用主角级美型标准");
+    expect(prompt).not.toContain("次表面散射");
+    expect(prompt).not.toContain("PBR织物材质");
   });
 });

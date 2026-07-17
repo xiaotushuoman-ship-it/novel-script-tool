@@ -4,6 +4,14 @@ import { defineConfig, type Plugin } from "vite";
 
 const TIMEAI_BASE_URL = "https://timeai.chat";
 const AISTARSLAB_BASE_URL = "https://api.video.aistarslab.com";
+export const VITE_WATCH_IGNORED = [
+  "**/fix-storyboard.js",
+  "**/.electron-cache/**",
+  "**/.electron-builder-cache/**",
+  "**/release/**",
+  "**/dist/**",
+  "**/.installer-update-smoke/**",
+];
 
 function timeAiLocalProxy(): Plugin {
   return {
@@ -256,7 +264,7 @@ export default defineConfig({
   plugins: [timeAiLocalProxy(), aistarsLabLocalProxy(), react()],
   server: {
     watch: {
-      ignored: ["**/fix-storyboard.js"],
+      ignored: VITE_WATCH_IGNORED,
     },
     proxy: {
       "/api/zzdh": {
