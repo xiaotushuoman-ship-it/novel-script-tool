@@ -56,8 +56,26 @@ describe("resolveAssetCharacterBodyStandard", () => {
     "成年男性，现代都市，黑色西装",
     "性别：男；年龄：27岁；都市设计师",
     "男性，三十岁，职场通勤",
+    "性别：男；年龄：59岁；现代职场",
   ])("routes %s to the modern adult male standard", (description) => {
     expect(resolveAssetCharacterBodyStandard(description)).toBe(MODERN_ADULT_MALE_BODY_STANDARD);
+  });
+
+  it.each([
+    "性别：女；年龄：80岁；时代：现代",
+    "九十岁古代男性",
+    "七旬老者",
+    "六十多岁女性",
+    "性别：女；年龄：60岁；时代：现代",
+    "八十岁现代男性",
+    "六旬女性",
+  ])("routes senior age wording in %s to the exception standard", (description) => {
+    const result = resolveAssetCharacterBodyStandard(description);
+
+    expect(result).toBe(EXCEPTION_BODY_STANDARD);
+    expect(result).not.toContain("饱满S曲线");
+    expect(result).not.toContain("标准宽肩窄腰");
+    expect(result).not.toContain("宽肩阔背");
   });
 
   it.each([
@@ -165,6 +183,8 @@ describe("ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS", () => {
     expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain(EXCEPTION_BODY_STANDARD);
     expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain("男性原文体态优先");
     expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain("不得写“按统一标准”“身材好”或省略");
+    expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain("18至59岁");
+    expect(ASSET_CHARACTER_BODY_STANDARD_INSTRUCTIONS).toContain("60岁及以上");
   });
 
   it.each(["3D国漫", "3D仿真", "现代甜酷3D乙游", "皮克斯", "低多边形", "非3D"])(
