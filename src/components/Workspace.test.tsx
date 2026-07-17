@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StrictMode, useState } from "react";
 import { createProject } from "../domain/projects";
-import { removeStaleCharacterStyleField, Workspace } from "./Workspace";
+import { normalizeAssetVisualStyle, removeStaleCharacterStyleField, Workspace } from "./Workspace";
 import { within } from "@testing-library/react";
 
 const callAiMock = vi.fn();
@@ -128,6 +128,34 @@ describe("removeStaleCharacterStyleField", () => {
     const source = "整体风格：old。人物的身份：药师。服装：青袍。饰品：银簪";
 
     expect(removeStaleCharacterStyleField(source)).toBe("人物的身份：药师。服装：青袍。饰品：银簪");
+  });
+
+  it.each([
+    {
+      source: "整体风格：旧风格；性别：女性；年龄：26岁；体态：纤细；鞋履：黑色短靴；人物的身份：设计师",
+      expected: "性别：女性；年龄：26岁；体态：纤细；鞋履：黑色短靴；人物的身份：设计师",
+    },
+    {
+      source: "整体风格：旧风格。肤色：冷白；发色：浅紫；配饰细节：银链；备注信息：左眼泪痣",
+      expected: "肤色：冷白；发色：浅紫；配饰细节：银链；备注信息：左眼泪痣",
+    },
+    {
+      source: "人物外貌：瓜子脸\r\n整体风格：旧风格\r\n次表面散射、锦缎光泽\r\n性别：女性\r\n鞋履：黑色短靴",
+      expected: "人物外貌：瓜子脸\r\n性别：女性\r\n鞋履：黑色短靴",
+    },
+  ])("stops stale style cleanup at any short structured field label", ({ source, expected }) => {
+    expect(removeStaleCharacterStyleField(source)).toBe(expected);
+  });
+});
+
+describe("normalizeAssetVisualStyle", () => {
+  it.each([
+    { assetType: "人物", visualStyle: "3D仿真精致角色", expected: "3D仿真精致角色" },
+    { assetType: "场景", visualStyle: "3D仿真精致角色", expected: "3D国漫风格" },
+    { assetType: "物品", visualStyle: "现代甜酷3D乙游", expected: "3D国漫风格" },
+    { assetType: "场景", visualStyle: "影视写实现代", expected: "影视写实现代" },
+  ])("normalizes $assetType style $visualStyle", ({ assetType, visualStyle, expected }) => {
+    expect(normalizeAssetVisualStyle(assetType, visualStyle)).toBe(expected);
   });
 });
 
@@ -3203,6 +3231,50 @@ describe("Workspace asset extraction image generation", () => {
     expect(extractionPrompt).toContain("不要输出人物资产");
     expect(extractionPrompt).toContain("不要输出物品资产");
     expect(extractionPrompt).toContain("【场景】场景名称：");
+  });
+
+  it.each([
+    {
+      assetType: "场景",
+      legacyStyle: "3D仿真精致角色",
+      result: "【场景】破碎祭坛：月光、石柱、暗红符文。",
+    },
+    {
+      assetType: "物品",
+      legacyStyle: "现代甜酷3D乙游",
+      result: "【物品】重斧：黑铁斧刃、暗红符文。",
+    },
+  ])("normalizes legacy character-only style before $assetType text extraction", async ({ assetType, legacyStyle, result }) => {
+    mockStreamTextOnce(result);
+    const project = createProject("历史人物专用画风文本提取测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "顾玄站在破碎祭坛，夜魁手持重斧，暗红符文照亮石柱。",
+      assetType,
+      visualStyle: legacyStyle,
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
+
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
+    const extractionPrompt = callAiStreamMock.mock.calls[0][1] as string;
+    expect(extractionPrompt).toContain(`本次只提取：${assetType}`);
+    expect(extractionPrompt).toContain("画风锚点：3D国漫风格");
+    expect(extractionPrompt).not.toContain("3D仿真精致角色");
+    expect(extractionPrompt).not.toContain("现代甜酷3D乙游");
   });
 
   it("detects multiple extracted assets and generates their images concurrently", async () => {
