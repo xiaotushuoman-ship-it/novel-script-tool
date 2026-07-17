@@ -769,36 +769,19 @@ describe("buildPrompt", () => {
     expect(fields.imageResolution.defaultValue).toBe("1K");
     expect(fields.imageResolution.options).toEqual(["1K", "2K", "4K"]);
     expect(template.body).not.toContain("补全说明");
-    expect(template.body).toContain("性别、年龄感");
-    expect(template.body).toContain("服装");
-    expect(template.body).toContain("像服装设计总监一样");
-    expect(template.body).toContain("禁止所有人物默认统一穿西装");
-    expect(template.body).toContain("不得撞脸当红网红、明星、艺人、博主");
-    expect(template.body).toContain("人物外貌：");
-    expect(template.body).toContain("角色等级：");
-    expect(template.body).toContain("整体风格：根据画风锚点{{visualStyle}}");
-    expect(template.body).toContain("画风附加词必须由画风锚点{{visualStyle}}决定");
-    expect(template.body).toContain("{{assetCharacterStyleRule}}");
+    expect(template.body).toContain("{{assetCharacterOnlyInstructions}}");
+    expect(template.body).toContain("{{assetCharacterOutputFormat}}");
+    expect(template.body).toContain("{{assetCharacterExample}}");
+    expect(template.body).not.toContain("人物资产必须全量提取");
+    expect(template.body).not.toContain("像服装设计总监一样");
+    expect(template.body).not.toContain("人物长相必须原创");
+    expect(template.body).not.toContain("人物三视图生产参考图");
     expect(template.body).not.toContain("Hyperrealistic photographic 35mm film");
     expect(template.body).not.toContain("NOT 3D");
-    expect(template.body).toContain("人物三视图生产参考图");
-    expect(template.body).toContain("纯白背景");
-    expect(template.body).toContain("上方三分之一为正面脸部近景头像");
-    expect(template.body).toContain("下方三分之二严格分成三个等比例竖向面板");
-    expect(template.body).toContain("颈部以下到脚部的正面、侧面、背面身体视图");
-    expect(template.body).toContain("下方三块不出现头部和五官");
-    expect(template.body).toContain("双手自然下垂");
-    expect(template.body).toContain("双脚完整可见");
-    expect(template.body).toContain("顶部头像与下方三视图必须是同一角色");
     expect(template.body).not.toContain("【Layout】2x2 grid");
     expect(template.body).not.toContain("FULL BODY NECK DOWN, NO FACE");
     expect(template.body).not.toContain("左下格不露脸");
     expect(template.body).not.toContain("必须使用2x2四宫格");
-    expect(template.body).toContain("不要字幕、水印、logo、编号或多余文字");
-    expect(template.body).toContain("必须达到男女主角、重要反派或核心配角的精美角色标准");
-    expect(template.body).toContain("不能是大众脸");
-    expect(template.body).toContain("人物的身份：");
-    expect(template.body).toContain("图片的结构：");
     expect(template.body).not.toContain("绝对注意事项：");
     expect(template.body).not.toContain("严禁风格跑偏");
     expect(template.body).toContain("场景资产必须是空场景/环境设定");
@@ -813,6 +796,39 @@ describe("buildPrompt", () => {
     expect(template.body).toContain("4.右下：反向全景");
     expect(template.body).toContain("不要只拍单个物品");
     expect(template.body).toContain("物品资产必须使用电商纯白色背景强约束");
+  });
+
+  it("injects all character-only instructions, output fields, and example for character extraction", () => {
+    const template = getTemplate("asset-extraction");
+    const simulationPrompt = buildPrompt(template, {
+      sourceText: "现代工作室里，服装师为演员调整造型。",
+      assetType: "人物",
+      visualStyle: "3D仿真精致角色",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+    const otomePrompt = buildPrompt(template, {
+      sourceText: "现代工作室里，服装师为演员调整造型。",
+      assetType: "人物",
+      visualStyle: "现代甜酷3D乙游",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+
+    expect(simulationPrompt).toContain("人物资产必须全量提取");
+    expect(simulationPrompt).toContain("人物服装必须像服装设计总监一样精细化区分");
+    expect(simulationPrompt).toContain("人物长相必须原创、生活化、有辨识度");
+    expect(simulationPrompt).toContain("角色等级：");
+    expect(simulationPrompt).toContain("人物外貌：");
+    expect(simulationPrompt).toContain("整体风格：根据画风锚点3D仿真精致角色");
+    expect(simulationPrompt).toContain("人物的身份：");
+    expect(simulationPrompt).toContain("人物三视图生产参考图");
+    expect(simulationPrompt).toContain("所有明确为成年女性的角色保持：饱满S曲线");
+    expect(simulationPrompt).toContain("清透裸妆");
+    expect(simulationPrompt).toContain("【人物】林晚：");
+    expect(otomePrompt).toContain("男性采用高级3D乙游主角标准");
   });
 
   it("keeps non-realistic asset character style wording from polluting the image prompt", () => {
@@ -935,9 +951,7 @@ describe("buildPrompt", () => {
 
     expect(assetOutputRules).toContain("动画化比例");
     expect(assetOutputRules).toContain("风格化材质");
-    expect(assetOutputRules).not.toContain("毛孔级仿真皮肤");
-    expect(assetOutputRules).not.toContain("真人摄影镜头");
-    expect(assetOutputRules).not.toContain("乙游写实骨相");
+    expect(assetOutputRules).toContain("禁止毛孔级仿真皮肤、真人摄影镜头、乙游写实骨相");
   });
 
   it("keeps low-poly game character vocabulary isolated", () => {
@@ -955,9 +969,26 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("低多边形几何切面");
     expect(assetOutputRules).toContain("简化体块");
     expect(assetOutputRules).toContain("游戏角色配色");
-    expect(assetOutputRules).not.toContain("次表面散射");
-    expect(assetOutputRules).not.toContain("毛孔");
-    expect(assetOutputRules).not.toContain("摄影级发丝");
+    expect(assetOutputRules).toContain("禁止次表面散射、毛孔级皮肤、摄影级发丝");
+  });
+
+  it("routes unknown 3D character styles through the conservative generic branch", () => {
+    const template = getTemplate("asset-extraction");
+    const prompt = buildPrompt(template, {
+      sourceText: "机械城工坊里，工程师检查新型外骨骼。",
+      assetType: "人物",
+      visualStyle: "自定义机械3D风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+    const assetOutputRules = prompt.slice(prompt.indexOf("按下面格式输出"));
+
+    expect(assetOutputRules).toContain("画风锚点：自定义机械3D风格");
+    expect(assetOutputRules).toContain("对应的建模精度、几何形态、表面材质");
+    expect(assetOutputRules).not.toContain("PBR国风材质");
+    expect(assetOutputRules).not.toContain("瓷白或冷白肤色");
+    expect(assetOutputRules).not.toContain("高级3D乙游主角标准");
   });
 
   it("preserves source-first adaptive character design across 3D profiles", () => {
@@ -1016,9 +1047,9 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("影视写实");
   });
 
-  it.each(["场景", "物品"])("does not inject 3D character profiles into %s extraction", (assetType) => {
+  it.each(["场景", "物品"])("does not inject character-only instructions into %s extraction", (assetType) => {
     const template = getTemplate("asset-extraction");
-    const prompt = buildPrompt(template, {
+    const simulationPrompt = buildPrompt(template, {
       sourceText: "雨夜古城的石桥与河岸灯笼。",
       assetType,
       visualStyle: "3D仿真精致角色",
@@ -1026,13 +1057,25 @@ describe("buildPrompt", () => {
       imageRatio: "16:9",
       imageResolution: "1K",
     });
+    const otomePrompt = buildPrompt(template, {
+      sourceText: "雨夜古城的石桥与河岸灯笼。",
+      assetType,
+      visualStyle: "现代甜酷3D乙游",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
 
-    expect(prompt).not.toContain("男女主角、核心反派和重要配角使用主角级美型标准");
-    expect(prompt).not.toContain("次表面散射");
-    expect(prompt).not.toContain("PBR织物材质");
-    expect(prompt).not.toContain("瓷白或冷白肤色");
-    expect(prompt).not.toContain("清透裸妆");
-    expect(prompt).not.toContain("男性采用高级3D乙游主角标准");
-    expect(prompt).not.toContain("低多边形几何切面");
+    for (const prompt of [simulationPrompt, otomePrompt]) {
+      expect(prompt).toContain(`严格只输出“${assetType}”资产`);
+      expect(prompt).not.toContain("人物资产必须全量提取");
+      expect(prompt).not.toContain("人物服装必须像服装设计总监一样精细化区分");
+      expect(prompt).not.toContain("人物长相必须原创、生活化、有辨识度");
+      expect(prompt).not.toContain("人物三视图生产参考图");
+      expect(prompt).not.toContain("饱满S曲线");
+      expect(prompt).not.toContain("清透裸妆");
+      expect(prompt).not.toContain("高级3D乙游主角标准");
+      expect(prompt).not.toContain("【人物】林晚：");
+    }
   });
 });
