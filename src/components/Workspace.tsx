@@ -98,9 +98,17 @@ function isInlineImageDataUrl(src: string) {
   return /^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(src);
 }
 
-const STALE_CHARACTER_STYLE_START = /(^|[；;]|\r\n|\n|\r)[ \t]*整体风格[：:][ \t]*/m;
-const NEXT_CHARACTER_FIELD_BOUNDARY =
-  /(\r\n|\n|\r)|([；;])(?=[ \t]*[A-Za-z\u3400-\u9FFF][A-Za-z0-9\u3400-\u9FFF _-]{0,19}[：:])/g;
+const CHARACTER_ASSET_FIELD_LABEL =
+  "(?:角色等级|人物外貌|人物的身份|人物身份|角色身份|图片的结构|图片结构|服装|饰品|发型|妆容|备注)";
+const CHARACTER_FIELD_SEPARATOR = "(?:\\r\\n|\\n|\\r|[；;。.!！?？,，、])";
+const STALE_CHARACTER_STYLE_START = new RegExp(
+  `(^|${CHARACTER_FIELD_SEPARATOR})[ \\t]*整体风格[：:][ \\t]*`,
+  "m",
+);
+const NEXT_CHARACTER_FIELD_BOUNDARY = new RegExp(
+  `${CHARACTER_FIELD_SEPARATOR}(?=[ \\t]*${CHARACTER_ASSET_FIELD_LABEL}[：:])`,
+  "g",
+);
 
 export function removeStaleCharacterStyleField(description: string) {
   let cleaned = description;
@@ -202,6 +210,8 @@ const STEP_NAME_BY_ID: Record<TemplateId, string> = {
 };
 
 const NO_PREVIEWABLE_IMAGE_MESSAGE = "模型已响应，但没有返回可预览图片。请换生图模型或检查该模型是否支持图片输出。";
+const ASSET_CHARACTER_ONLY_STYLES = new Set(["3D仿真精致角色", "现代甜酷3D乙游"]);
+const DEFAULT_SHARED_ASSET_STYLE = "3D国漫风格";
 const SEEDANCE_VIDEO_MAX_POLL_ATTEMPTS = 402;
 const XIAOTU_SOURCE_BATCH_MAX_BLOCKS = 4;
 const XIAOTU_SOURCE_BATCH_MAX_CHARS = 2400;
@@ -553,6 +563,16 @@ export function Workspace({
 
   function updateInput(key: string, value: string) {
     updateInputs({ [key]: value });
+  }
+
+  function updateAssetType(value: string) {
+    const visualStyle = step.inputs.visualStyle ?? DEFAULT_SHARED_ASSET_STYLE;
+    updateInputs({
+      assetType: value,
+      ...(value !== "人物" && ASSET_CHARACTER_ONLY_STYLES.has(visualStyle)
+        ? { visualStyle: DEFAULT_SHARED_ASSET_STYLE }
+        : {}),
+    });
   }
 
   function updateInputs(patch: Record<string, string>) {
@@ -2998,7 +3018,11 @@ export function Workspace({
     const assetDescription = asset?.description?.trim() || "";
     const assetType = (asset?.type || inputs.assetType || "人物").trim();
     const assetTarget = (asset?.name || assetType).trim();
-    const visualStyle = (inputs.visualStyle ?? "3D国漫风格").trim();
+    const requestedVisualStyle = (inputs.visualStyle ?? DEFAULT_SHARED_ASSET_STYLE).trim();
+    const visualStyle =
+      assetType !== "人物" && ASSET_CHARACTER_ONLY_STYLES.has(requestedVisualStyle)
+        ? DEFAULT_SHARED_ASSET_STYLE
+        : requestedVisualStyle;
     const imageRatio = (inputs.imageRatio ?? "16:9").trim();
     const imageResolution = (inputs.imageResolution ?? "1K").trim();
     const sourceText = (
@@ -3247,13 +3271,19 @@ export function Workspace({
       const options =
         project.currentStep === "asset-extraction" && field.key === "imageResolution"
           ? getAssetImageResolutionOptions(step.inputs.imageModel ?? "gpt-image-2")
+          : project.currentStep === "asset-extraction" && field.key === "visualStyle" && step.inputs.assetType !== "人物"
+            ? (field.options ?? []).filter((option) => !ASSET_CHARACTER_ONLY_STYLES.has(option))
           : field.options ?? [];
       const selectValue = options.includes(value) ? value : field.defaultValue && options.includes(field.defaultValue) ? field.defaultValue : options[0] ?? "";
       return (
         <select
           aria-label={field.label}
           value={selectValue}
-          onChange={(event) => updateInput(field.key, event.target.value)}
+          onChange={(event) =>
+            project.currentStep === "asset-extraction" && field.key === "assetType"
+              ? updateAssetType(event.target.value)
+              : updateInput(field.key, event.target.value)
+          }
         >
           {options.map((option) => (
             <option key={option} value={option}>
