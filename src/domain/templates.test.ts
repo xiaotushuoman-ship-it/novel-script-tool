@@ -965,7 +965,10 @@ describe("buildPrompt", () => {
 
     expect(assetOutputRules).toContain("动画化比例");
     expect(assetOutputRules).toContain("风格化材质");
-    expect(assetOutputRules).toContain("禁止毛孔级仿真皮肤、真人摄影镜头、乙游写实骨相");
+    expect(assetOutputRules).toContain("保持动画化材质与概括骨相，不采用照片级微观皮肤和真人化角色语言");
+    expect(assetOutputRules).not.toContain("毛孔级仿真皮肤");
+    expect(assetOutputRules).not.toContain("真人摄影镜头");
+    expect(assetOutputRules).not.toContain("乙游写实骨相");
   });
 
   it("keeps low-poly game character vocabulary isolated", () => {
@@ -983,7 +986,10 @@ describe("buildPrompt", () => {
     expect(assetOutputRules).toContain("低多边形几何切面");
     expect(assetOutputRules).toContain("简化体块");
     expect(assetOutputRules).toContain("游戏角色配色");
-    expect(assetOutputRules).toContain("禁止次表面散射、毛孔级皮肤、摄影级发丝");
+    expect(assetOutputRules).toContain("保持几何切面、简化表面和块面发型，不采用高精度皮肤透光、微观肌理或单根发丝表达");
+    expect(assetOutputRules).not.toContain("次表面散射");
+    expect(assetOutputRules).not.toContain("毛孔级皮肤");
+    expect(assetOutputRules).not.toContain("摄影级发丝");
   });
 
   it("routes unknown 3D character styles through the conservative generic branch", () => {
