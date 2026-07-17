@@ -99,7 +99,7 @@ function isInlineImageDataUrl(src: string) {
 }
 
 const CHARACTER_FIELD_SEPARATOR = "(?:\\r\\n|\\n|\\r|[；;。.!！?？,，、])";
-const GENERIC_ASSET_FIELD_LABEL = "[A-Za-z0-9\\u3400-\\u9FFF][A-Za-z0-9\\u3400-\\u9FFF _-]{0,15}";
+const GENERIC_ASSET_FIELD_LABEL = "[A-Za-z0-9\\u3400-\\u9FFF][A-Za-z0-9\\u3400-\\u9FFF _()（）/\\\\·・-]{0,15}";
 const STALE_CHARACTER_STYLE_START = new RegExp(
   `(^|${CHARACTER_FIELD_SEPARATOR})[ \\t]*整体风格[：:][ \\t]*`,
   "m",

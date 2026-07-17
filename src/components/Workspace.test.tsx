@@ -146,6 +146,23 @@ describe("removeStaleCharacterStyleField", () => {
   ])("stops stale style cleanup at any short structured field label", ({ source, expected }) => {
     expect(removeStaleCharacterStyleField(source)).toBe(expected);
   });
+
+  it.each([
+    {
+      source: "整体风格：旧风格；备注(导演)：左眼泪痣；人物的身份：设计师",
+      expected: "备注(导演)：左眼泪痣；人物的身份：设计师",
+    },
+    {
+      source: "整体风格：旧风格；服装/鞋履：黑色风衣与短靴；饰品（随身）：银戒",
+      expected: "服装/鞋履：黑色风衣与短靴；饰品（随身）：银戒",
+    },
+    {
+      source: "整体风格：旧风格；发型\\妆容：黑色长卷发与清透裸妆；配饰·细节：银链；备注・信息：左眼泪痣",
+      expected: "发型\\妆容：黑色长卷发与清透裸妆；配饰·细节：银链；备注・信息：左眼泪痣",
+    },
+  ])("preserves punctuated structured field labels after stale style", ({ source, expected }) => {
+    expect(removeStaleCharacterStyleField(source)).toBe(expected);
+  });
 });
 
 describe("normalizeAssetVisualStyle", () => {
