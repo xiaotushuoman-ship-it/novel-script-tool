@@ -99,13 +99,51 @@ function isInlineImageDataUrl(src: string) {
 }
 
 const CHARACTER_FIELD_SEPARATOR = "(?:\\r\\n|\\n|\\r|[；;。.!！?？,，、])";
-const GENERIC_ASSET_FIELD_LABEL = "[A-Za-z0-9\\u3400-\\u9FFF][A-Za-z0-9\\u3400-\\u9FFF _()（）/\\\\·・-]{0,15}";
+const CHARACTER_FIELD_NAMES = [
+  "角色等级",
+  "人物外貌",
+  "人物身份",
+  "人物的身份",
+  "身份",
+  "性别",
+  "年龄",
+  "年龄感",
+  "肤色",
+  "皮肤",
+  "脸型",
+  "五官",
+  "眼睛",
+  "瞳色",
+  "发型",
+  "发色",
+  "妆容",
+  "体态",
+  "身材",
+  "服装",
+  "鞋履",
+  "饰品",
+  "配饰",
+  "配饰细节",
+  "动作",
+  "姿态",
+  "表情",
+  "气质",
+  "备注",
+  "备注信息",
+  "图片结构",
+  "图片的结构",
+].sort((left, right) => right.length - left.length);
+const CHARACTER_FIELD_NAME = `(?:${CHARACTER_FIELD_NAMES.join("|")})`;
+const CHARACTER_FIELD_QUALIFIER = "(?:\\([^()（）：:\\r\\n]+\\)|（[^()（）：:\\r\\n]+）)";
+const CHARACTER_FIELD_LABEL =
+  `${CHARACTER_FIELD_NAME}(?:${CHARACTER_FIELD_QUALIFIER})?` +
+  `(?:[/\\\\]${CHARACTER_FIELD_NAME}(?:${CHARACTER_FIELD_QUALIFIER})?)?`;
 const STALE_CHARACTER_STYLE_START = new RegExp(
   `(^|${CHARACTER_FIELD_SEPARATOR})[ \\t]*整体风格[：:][ \\t]*`,
   "m",
 );
 const NEXT_CHARACTER_FIELD_BOUNDARY = new RegExp(
-  `${CHARACTER_FIELD_SEPARATOR}(?=[ \\t]*(?!整体风格[：:])${GENERIC_ASSET_FIELD_LABEL}[：:])`,
+  `${CHARACTER_FIELD_SEPARATOR}(?=[ \\t]*${CHARACTER_FIELD_LABEL}[：:])`,
   "g",
 );
 

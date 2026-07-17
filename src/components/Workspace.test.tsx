@@ -143,7 +143,7 @@ describe("removeStaleCharacterStyleField", () => {
       source: "人物外貌：瓜子脸\r\n整体风格：旧风格\r\n次表面散射、锦缎光泽\r\n性别：女性\r\n鞋履：黑色短靴",
       expected: "人物外貌：瓜子脸\r\n性别：女性\r\n鞋履：黑色短靴",
     },
-  ])("stops stale style cleanup at any short structured field label", ({ source, expected }) => {
+  ])("stops stale style cleanup at known character field labels", ({ source, expected }) => {
     expect(removeStaleCharacterStyleField(source)).toBe(expected);
   });
 
@@ -157,11 +157,40 @@ describe("removeStaleCharacterStyleField", () => {
       expected: "服装/鞋履：黑色风衣与短靴；饰品（随身）：银戒",
     },
     {
-      source: "整体风格：旧风格；发型\\妆容：黑色长卷发与清透裸妆；配饰·细节：银链；备注・信息：左眼泪痣",
-      expected: "发型\\妆容：黑色长卷发与清透裸妆；配饰·细节：银链；备注・信息：左眼泪痣",
+      source: "整体风格：旧风格；发型\\妆容：黑色长卷发与清透裸妆；备注信息：左眼泪痣",
+      expected: "发型\\妆容：黑色长卷发与清透裸妆；备注信息：左眼泪痣",
     },
-  ])("preserves punctuated structured field labels after stale style", ({ source, expected }) => {
+  ])("preserves allowed character field modifiers and combinations after stale style", ({ source, expected }) => {
     expect(removeStaleCharacterStyleField(source)).toBe(expected);
+  });
+
+  it.each([
+    {
+      source: "整体风格：旧风格；红与黑·相互碰撞：形成强烈张力；性别：女性；年龄：26岁",
+      expected: "性别：女性；年龄：26岁",
+    },
+    {
+      source: "整体风格：旧风格；冷白/暗紫交织：营造危险氛围；体态：纤细；鞋履：黑色短靴",
+      expected: "体态：纤细；鞋履：黑色短靴",
+    },
+    {
+      source: "整体风格：旧风格；服装/光影：黑色风衣融入暗部；动作：抬手整理袖口",
+      expected: "动作：抬手整理袖口",
+    },
+    {
+      source: "人物外貌：瓜子脸\n整体风格：旧风格\n光影(侧逆光)：突出轮廓\n备注(导演)：保留左眼泪痣",
+      expected: "人物外貌：瓜子脸\n备注(导演)：保留左眼泪痣",
+    },
+  ])("removes legacy style continuations until the next known character field", ({ source, expected }) => {
+    expect(removeStaleCharacterStyleField(source)).toBe(expected);
+  });
+
+  it.each([
+    "红与黑·相互碰撞：形成强烈张力；性别：女性；年龄：26岁",
+    "冷白/暗紫交织：营造危险氛围；体态：纤细；鞋履：黑色短靴",
+    "光影(侧逆光)：突出轮廓\n备注(导演)：保留左眼泪痣",
+  ])("keeps text without an overall style field exactly unchanged", (source) => {
+    expect(removeStaleCharacterStyleField(source)).toBe(source);
   });
 });
 
