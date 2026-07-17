@@ -27,6 +27,7 @@ import { readImportedDocument } from "../domain/documentImport";
 import type { Project } from "../domain/projects";
 import { checkSeedanceSafety, type SeedanceSafetyReport } from "../domain/seedanceSafety";
 import {
+  buildAssetCharacterStyleRule,
   buildPrompt,
   getTemplate,
   IMAGE_MODEL_OPTIONS,
@@ -2995,6 +2996,7 @@ export function Workspace({
       !assetDescription && inputs.sourceText ? `完整原文背景：${inputs.sourceText}` : "",
       ...(assetType === "人物"
         ? [
+            buildAssetCharacterStyleRule(visualStyle),
             "人物统一后缀：人物三视图生产参考图，纯白背景。",
             "图片结构强制：上方三分之一为正面脸部近景头像；下方三分之二严格分成三个等比例竖向面板，依次展示从颈部以下到脚部的正面、侧面、背面身体视图。",
             "下方身体视图要求：下方三块不出现头部和五官，双手自然下垂，双脚完整可见，三块比例一致、间距清楚。",

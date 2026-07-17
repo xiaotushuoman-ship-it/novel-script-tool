@@ -4297,6 +4297,51 @@ describe("Workspace asset extraction image generation", () => {
     );
   });
 
+  it("reuses the selected simulation character style rules for character image generation", async () => {
+    callImageGenerationMock.mockResolvedValue("https://img.example.com/simulation-character.png");
+    const project = createProject("仿真人物画风复用测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = [
+      "【人物】林晚：",
+      "角色等级：女主角",
+      "人物外貌：二十六岁，方圆脸，细长眉，深棕色眼睛，黑色低马尾，穿墨绿色收腰长裙。",
+      "人物的身份：经营旧书店的成年女性。",
+      "图片的结构：人物三视图生产参考图。",
+    ].join("\n");
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚经营一家旧书店。",
+      assetType: "人物",
+      visualStyle: "3D仿真精致角色",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
+    const prompt = callImageGenerationMock.mock.calls[0][1] as string;
+    expect(prompt).toContain("指定画风：3D仿真精致角色");
+    expect(prompt).toContain("画风锚点：3D仿真精致角色");
+    expect(prompt).toContain("细腻超清皮肤纹理");
+    expect(prompt).toContain("不同角色的脸型、骨相、眉眼、瞳色、鼻唇、发型发色、妆容、服装配色和饰品组合不得重复");
+    expect(prompt).toContain("原文明确的人物年龄、脸型、五官、发型、发色、妆容、饰品和身份优先，不得被模板覆盖");
+    expect(prompt).toContain("普通成年女性除未成年人、老人、病弱、残障或其他明确特殊身份例外外");
+    expect(prompt).toContain("上方三分之一为正面脸部近景头像");
+    expect(prompt).toContain("下方三分之二严格分成三个等比例竖向面板");
+    expect(prompt).not.toContain("低多边形几何切面");
+  });
+
   it("uses the currently selected style instead of stale extracted character style text", async () => {
     callImageGenerationMock.mockResolvedValue("https://img.example.com/restyled-asset.png");
     const project = createProject("人物切换画风测试");
@@ -4304,15 +4349,16 @@ describe("Workspace asset extraction image generation", () => {
     project.steps["asset-extraction"].draft = [
       "【人物】林晚：",
       "角色等级：女主角",
-      "人物外貌：二十岁出头，瓜子脸，眉眼清雅。",
-      "整体风格：画风锚点：3D国漫风格，次表面散射，PBR织物材质。",
-      "人物的身份：古城药师。",
+      "人物外貌：二十岁出头，瓜子脸，眉眼清雅，黑色长卷发。",
+      "整体风格：画风锚点：3D国漫风格，次表面散射，PBR国风材质。",
+      "人物的身份：现代珠宝设计师。",
+      "服装：酒红色短款皮夹克，黑色不对称长裙，银色流苏耳坠。",
       "图片的结构：人物三视图生产参考图。",
     ].join("\n");
     project.steps["asset-extraction"].inputs = {
-      sourceText: "林晚是古城药师。",
+      sourceText: "林晚是现代珠宝设计师。",
       assetType: "人物",
-      visualStyle: "水墨国风动画",
+      visualStyle: "现代甜酷3D乙游",
       imageModel: "gpt-image-2",
       imageRatio: "16:9",
       imageResolution: "1K",
@@ -4333,10 +4379,16 @@ describe("Workspace asset extraction image generation", () => {
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
     const prompt = callImageGenerationMock.mock.calls[0][1] as string;
     expect(prompt).toContain("角色等级：女主角");
-    expect(prompt).toContain("指定画风：水墨国风动画");
+    expect(prompt).toContain("指定画风：现代甜酷3D乙游");
+    expect(prompt).toContain("画风锚点：现代甜酷3D乙游");
+    expect(prompt).toContain("皮革亮面与哑光拼接");
+    expect(prompt).toContain("高级3D乙游主角标准");
+    expect(prompt).toContain("瓜子脸，眉眼清雅，黑色长卷发");
+    expect(prompt).toContain("人物的身份：现代珠宝设计师");
+    expect(prompt).toContain("酒红色短款皮夹克，黑色不对称长裙，银色流苏耳坠");
     expect(prompt).not.toContain("画风锚点：3D国漫风格");
     expect(prompt).not.toContain("次表面散射");
-    expect(prompt).not.toContain("PBR织物材质");
+    expect(prompt).not.toContain("PBR国风材质");
   });
 
   it("does not show 2K or 4K upscale controls in image result cards or preview dialog", async () => {
