@@ -215,7 +215,7 @@ describe("normalizeAssetVisualStyle", () => {
   it.each([
     { assetType: "人物", visualStyle: "3D仿真精致角色", expected: "3D仿真精致角色" },
     { assetType: "场景", visualStyle: "3D仿真精致角色", expected: "3D国漫风格" },
-    { assetType: "物品", visualStyle: "现代甜酷3D乙游", expected: "3D国漫风格" },
+    { assetType: "物品", visualStyle: "现代甜酷3D乙游", expected: "现代甜酷3D乙游" },
     { assetType: "场景", visualStyle: "影视写实现代", expected: "影视写实现代" },
   ])("normalizes $assetType style $visualStyle", ({ assetType, visualStyle, expected }) => {
     expect(normalizeAssetVisualStyle(assetType, visualStyle)).toBe(expected);
@@ -3341,9 +3341,16 @@ describe("Workspace asset extraction image generation", () => {
     await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
     const extractionPrompt = callAiStreamMock.mock.calls[0][1] as string;
     expect(extractionPrompt).toContain(`本次只提取：${assetType}`);
-    expect(extractionPrompt).toContain("画风锚点：3D国漫风格");
-    expect(extractionPrompt).not.toContain("3D仿真精致角色");
-    expect(extractionPrompt).not.toContain("现代甜酷3D乙游");
+    if (assetType === "场景") {
+      expect(extractionPrompt).toContain("画风锚点：3D国漫风格");
+      expect(extractionPrompt).not.toContain("3D仿真精致角色");
+      expect(extractionPrompt).not.toContain("现代甜酷3D乙游");
+    } else {
+      expect(extractionPrompt).toContain("画风锚点：现代甜酷3D乙游");
+      expect(extractionPrompt).toContain("物品图片结构：四视电商图");
+      expect(extractionPrompt).not.toContain("画风锚点：3D国漫风格");
+      expect(extractionPrompt).not.toContain("3D仿真精致角色");
+    }
   });
 
   it("detects multiple extracted assets and generates their images concurrently", async () => {
@@ -4519,20 +4526,21 @@ describe("Workspace asset extraction image generation", () => {
     fireEvent.change(characterStyleSelect, { target: { value: "3D仿真精致角色" } });
     fireEvent.change(screen.getByRole("combobox", { name: "提取类型" }), { target: { value: "物品" } });
 
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "画风锚点" })).toHaveValue("3D国漫风格"));
-    expect(within(screen.getByRole("combobox", { name: "画风锚点" })).queryByRole("option", { name: "3D仿真精致角色" })).not.toBeInTheDocument();
-    expect(within(screen.getByRole("combobox", { name: "画风锚点" })).queryByRole("option", { name: "现代甜酷3D乙游" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "画风锚点" })).toHaveValue("3D仿真精致角色"));
+    expect(within(screen.getByRole("combobox", { name: "画风锚点" })).getByRole("option", { name: "3D仿真精致角色" })).toBeInTheDocument();
+    expect(within(screen.getByRole("combobox", { name: "画风锚点" })).getByRole("option", { name: "现代甜酷3D乙游" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "物品图片结构" })).toHaveValue("四视电商图");
     expect(onProjectChange.mock.calls.at(-1)?.[0].steps["asset-extraction"].inputs).toMatchObject({
       assetType: "物品",
-      visualStyle: "3D国漫风格",
+      visualStyle: "3D仿真精致角色",
     });
 
     fireEvent.click(screen.getByRole("button", { name: "生成 长刀" }));
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(2));
     const propPrompt = callImageGenerationMock.mock.calls[1][1] as string;
-    expect(propPrompt).toContain("指定画风：3D国漫风格");
-    expect(propPrompt).not.toContain("3D仿真精致角色");
-    expect(propPrompt).not.toContain("现代甜酷3D乙游");
+    expect(propPrompt).toContain("指定画风：3D仿真精致角色");
+    expect(propPrompt).toContain("物品图片结构：四视电商图");
+    expect(propPrompt).not.toContain("指定画风：3D国漫风格");
   });
 
   it("keeps the selected asset image model during normal 2K image generation", async () => {
@@ -5350,16 +5358,24 @@ describe("Workspace asset extraction image generation", () => {
         onSaveVersion={() => undefined}
       />,
     );
+    expect(screen.getByRole("combobox", { name: "物品图片结构" })).toHaveValue("四视电商图");
 
     fireEvent.click(screen.getByRole("button", { name: "生成 长刀" }));
     await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(2));
     expect(callImageGenerationMock.mock.calls[1][1]).toContain("电商纯白色背景强约束");
+    expect(callImageGenerationMock.mock.calls[1][1]).toContain("物品图片结构：四视电商图");
+    expect(callImageGenerationMock.mock.calls[1][1]).toContain("版式要求：固定2X2布局");
+    expect(callImageGenerationMock.mock.calls[1][1]).toContain("1.左上：正面产品图");
+    expect(callImageGenerationMock.mock.calls[1][1]).toContain("2.右上：侧面产品图");
+    expect(callImageGenerationMock.mock.calls[1][1]).toContain("3.左下：背面产品图");
+    expect(callImageGenerationMock.mock.calls[1][1]).toContain("4.右下：俯视产品图");
+    expect(callImageGenerationMock.mock.calls[1][1]).toContain("四格必须是同一物品、同一比例、同一材质、同一光影、同一画风锚点");
     expect(callImageGenerationMock.mock.calls[1][1]).toContain("纯白背景");
     expect(callImageGenerationMock.mock.calls[1][1]).toContain("不要人物");
     expect(callImageGenerationMock.mock.calls[1][1]).toContain("不要场景环境");
-    expect(callImageGenerationMock.mock.calls[1][1]).toContain("指定画风：3D国漫风格");
+    expect(callImageGenerationMock.mock.calls[1][1]).toContain("指定画风：现代甜酷3D乙游");
+    expect(callImageGenerationMock.mock.calls[1][1]).not.toContain("指定画风：3D国漫风格");
     expect(callImageGenerationMock.mock.calls[1][1]).not.toContain("3D仿真精致角色");
-    expect(callImageGenerationMock.mock.calls[1][1]).not.toContain("现代甜酷3D乙游");
     for (const rule of characterOnlyRules) {
       expect(callImageGenerationMock.mock.calls[1][1]).not.toContain(rule);
     }

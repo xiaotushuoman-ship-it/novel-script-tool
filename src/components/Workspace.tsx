@@ -258,7 +258,7 @@ const DEFAULT_SHARED_ASSET_STYLE = "3D国漫风格";
 
 export function normalizeAssetVisualStyle(assetType: string | undefined, visualStyle: string | undefined) {
   const normalizedStyle = visualStyle?.trim() || DEFAULT_SHARED_ASSET_STYLE;
-  return assetType?.trim() !== "人物" && ASSET_CHARACTER_ONLY_STYLES.has(normalizedStyle)
+  return assetType?.trim() === "场景" && ASSET_CHARACTER_ONLY_STYLES.has(normalizedStyle)
     ? DEFAULT_SHARED_ASSET_STYLE
     : normalizedStyle;
 }
@@ -3103,6 +3103,7 @@ export function Workspace({
     const visualStyle = normalizeAssetVisualStyle(assetType, inputs.visualStyle);
     const imageRatio = (inputs.imageRatio ?? "16:9").trim();
     const imageResolution = (inputs.imageResolution ?? "1K").trim();
+    const propImageStructure = (inputs.propImageStructure ?? "四视电商图").trim();
     const cleanedSourceText = (
       assetDescription
         ? assetType === "人物"
@@ -3159,9 +3160,24 @@ export function Workspace({
         : []),
       ...(assetType === "物品"
         ? [
-            "物品统一后缀：电商纯白色背景强约束。",
-            "物品格式：纯道具产品图，居中展示，纯白背景，白底棚拍，柔和商品光，真实材质反光。",
-            "物品要求：只展示物品本身的外形、材质、颜色、尺寸感、磨损状态和功能；不要人物、不要手持、不要场景环境、不要生活背景、不要文字、不要字幕、不要水印、不要logo。",
+            ...(propImageStructure === "单张电商图"
+              ? [
+                  "物品图片结构：单张电商图。",
+                  "物品统一后缀：电商纯白色背景强约束。",
+                  "物品格式：纯道具产品图，居中展示，纯白背景，白底棚拍，柔和商品光；材质、光影、色彩和造型语言必须跟随当前画风锚点，不得固定成写实摄影风。",
+                  "物品要求：只展示物品本身的外形、材质、颜色、尺寸感、磨损状态和功能；不要人物、不要手持、不要场景环境、不要生活背景、不要文字、不要字幕、不要水印、不要logo。",
+                ]
+              : [
+                  "物品图片结构：四视电商图。",
+                  "物品统一后缀：物品四视电商图，电商纯白色背景强约束。",
+                  "版式要求：固定2X2布局，四个画面都必须展示同一件物品，不是四个不同物品，不是场景图；四格必须是同一物品、同一比例、同一材质、同一光影、同一画风锚点。",
+                  "1.左上：正面产品图，展示物品正面轮廓、主材质、核心装饰和尺寸感。",
+                  "2.右上：侧面产品图，展示物品厚度、侧边结构、接口、刀刃/把手/盖口等侧向细节。",
+                  "3.左下：背面产品图，展示背部轮廓、背面材质、背面磨损、固定件或隐藏结构。",
+                  "4.右下：俯视产品图，从正上方展示顶部轮廓、开口、纹理、按键、铭牌、刀背或摆放形态。",
+                  `风格锚点锁定：四格的材质、光影、色彩、线条、建模或渲染方式必须跟随“${visualStyle}”，纯白背景和电商棚拍只控制背景与展示方式，不得覆盖画风锚点。`,
+                  "物品要求：只展示物品本身的外形、材质、颜色、尺寸感、磨损状态和功能；不要人物、不要手持、不要场景环境、不要生活背景、不要文字、不要字幕、不要水印、不要logo、不要编号、不要面板标题。",
+                ])
           ]
         : []),
       "生成要求：主体必须来自原文和资产提取内容；外貌、服装、场景、道具只从原文提取，原文缺失时保持简洁合理，不要新增无关角色和无关背景。",
@@ -3357,16 +3373,19 @@ export function Workspace({
 
     if (field.control === "select") {
       const assetType = step.inputs.assetType ?? "人物";
+      const isPropAsset = assetType === "物品";
       const options =
         project.currentStep === "asset-extraction" && field.key === "imageResolution"
           ? getAssetImageResolutionOptions(step.inputs.imageModel ?? "gpt-image-2")
-          : project.currentStep === "asset-extraction" && field.key === "visualStyle" && assetType !== "人物"
+          : project.currentStep === "asset-extraction" && field.key === "visualStyle" && assetType === "场景"
             ? (field.options ?? []).filter((option) => !ASSET_CHARACTER_ONLY_STYLES.has(option))
           : field.options ?? [];
+      const shouldHidePropImageStructure = project.currentStep === "asset-extraction" && field.key === "propImageStructure" && !isPropAsset;
       const normalizedValue =
         project.currentStep === "asset-extraction" && field.key === "visualStyle"
           ? normalizeAssetVisualStyle(assetType, value)
           : value;
+      if (shouldHidePropImageStructure) return null;
       const selectValue = options.includes(normalizedValue)
         ? normalizedValue
         : field.defaultValue && options.includes(field.defaultValue)
