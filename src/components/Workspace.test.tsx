@@ -4404,6 +4404,11 @@ describe("Workspace asset extraction image generation", () => {
     const prompt = callImageGenerationMock.mock.calls[0][1] as string;
 
     expect(prompt).toContain(expectedStandard);
+    if (_caseName === "adult female") {
+      expect(prompt).toContain("开高衩");
+      expect(prompt).toContain("高开衩");
+      expect(prompt).toContain("角色长相必须完全区分");
+    }
     expect(prompt.indexOf(expectedStandard)).toBeLessThan(prompt.indexOf("整体风格首句必须明确写出"));
     expect(prompt.indexOf(expectedStandard)).toBeLessThan(prompt.indexOf("人物统一后缀：人物三视图生产参考图"));
   });

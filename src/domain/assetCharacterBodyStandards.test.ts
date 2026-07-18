@@ -14,7 +14,7 @@ import {
 describe("body standard constants", () => {
   it("defines the complete adult female standard", () => {
     expect(ADULT_FEMALE_BODY_STANDARD).toBe(
-      "体态标准：成年女性采用饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿，站姿自然挺拔，正面侧面背面比例一致。",
+      "体态标准：成年女性采用饱满S曲线、窄肩蜂腰、圆润胯部、前凸后翘、修长笔直大长腿；服装设计目标保持精美华丽，必须包含收腰、开高衩/高开衩、薄纱、刺绣、鎏金材质等设计语言；角色长相必须完全区分，站姿自然挺拔，正面侧面背面比例一致。",
     );
   });
 
