@@ -118,8 +118,12 @@ export function setupAutoUpdate({
     await showUpdateError(error);
   });
 
-  schedule(() => checkNow(), delayMs);
-  repeat(() => checkNow(), intervalMs);
+  void schedule;
+  void repeat;
+  void delayMs;
+  void intervalMs;
+  void focusThrottleMs;
+  void lastCheckAt;
 
   return {
     started: true,

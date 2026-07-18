@@ -3437,7 +3437,8 @@ describe("Workspace asset extraction image generation", () => {
     expect(prompt).toContain("人物外貌：女性");
     expect(prompt).not.toContain("整体风格：3D国漫风格");
     expect(prompt).toContain("指定画风：3D国漫风格");
-    expect(prompt).toContain("图片的结构：左边人物正面近景肖像");
+    expect(prompt).not.toContain("图片的结构：左边人物正面近景肖像");
+    expect(prompt).toContain("图片结构强制：上方三分之一为正面脸部近景头像");
     expect(prompt).toContain("人物三视图生产参考图");
     expect(prompt).toContain("上方三分之一为正面脸部近景头像");
     expect(prompt).toContain("下方三分之二严格分成三个等比例竖向面板");
@@ -5112,6 +5113,9 @@ describe("Workspace asset extraction image generation", () => {
       "人物名称：刘婶：豆腐坊摊主，说话直接。",
       "角色3：老赵：卤味摊主，动作谨慎。",
       "配角：陈伯：街坊老人，站在摊位旁。",
+      "人物外貌：街坊都叫她王姨，手里攥着账本，穿蓝布围裙。",
+      "人物的身份：钱会长，商会负责人，坐在桌后压着周海签字。",
+      "关系：壮汉，钱会长身边打手，按着周海的手。",
     ].join("\n");
     project.steps["asset-extraction"].inputs = {
       sourceText: "林晚、刘婶、老赵、陈伯都出现在夜市。",
@@ -5136,6 +5140,9 @@ describe("Workspace asset extraction image generation", () => {
     expect(screen.getByText("刘婶")).toBeInTheDocument();
     expect(screen.getByText("老赵")).toBeInTheDocument();
     expect(screen.getByText("陈伯")).toBeInTheDocument();
+    expect(screen.getByText("王姨")).toBeInTheDocument();
+    expect(screen.getByText("钱会长")).toBeInTheDocument();
+    expect(screen.getByText("壮汉")).toBeInTheDocument();
   });
 
   it("keeps large data-url previews on the original source without refetching them", async () => {

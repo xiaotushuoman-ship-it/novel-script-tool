@@ -20,8 +20,8 @@ describe("desktop release configuration", () => {
     expect(packageJson.build.files).toContain("electron/autoUpdate.mjs");
     expect(mainProcess).toContain('import electronUpdater from "electron-updater"');
     expect(mainProcess).not.toContain('import { autoUpdater } from "electron-updater"');
-    expect(mainProcess).toContain('mainWindow.on("focus"');
-    expect(mainProcess).toContain("updateController?.checkNow()");
+    expect(mainProcess).not.toContain('mainWindow.on("focus"');
+    expect(mainProcess).not.toContain("updateController?.checkNow()");
   });
 
   it("releases a tested Windows installer on every main branch synchronization", async () => {

@@ -39,7 +39,20 @@ describe("desktop auto update", () => {
     expect(updater.checkForUpdates).not.toHaveBeenCalled();
   });
 
-  it("checks after startup, every 30 minutes, and when requested by a focused window", async () => {
+  it("does not schedule automatic update checks in packaged builds", () => {
+    const updater = createUpdater();
+    const schedule = vi.fn();
+    const repeat = vi.fn();
+
+    const result = setupAutoUpdate({ isPackaged: true, updater, dialog: {}, schedule, repeat });
+
+    expect(result.started).toBe(true);
+    expect(schedule).not.toHaveBeenCalled();
+    expect(repeat).not.toHaveBeenCalled();
+    expect(updater.checkForUpdates).not.toHaveBeenCalled();
+  });
+
+  it("checks only when explicitly requested", async () => {
     const updater = createUpdater();
     const startupCallbacks = [];
     const repeatCallbacks = [];
@@ -52,14 +65,14 @@ describe("desktop auto update", () => {
     const result = setupAutoUpdate({ isPackaged: true, updater, dialog: {}, schedule, repeat });
 
     expect(result.started).toBe(true);
-    expect(schedule).toHaveBeenCalledWith(expect.any(Function), 5000);
-    expect(repeat).toHaveBeenCalledWith(expect.any(Function), 30 * 60 * 1000);
+    expect(schedule).not.toHaveBeenCalled();
+    expect(repeat).not.toHaveBeenCalled();
 
-    await startupCallbacks[0]();
-    await repeatCallbacks[0]();
     await result.checkNow();
 
-    expect(updater.checkForUpdates).toHaveBeenCalledTimes(3);
+    expect(startupCallbacks).toHaveLength(0);
+    expect(repeatCallbacks).toHaveLength(0);
+    expect(updater.checkForUpdates).toHaveBeenCalledTimes(1);
   });
 
   it("downloads an available update silently in the background", async () => {

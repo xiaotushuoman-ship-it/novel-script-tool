@@ -35,9 +35,6 @@ async function createMainWindow() {
     return { action: "deny" };
   });
   mainWindow.once("ready-to-show", () => mainWindow?.show());
-  mainWindow.on("focus", () => {
-    void updateController?.checkNow();
-  });
   await mainWindow.loadURL(desktopServer.url);
   if (!updateController) {
     updateController = setupAutoUpdate({
@@ -46,8 +43,6 @@ async function createMainWindow() {
       dialog,
       getWindow: () => mainWindow,
     });
-  } else {
-    void updateController.checkNow();
   }
 }
 

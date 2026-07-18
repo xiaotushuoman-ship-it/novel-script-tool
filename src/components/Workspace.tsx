@@ -2937,18 +2937,33 @@ export function Workspace({
       const normalizedLine = line.replace(/^\s*(?:[-*•]\s*)?(?:\d+[.、)]\s*)?/, "");
       const bracketMatch = normalizedLine.match(/^【(人物|角色|场景|物品|道具)】\s*([^：:，,]+)[：:，,]?\s*(.*)$/);
       const labelMatch = normalizedLine.match(/^(人物|角色|场景|物品|道具)[：:]\s*([^：:，,]+)[：:，,]?\s*(.*)$/);
+      const hasTypedAssetMatch = Boolean(bracketMatch || labelMatch);
       const namedFieldMatch = normalizedLine.match(/^(?:人物名称|角色名称|姓名|名称)[：:]\s*([^：:，,]+)[：:，,]?\s*(.*)$/);
       const roleIndexMatch = normalizedLine.match(/^(角色|人物)\s*\d+[：:]\s*([^：:，,]+)[：:，,]?\s*(.*)$/);
       const categoryMatch = normalizedLine.match(/^(?:主要人物|出场人物|配角|反派|家人|路人|旁观者)[：:]\s*([^：:，,]+)[：:，,]?\s*(.*)$/);
+      const characterFieldAsAssetMatch = hasTypedAssetMatch
+        ? null
+        : normalizedLine.match(
+            /^(?:人物外貌|角色外貌|外貌|人物的身份|角色身份|身份|关系)[：:]\s*(?:(?:街坊都叫|大家叫|众人叫|人称|名叫|叫作|叫做|叫)(?:他|她|其)?([^：:，,。；;\s]{2,12})|([^：:，,。；;\s]{2,12})[：:]|((?:[^：:，,。；;\s]{1,10}(?:姨|婶|伯|叔|哥|姐|嫂|爷|奶|婆|公|老板|会长|主任|经理|师傅|护卫|侍卫|丫鬟|弟子|摊主|掌柜|管家|保洁|司机|助理|医生|护士|老师|同学|邻居|街坊))|壮汉|打手|保镖))[，,。；;]?\s*(.*)$/,
+          );
       const match = bracketMatch ?? labelMatch;
       const type =
         match?.[1] === "角色"
           ? "人物"
           : match?.[1] === "道具"
             ? "物品"
-            : match?.[1] ?? (namedFieldMatch || roleIndexMatch || categoryMatch ? "人物" : "");
+            : match?.[1] ?? (namedFieldMatch || roleIndexMatch || categoryMatch || characterFieldAsAssetMatch ? "人物" : "");
       if (!type) continue;
-      const name = (match?.[2] ?? namedFieldMatch?.[1] ?? roleIndexMatch?.[2] ?? categoryMatch?.[1] ?? "").trim();
+      const name = (
+        match?.[2] ??
+        namedFieldMatch?.[1] ??
+        roleIndexMatch?.[2] ??
+        categoryMatch?.[1] ??
+        characterFieldAsAssetMatch?.[1] ??
+        characterFieldAsAssetMatch?.[2] ??
+        characterFieldAsAssetMatch?.[3] ??
+        ""
+      ).trim();
       if (!name) continue;
       const followingLines: string[] = [];
       for (let nextIndex = index + 1; nextIndex < draftLines.length; nextIndex += 1) {
@@ -2956,14 +2971,21 @@ export function Workspace({
         if (!nextLine) continue;
         const normalizedNextLine = nextLine.replace(/^\s*(?:[-*•]\s*)?(?:\d+[.、)]\s*)?/, "");
         if (
-          /^(【(人物|角色|场景|物品|道具)】|(人物|角色|场景|物品|道具)[：:]|(?:人物名称|角色名称|姓名|名称)[：:]|(?:角色|人物)\s*\d+[：:]|(?:主要人物|出场人物|配角|反派|家人|路人|旁观者)[：:])/.test(
+          /^(【(人物|角色|场景|物品|道具)】|(人物|角色|场景|物品|道具)[：:]|(?:人物名称|角色名称|姓名|名称)[：:]|(?:角色|人物)\s*\d+[：:]|(?:主要人物|出场人物|配角|反派|家人|路人|旁观者)[：:]|(?!(?:人物|角色|场景|物品|道具)[：:])(?:人物外貌|角色外貌|外貌|人物的身份|角色身份|身份|关系)[：:]\s*(?:(?:街坊都叫|大家叫|众人叫|人称|名叫|叫作|叫做|叫)(?:他|她|其)?[^：:，,。；;\s]{2,12}|[^：:，,。；;\s]{2,12}[：:]|(?:[^：:，,。；;\s]{1,10}(?:姨|婶|伯|叔|哥|姐|嫂|爷|奶|婆|公|老板|会长|主任|经理|师傅|护卫|侍卫|丫鬟|弟子|摊主|掌柜|管家|保洁|司机|助理|医生|护士|老师|同学|邻居|街坊)|壮汉|打手|保镖)))/.test(
             normalizedNextLine,
           )
         )
           break;
         followingLines.push(nextLine);
       }
-      const inlineDescription = (match?.[3] ?? namedFieldMatch?.[2] ?? roleIndexMatch?.[3] ?? categoryMatch?.[2] ?? "").trim();
+      const inlineDescription = (
+        match?.[3] ??
+        namedFieldMatch?.[2] ??
+        roleIndexMatch?.[3] ??
+        categoryMatch?.[2] ??
+        characterFieldAsAssetMatch?.[4] ??
+        ""
+      ).trim();
       const description = [inlineDescription, ...followingLines].filter(Boolean).join("\n") || line;
       assets.push({
         id: `${type}-${name}-${assets.length}`,
