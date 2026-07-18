@@ -1,6 +1,13 @@
 ﻿import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StrictMode, useState } from "react";
+import {
+  ADULT_FEMALE_BODY_STANDARD,
+  ANCIENT_ADULT_MALE_BODY_STANDARD,
+  EXCEPTION_BODY_STANDARD,
+  MODERN_ADULT_MALE_BODY_STANDARD,
+  NEUTRAL_BODY_STANDARD,
+} from "../domain/assetCharacterBodyStandards";
 import { createProject } from "../domain/projects";
 import { normalizeAssetVisualStyle, removeStaleCharacterStyleField, Workspace } from "./Workspace";
 import { within } from "@testing-library/react";
@@ -4313,6 +4320,129 @@ describe("Workspace asset extraction image generation", () => {
       "https://img.example.com/asset.png",
     );
     expect(screen.getByRole("button", { name: "下载图片 1" })).toBeInTheDocument();
+  });
+
+  it("preserves an extracted body standard once and places it before current style and three-view rules", async () => {
+    callImageGenerationMock.mockResolvedValue("https://img.example.com/custom-body.png");
+    const bodyStandard = "体态标准：高挑纤细，右肩略低，正面侧面背面保持同一比例。";
+    const project = createProject("人物自定义体态保留测试");
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = [
+      "【人物】林晚：",
+      "角色等级：女主角。",
+      "人物外貌：成年女性，黑色长发，眼神清醒。",
+      "整体风格：旧风格，真人电影光影。",
+      bodyStandard,
+      "人物的身份：现代珠宝设计师。",
+      "图片的结构：人物三视图生产参考图。",
+    ].join("\n");
+    project.steps["asset-extraction"].inputs = {
+      sourceText: "林晚是现代珠宝设计师。",
+      assetType: "人物",
+      visualStyle: "现代甜酷3D乙游",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成 林晚" }));
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
+    const prompt = callImageGenerationMock.mock.calls[0][1] as string;
+
+    expect(prompt.split(bodyStandard)).toHaveLength(2);
+    expect(prompt).not.toContain("整体风格：旧风格");
+    expect(prompt.indexOf(bodyStandard)).toBeLessThan(prompt.indexOf("整体风格首句必须明确写出"));
+    expect(prompt.indexOf(bodyStandard)).toBeLessThan(prompt.indexOf("人物统一后缀：人物三视图生产参考图"));
+    expect(prompt).toContain("人物体态（高优先级，必须执行）");
+    expect(prompt).toContain("不得改变正面、侧面、背面的肩、腰、胯和腿部比例");
+  });
+
+  it.each([
+    ["adult female", "人物外貌：成年女性，现代都市珠宝设计师，黑色长发。", ADULT_FEMALE_BODY_STANDARD],
+    ["ancient adult male", "人物外貌：成年男性，古风将军，身穿战袍。", ANCIENT_ADULT_MALE_BODY_STANDARD],
+    ["modern adult male", "人物外貌：成年男性，现代都市设计师，黑色西装。", MODERN_ADULT_MALE_BODY_STANDARD],
+    ["child", "人物外貌：十岁男孩，古风学徒。", EXCEPTION_BODY_STANDARD],
+    ["senior", "人物外貌：六十八岁男性，现代退休教师。", EXCEPTION_BODY_STANDARD],
+    ["special identity", "人物外貌：成年女性，病弱，乘坐轮椅。", EXCEPTION_BODY_STANDARD],
+    ["unknown identity", "人物外貌：神秘来客，身份与时代不明。", NEUTRAL_BODY_STANDARD],
+  ])("fills the %s body standard before image generation", async (_caseName, description, expectedStandard) => {
+    callImageGenerationMock.mockResolvedValue("https://img.example.com/inferred-body.png");
+    const project = createProject(`人物体态补全-${_caseName}`);
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = `【人物】测试角色：${description}`;
+    project.steps["asset-extraction"].inputs = {
+      sourceText: description,
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "生成 测试角色" }));
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
+    const prompt = callImageGenerationMock.mock.calls[0][1] as string;
+
+    expect(prompt).toContain(expectedStandard);
+    expect(prompt.indexOf(expectedStandard)).toBeLessThan(prompt.indexOf("整体风格首句必须明确写出"));
+    expect(prompt.indexOf(expectedStandard)).toBeLessThan(prompt.indexOf("人物统一后缀：人物三视图生产参考图"));
+  });
+
+  it.each([
+    ["场景", "旧宅", "【场景】旧宅：深夜，木结构院落，灯笼微亮。"],
+    ["物品", "木箱", "【物品】木箱：深色木料，铜制包角，表面有磨损。"],
+  ])("does not add character body standards to %s image prompts", async (assetType, assetName, draft) => {
+    callImageGenerationMock.mockResolvedValue("https://img.example.com/non-character.png");
+    const project = createProject(`${assetType}体态隔离测试`);
+    project.currentStep = "asset-extraction";
+    project.steps["asset-extraction"].draft = draft;
+    project.steps["asset-extraction"].inputs = {
+      sourceText: draft,
+      assetType,
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: `生成 ${assetName}` }));
+    await waitFor(() => expect(callImageGenerationMock).toHaveBeenCalledTimes(1));
+    const prompt = callImageGenerationMock.mock.calls[0][1] as string;
+
+    expect(prompt).not.toContain("人物体态（高优先级，必须执行）");
+    expect(prompt).not.toContain("体态标准：");
+    expect(prompt).not.toContain("成年女性采用饱满S曲线");
+    expect(prompt).not.toContain("古风成年男性采用标准宽肩窄腰");
   });
 
   it("shows character-only styles only for character extraction and persists a shared fallback on type changes", async () => {
