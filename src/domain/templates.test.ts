@@ -1,4 +1,10 @@
 import { describe, expect, it } from "vitest";
+import {
+  ADULT_FEMALE_BODY_STANDARD,
+  ANCIENT_ADULT_MALE_BODY_STANDARD,
+  EXCEPTION_BODY_STANDARD,
+  MODERN_ADULT_MALE_BODY_STANDARD,
+} from "./assetCharacterBodyStandards";
 import { buildPrompt, getTemplate, PLATFORM_REVIEW_RULES, TEMPLATES } from "./templates";
 
 describe("template catalog", () => {
@@ -822,6 +828,7 @@ describe("buildPrompt", () => {
     expect(simulationPrompt).toContain("人物长相必须原创、生活化、有辨识度");
     expect(simulationPrompt).toContain("角色等级：");
     expect(simulationPrompt).toContain("人物外貌：");
+    expect(simulationPrompt).toContain("体态标准：");
     expect(simulationPrompt).toContain("整体风格：根据画风锚点3D仿真精致角色");
     expect(simulationPrompt).toContain("人物的身份：");
     expect(simulationPrompt).toContain("人物三视图生产参考图");
@@ -830,6 +837,64 @@ describe("buildPrompt", () => {
     expect(simulationPrompt).toContain("【人物】林晚：");
     expect(simulationPrompt).toContain("人物格式示例只展示字段结构，示例人物的年龄、肤色、体态、职业和造型不得复制给原文角色");
     expect(otomePrompt).toContain("高级3D乙游主角标准仅可作为原文未规定、适龄的男主角、重要男性或乙游定位角色候选");
+  });
+
+  it("requires a directly usable body standard between appearance and style", () => {
+    const prompt = buildPrompt(getTemplate("asset-extraction"), {
+      sourceText: "古城和现代都市中的多名角色。",
+      assetType: "人物",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+    const outputFormat = prompt.slice(prompt.indexOf("- 人物输出必须按“完整提示词展示”字段结构"));
+    const appearanceIndex = outputFormat.indexOf("人物外貌：");
+    const bodyIndex = outputFormat.indexOf("体态标准：");
+    const styleIndex = outputFormat.indexOf("整体风格：");
+
+    expect(appearanceIndex).toBeGreaterThanOrEqual(0);
+    expect(appearanceIndex).toBeLessThan(bodyIndex);
+    expect(bodyIndex).toBeLessThan(styleIndex);
+    expect(outputFormat).toContain("完整、可直接生图的体态描述");
+    expect(outputFormat).toContain("不得写“按统一标准”“身材好”或省略");
+  });
+
+  it("includes complete female, ancient male, modern male, and exception body routing", () => {
+    const prompt = buildPrompt(getTemplate("asset-extraction"), {
+      sourceText: "角色群像。",
+      assetType: "人物",
+      visualStyle: "3D仿真精致角色",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    });
+
+    expect(prompt).toContain(ADULT_FEMALE_BODY_STANDARD);
+    expect(prompt).toContain(ANCIENT_ADULT_MALE_BODY_STANDARD);
+    expect(prompt).toContain(MODERN_ADULT_MALE_BODY_STANDARD);
+    expect(prompt).toContain(EXCEPTION_BODY_STANDARD);
+    expect(prompt).toContain("男性被明确写成矮壮、魁梧、瘦小或年长时");
+    expect(prompt).toContain("已有字段 > 例外角色 > 明确成年女性 > 明确成年男性加古今线索 > 中性兜底");
+  });
+
+  it("does not inject character body routing into scene or prop extraction", () => {
+    const template = getTemplate("asset-extraction");
+    const baseValues = {
+      sourceText: "旧宅内摆着一只木箱。",
+      visualStyle: "3D国漫风格",
+      imageModel: "gpt-image-2",
+      imageRatio: "16:9",
+      imageResolution: "1K",
+    };
+    const scenePrompt = buildPrompt(template, { ...baseValues, assetType: "场景" });
+    const propPrompt = buildPrompt(template, { ...baseValues, assetType: "物品" });
+
+    for (const prompt of [scenePrompt, propPrompt]) {
+      expect(prompt).not.toContain("体态标准：");
+      expect(prompt).not.toContain("古风成年男性采用标准宽肩窄腰");
+      expect(prompt).not.toContain("现代成年男性采用宽肩阔背");
+    }
   });
 
   it("keeps non-realistic asset character style wording from polluting the image prompt", () => {
