@@ -50,7 +50,7 @@ export async function forwardLocalTimeAiRequest(request: IncomingMessage, respon
   }
 
   const targetUrl = buildLocalTimeAiTargetUrl(request.url || "");
-  const authorization = request.headers.authorization;
+  const authorization = resolveForwardedAuthorization(request.headers.authorization);
 
   try {
     const body = await readRequestBody(request);
@@ -243,6 +243,12 @@ function buildLocalTimeAiTargetUrl(localUrl: string) {
   const [path = "", query = ""] = localUrl.split("?");
   const normalizedPath = path.replace(/^\/+/, "");
   return `${TIMEAI_BASE_URL}/${normalizedPath}${query ? `?${query}` : ""}`;
+}
+
+function resolveForwardedAuthorization(authorization: string | string[] | undefined) {
+  const value = Array.isArray(authorization) ? authorization[0] : authorization;
+  if (typeof value !== "string") return undefined;
+  return /^Bearer\s+server-proxy$/i.test(value.trim()) ? undefined : value;
 }
 
 function buildLocalAistarsLabTargetUrl(localUrl: string) {

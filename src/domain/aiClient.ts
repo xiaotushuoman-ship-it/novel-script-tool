@@ -49,7 +49,7 @@ export async function callAi(
   );
 
   if (!response.ok) {
-    throw new Error(buildHttpErrorMessage("AI 调用", response.status));
+    throw new Error(await buildHttpErrorMessageFromResponse("AI 调用", response));
   }
 
   const data = await response.json();
@@ -89,9 +89,12 @@ export async function callAiStream(
   );
 
   if (!response.ok) {
-    const fallbackContent = await callAi(settings, prompt, fetchImpl);
-    onChunk(fallbackContent);
-    return fallbackContent;
+    const fallbackContent = await callAi(settings, prompt, fetchImpl).catch(async () => null);
+    if (fallbackContent !== null) {
+      onChunk(fallbackContent);
+      return fallbackContent;
+    }
+    throw new Error(await buildHttpErrorMessageFromResponse("AI 调用", response));
   }
 
   if (!response.body || typeof response.body.getReader !== "function") {

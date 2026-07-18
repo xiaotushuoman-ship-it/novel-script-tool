@@ -57,6 +57,22 @@ describe("callAi", () => {
     );
   });
 
+  it("includes upstream text error details when TimeAI rejects the request", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ error: { message: "model gpt-5.6-sol is not available for this API group" } }),
+    });
+
+    await expect(
+      callAi(
+        { endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.6-sol" },
+        "prompt",
+        fetchImpl,
+      ),
+    ).rejects.toThrow("model gpt-5.6-sol is not available for this API group");
+  });
+
   it("sends supported third-party text model ids unchanged", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,

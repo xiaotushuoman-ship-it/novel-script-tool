@@ -229,9 +229,13 @@ function buildUpstreamHeaders(headers) {
   const result = {};
   for (const name of ["accept", "authorization", "content-type"]) {
     const value = headers[name];
-    if (typeof value === "string") result[name] = value;
+    if (typeof value === "string" && !isServerProxyAuthorization(name, value)) result[name] = value;
   }
   return result;
+}
+
+function isServerProxyAuthorization(name, value) {
+  return name === "authorization" && /^Bearer\s+server-proxy$/i.test(value.trim());
 }
 
 function readRequestBody(request) {

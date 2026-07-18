@@ -22,6 +22,46 @@ describe("TimeAI proxy target url", () => {
     expect(timeAiPathConfig.maxDuration).toBe(300);
   });
 
+  it("uses the server TIMEAI_API_KEY when the browser sends the server-proxy placeholder", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalApiKey = process.env.TIMEAI_API_KEY;
+    process.env.TIMEAI_API_KEY = "sk-server";
+    const fetchImpl = vi.fn(async () => new Response("{}", { status: 200 }));
+    globalThis.fetch = fetchImpl;
+    const response = {
+      statusCode: 0,
+      headers: {},
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      setHeader(name, value) {
+        this.headers[name] = value;
+      },
+      send: vi.fn(),
+      end: vi.fn(),
+      json: vi.fn(),
+    };
+
+    try {
+      await forwardTimeAiRequest(
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: "Bearer server-proxy" },
+          body: {},
+          query: { path: "v1/chat/completions" },
+        },
+        response,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalApiKey === undefined) delete process.env.TIMEAI_API_KEY;
+      else process.env.TIMEAI_API_KEY = originalApiKey;
+    }
+
+    expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBe("Bearer sk-server");
+  });
+
   it("flushes streaming TimeAI responses before the upstream finishes", async () => {
     const originalFetch = globalThis.fetch;
     const originalApiKey = process.env.TIMEAI_API_KEY;

@@ -29,7 +29,7 @@ export async function forwardTimeAiRequest(request, response, path = request.que
     typeof authorizationHeader === "string" && authorizationHeader.toLowerCase().startsWith("bearer ")
       ? authorizationHeader.slice(7).trim()
       : "";
-  const apiKey = bearerKey || process.env.TIMEAI_API_KEY;
+  const apiKey = (bearerKey === "server-proxy" ? "" : bearerKey) || process.env.TIMEAI_API_KEY;
   if (!apiKey) {
     response.status(500).json({ error: { message: "Server missing TIMEAI_API_KEY" } });
     return;

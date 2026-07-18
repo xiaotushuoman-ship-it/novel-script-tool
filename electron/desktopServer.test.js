@@ -32,6 +32,24 @@ describe("desktop server routes", () => {
     expect(buildZzdhTargetUrl("/api/zzdh/v1/tools/call")).toBe("http://127.0.0.1:8766/v1/tools/call");
   });
 
+  it("drops the server-proxy placeholder before forwarding TimeAI requests", async () => {
+    const distDir = await mkdtemp(path.join(tmpdir(), "xiaotu-desktop-"));
+    await writeFile(path.join(distDir, "index.html"), "desktop", "utf8");
+    cleanupTasks.push(() => rm(distDir, { recursive: true, force: true }));
+    const fetchImpl = vi.fn(async () => new Response("{}", { status: 200 }));
+
+    const desktop = await startDesktopServer({ distDir, fetchImpl, port: 0 });
+    cleanupTasks.push(() => desktop.close());
+
+    await fetch(`${desktop.url}/api/timeai/v1/chat/completions`, {
+      method: "POST",
+      headers: { Authorization: "Bearer server-proxy", "Content-Type": "application/json" },
+      body: "{}",
+    });
+
+    expect(fetchImpl.mock.calls[0][1].headers).not.toHaveProperty("authorization");
+  });
+
   it("serves the built app and falls back to index.html for client routes", async () => {
     const distDir = await mkdtemp(path.join(tmpdir(), "xiaotu-desktop-"));
     await writeFile(path.join(distDir, "index.html"), "<main>xiaotu desktop</main>", "utf8");
