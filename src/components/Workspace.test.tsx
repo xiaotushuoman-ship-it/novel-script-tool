@@ -2467,6 +2467,43 @@ describe("Workspace storyboard controls", () => {
 });
 
 describe("Workspace writing flow", () => {
+  it("asks one-click novel generation to run hidden script-doctor checks and sharpen viral dialogue", async () => {
+    mockStreamTextOnce("【第1章：摊位被砸】\n许明舟按住账本，抬眼看向围上来的人。\n钱会长（冷笑）：\"签了，摊位归我。\"");
+    const project = createProject("一键小说剧本医生测试");
+    project.currentStep = "outline-expansion";
+    project.steps["outline-expansion"].inputs.outline = "许明舟发现夜市摊位被人做局抢走，他要当众找回证据。";
+    project.steps["outline-expansion"].inputs.style = "都市爽文";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
+
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
+    const prompt = callAiStreamMock.mock.calls[0][1] as string;
+    expect(prompt).toContain("资深剧本医生自诊");
+    expect(prompt).toContain("2秒跳出率");
+    expect(prompt).toContain("5S完播率");
+    expect(prompt).toContain("粉丝互动率");
+    expect(prompt).toContain("一流编剧");
+    expect(prompt).toContain("金句");
+    expect(prompt).toContain("禁用“死死”");
+    expect(prompt).toContain("不得展示剧本医生自诊");
+    expect(prompt).toContain("禁止公式化动作摘要");
+    expect(prompt).toContain("抓起什么、碰到什么、谁站起来、谁挡住谁");
+    expect(prompt).toContain("桌椅、门、手机、账本");
+    expect(prompt).toContain("现场阻力");
+    expect(prompt).toContain("生活口语破损感");
+    expect(prompt).toContain("先像人话，再像金句");
+  });
+
   it("streams only chapter screenplay content for one-click novel generation", async () => {
     callAiStreamMock.mockImplementationOnce(
       async (_settings: unknown, _prompt: string, onChunk: (chunk: string) => void) => {
