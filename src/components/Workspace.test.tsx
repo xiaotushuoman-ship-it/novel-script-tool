@@ -2502,6 +2502,16 @@ describe("Workspace writing flow", () => {
     expect(prompt).toContain("现场阻力");
     expect(prompt).toContain("生活口语破损感");
     expect(prompt).toContain("先像人话，再像金句");
+    expect(prompt).toContain("始终保持职业编剧主身份");
+    expect(prompt).toContain("评审和剧本医生只是内部自检环节");
+    expect(prompt).toContain("不要自称审稿人或制片方");
+    expect(prompt).toContain("场景目标、阻挠冲突、结束价值变化");
+    expect(prompt).toContain("外在目标和内在需求");
+    expect(prompt).toContain("可见的人物弧光");
+    expect(prompt).toContain("高度雷同必须主动替换为原创设定");
+    expect(prompt).toContain("可拍性与成本意识");
+    expect(prompt).toContain("动作描述用现在时");
+    expect(prompt).toContain("翻译腔或者舞台剧感");
   });
 
   it("streams only chapter screenplay content for one-click novel generation", async () => {
