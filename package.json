@@ -1,6 +1,6 @@
 {
   "name": "novel-script-tool",
-  "version": "2026.7.0",
+  "version": "2026.7.20",
   "private": true,
   "type": "module",
   "main": "electron/main.mjs",
@@ -80,6 +80,7 @@
       "createStartMenuShortcut": true,
       "shortcutName": "小兔助手",
       "runAfterFinish": true,
+      "include": "build/installer.nsh",
       "deleteAppDataOnUninstall": false
     }
   }

@@ -10,6 +10,8 @@ const { autoUpdater } = electronUpdater;
 let desktopServer;
 let mainWindow;
 let updateController;
+let cleanupStarted = false;
+let cleanupFinished = false;
 
 async function createMainWindow() {
   const distDir = app.isPackaged ? path.join(app.getAppPath(), "dist") : path.resolve(currentDir, "..", "dist");
@@ -46,6 +48,14 @@ async function createMainWindow() {
   }
 }
 
+async function cleanupBeforeQuit() {
+  await updateController?.dispose?.();
+  updateController = undefined;
+  await desktopServer?.close?.();
+  desktopServer = undefined;
+  mainWindow = undefined;
+}
+
 app.whenReady().then(async () => {
   await createMainWindow();
   app.on("activate", async () => {
@@ -57,6 +67,15 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", () => {
-  void desktopServer?.close();
+app.on("before-quit", (event) => {
+  if (cleanupFinished) return;
+  event.preventDefault();
+  if (cleanupStarted) return;
+  cleanupStarted = true;
+  void cleanupBeforeQuit()
+    .catch((error) => console.warn("Desktop app cleanup failed", error))
+    .finally(() => {
+      cleanupFinished = true;
+      app.quit();
+    });
 });

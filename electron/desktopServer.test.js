@@ -32,6 +32,20 @@ describe("desktop server routes", () => {
     expect(buildZzdhTargetUrl("/api/zzdh/v1/tools/call")).toBe("http://127.0.0.1:8766/v1/tools/call");
   });
 
+  it("unrefs the local server and closes it idempotently for installer upgrades", async () => {
+    const distDir = await mkdtemp(path.join(tmpdir(), "xiaotu-desktop-"));
+    await writeFile(path.join(distDir, "index.html"), "desktop", "utf8");
+    cleanupTasks.push(() => rm(distDir, { recursive: true, force: true }));
+
+    const desktop = await startDesktopServer({ distDir, port: 0 });
+
+    await desktop.close();
+    await desktop.close();
+
+    const response = await fetch(desktop.url).catch((error) => error);
+    expect(response).toBeInstanceOf(Error);
+  });
+
   it("drops the server-proxy placeholder before forwarding TimeAI requests", async () => {
     const distDir = await mkdtemp(path.join(tmpdir(), "xiaotu-desktop-"));
     await writeFile(path.join(distDir, "index.html"), "desktop", "utf8");

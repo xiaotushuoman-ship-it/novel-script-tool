@@ -1,5 +1,4 @@
 const DEFAULT_STARTUP_DELAY_MS = 5000;
-const DEFAULT_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 const DEFAULT_FOCUS_THROTTLE_MS = 60 * 1000;
 
 export function setupAutoUpdate({
@@ -8,14 +7,13 @@ export function setupAutoUpdate({
   dialog,
   getWindow = () => undefined,
   schedule = setTimeout,
-  repeat = setInterval,
+  clearSchedule = clearTimeout,
   logger = console,
   delayMs = DEFAULT_STARTUP_DELAY_MS,
-  intervalMs = DEFAULT_CHECK_INTERVAL_MS,
   focusThrottleMs = DEFAULT_FOCUS_THROTTLE_MS,
   now = Date.now,
 }) {
-  if (!isPackaged) return { started: false, checkNow: async () => undefined };
+  if (!isPackaged) return { started: false, checkNow: async () => undefined, dispose: async () => undefined };
 
   updater.autoDownload = false;
   updater.autoInstallOnAppQuit = false;
@@ -24,6 +22,20 @@ export function setupAutoUpdate({
   let updateReady = false;
   let errorDialogOpen = false;
   let lastCheckAt = 0;
+  let disposed = false;
+  const handles = [];
+  const listeners = [];
+
+  const trackHandle = (handle) => {
+    if (!handle) return;
+    handles.push(handle);
+    handle.unref?.();
+  };
+
+  const trackListener = (event, handler) => {
+    updater.on(event, handler);
+    listeners.push([event, handler]);
+  };
 
   const resetWindowProgress = () => {
     const window = getWindow();
@@ -53,6 +65,7 @@ export function setupAutoUpdate({
   };
 
   const checkNow = async ({ force = true } = {}) => {
+    if (disposed) return;
     const currentTime = now();
     if (!force && currentTime - lastCheckAt < focusThrottleMs) return;
     if (isChecking || isDownloading || updateReady) return;
@@ -67,8 +80,8 @@ export function setupAutoUpdate({
     }
   };
 
-  updater.on("update-available", async () => {
-    if (isDownloading || updateReady) return;
+  trackListener("update-available", async () => {
+    if (disposed || isDownloading || updateReady) return;
     isDownloading = true;
     try {
       await updater.downloadUpdate();
@@ -78,12 +91,12 @@ export function setupAutoUpdate({
     }
   });
 
-  updater.on("update-not-available", () => {
+  trackListener("update-not-available", () => {
     isDownloading = false;
     resetWindowProgress();
   });
 
-  updater.on("download-progress", (progress) => {
+  trackListener("download-progress", (progress) => {
     const percent = Math.max(0, Math.min(100, Number(progress?.percent) || 0));
     const window = getWindow();
     if (!window || window.isDestroyed?.()) return;
@@ -91,7 +104,8 @@ export function setupAutoUpdate({
     window.setTitle?.(`小兔助手 - 更新下载 ${Math.round(percent)}%`);
   });
 
-  updater.on("update-downloaded", async (info) => {
+  trackListener("update-downloaded", async (info) => {
+    if (disposed) return;
     isDownloading = false;
     updateReady = true;
     resetWindowProgress();
@@ -112,22 +126,30 @@ export function setupAutoUpdate({
     updater.autoInstallOnAppQuit = true;
   });
 
-  updater.on("error", async (error) => {
+  trackListener("error", async (error) => {
     isChecking = false;
     isDownloading = false;
     await showUpdateError(error);
   });
 
-  void schedule;
-  void repeat;
-  void delayMs;
-  void intervalMs;
-  void focusThrottleMs;
-  void lastCheckAt;
+  const startupTimer = schedule(() => void checkNow(), delayMs);
+  trackHandle(startupTimer);
 
   return {
     started: true,
     checkNow: () => checkNow(),
     checkOnFocus: () => checkNow({ force: false }),
+    dispose: async () => {
+      if (disposed) return;
+      disposed = true;
+      for (const handle of handles) {
+        clearSchedule(handle);
+      }
+      for (const [event, handler] of listeners) {
+        updater.off?.(event, handler);
+      }
+      handles.length = 0;
+      listeners.length = 0;
+    },
   };
 }

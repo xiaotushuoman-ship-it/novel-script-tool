@@ -79,10 +79,21 @@ export async function startDesktopServer({
 
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Desktop server did not expose a TCP port");
+  server.unref?.();
+
+  let closed = false;
 
   return {
     url: `http://${host}:${address.port}`,
-    close: () => new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve()))),
+    close: () =>
+      new Promise((resolve, reject) => {
+        if (closed) {
+          resolve();
+          return;
+        }
+        closed = true;
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
   };
 }
 
@@ -97,6 +108,7 @@ async function forwardRequest(request, response, targetUrl, fetchImpl, options =
   const body = await readRequestBody(request);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  timeout.unref?.();
   try {
     const upstream = await fetchImpl(targetUrl, {
       method: request.method,

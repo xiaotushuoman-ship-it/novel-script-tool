@@ -6,6 +6,7 @@ describe("desktop release configuration", () => {
   it("publishes updater-compatible artifacts to the public GitHub repository", async () => {
     const packageJson = JSON.parse(await readFile(new URL("../../package.json", import.meta.url), "utf8"));
     const mainProcess = await readFile(new URL("../../electron/main.mjs", import.meta.url), "utf8");
+    const installerInclude = await readFile(new URL("../../build/installer.nsh", import.meta.url), "utf8");
 
     expect(packageJson.dependencies["electron-updater"]).toBeTruthy();
     expect(packageJson.build.publish).toEqual([
@@ -18,7 +19,11 @@ describe("desktop release configuration", () => {
     expect(packageJson.build.win.artifactName).toBe("Xiaotu-Assistant-Setup-${version}.${ext}");
     expect(packageJson.build.electronDist).toBeUndefined();
     expect(packageJson.build.files).toContain("electron/autoUpdate.mjs");
+    expect(packageJson.build.nsis.include).toBe("build/installer.nsh");
+    expect(installerInclude).toContain("customCheckAppRunning");
+    expect(installerInclude).toContain("taskkill /F");
     expect(mainProcess).toContain('import electronUpdater from "electron-updater"');
+    expect(mainProcess).toContain("cleanupBeforeQuit");
     expect(mainProcess).not.toContain('import { autoUpdater } from "electron-updater"');
     expect(mainProcess).not.toContain('mainWindow.on("focus"');
     expect(mainProcess).not.toContain("updateController?.checkNow()");
