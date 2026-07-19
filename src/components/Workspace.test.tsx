@@ -2467,6 +2467,35 @@ describe("Workspace storyboard controls", () => {
 });
 
 describe("Workspace writing flow", () => {
+  it("keeps the one-click novel output aligned to the selected chapter word target and short spoken dialogue", async () => {
+    mockStreamTextOnce("第1章：断亲书\n许明舟盯着那张纸，半晌才开口。\n周建国：\"签。\"\n许明舟：\"不签。\"");
+    const project = createProject("字数和台词测试");
+    project.currentStep = "outline-expansion";
+    project.steps["outline-expansion"].inputs.outline = "许明舟被赶出家门后靠夜市摊翻盘。";
+    project.steps["outline-expansion"].inputs.chapterWords = "1500";
+    project.steps["outline-expansion"].inputs.totalChapters = "20";
+
+    render(
+      <Workspace
+        aiSettings={{ endpoint: "https://timeai.chat/v1", apiKey: "sk-test", model: "gpt-5.5" }}
+        project={project}
+        onAiSettingsChange={() => undefined}
+        onProjectChange={() => undefined}
+        onSaveVersion={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "调用 AI 生成" }));
+    await waitFor(() => expect(callAiStreamMock).toHaveBeenCalledTimes(1));
+    const prompt = callAiStreamMock.mock.calls[0][1] as string;
+    expect(prompt).toContain("单章目标字数：1500");
+    expect(prompt).toContain("必须达到所选单章字数");
+    expect(prompt).toContain("每个角色单次发言不得超过20个汉字");
+    expect(prompt).toContain("单次发言总字数少于20字");
+    expect(prompt).toContain("不要把每句都写成完整长句");
+    expect(prompt).toContain("生活口语破损感");
+  });
+
   it("asks one-click novel generation to run hidden script-doctor checks and sharpen viral dialogue", async () => {
     mockStreamTextOnce("【第1章：摊位被砸】\n许明舟按住账本，抬眼看向围上来的人。\n钱会长（冷笑）：\"签了，摊位归我。\"");
     const project = createProject("一键小说剧本医生测试");
@@ -5428,5 +5457,4 @@ describe("Workspace asset extraction image generation", () => {
     }
   });
 });
-
 

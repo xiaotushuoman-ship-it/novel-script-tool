@@ -107,6 +107,8 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("主角被赶出家门");
     expect(prompt).toContain("总章数：20");
     expect(prompt).toContain("单章目标字数：2500");
+    expect(prompt).toContain("必须达到所选单章字数");
+    expect(prompt).toContain("完整成品信息密度");
     expect(prompt).toContain("完整短剧剧本");
     expect(prompt).not.toContain("本章自评分：95+");
   });
@@ -162,6 +164,8 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("姓名互换测试");
     expect(prompt).toContain("潜台词");
     expect(prompt).toContain("单次发言不得超过20个汉字");
+    expect(prompt).toContain("单次发言总字数少于20字");
+    expect(prompt).toContain("不要把每句都写成完整长句");
     expect(prompt).toContain("标点符号不计入字数");
     expect(prompt).toContain("拆成自然的多轮短句");
     expect(prompt).toContain("施压、试探、遮掩、套话、拒绝、交易、暴露、误判、反击、关系变化或行动决定");
