@@ -110,6 +110,9 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("必须达到所选单章字数");
     expect(prompt).toContain("完整成品信息密度");
     expect(prompt).toContain("完整短剧剧本");
+    expect(prompt).toContain("抖音漫剧实时爆款只作为结构参考");
+    expect(prompt).toContain("严禁虚构实时榜单、播放量、平台排名或具体作品名");
+    expect(prompt).toContain("人物欲望、对手压力、爆点链、爽点兑现");
     expect(prompt).not.toContain("本章自评分：95+");
   });
 
@@ -158,6 +161,14 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("音效/氛围");
     expect(prompt).toContain("启动资深剧本医生自诊");
     expect(prompt).toContain("不得展示剧本医生自诊");
+    expect(prompt).toContain("低质阻断");
+    expect(prompt).toContain("爆点链不成立");
+    expect(prompt).toContain("台词不像真人说话");
+    expect(prompt).toContain("人性触点");
+    expect(prompt).toContain("关系旧账");
+    expect(prompt).toContain("利益刺点");
+    expect(prompt).toContain("情绪误差");
+    expect(prompt).toContain("禁止直接输出结果");
     expect(prompt).toContain("第一句话");
     expect(prompt).toContain("小说叙事模式与短剧表达模式自动判断");
     expect(prompt).toContain("人物语言指纹");
