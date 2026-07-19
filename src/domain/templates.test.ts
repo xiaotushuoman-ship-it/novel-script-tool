@@ -126,7 +126,7 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("不得向用户追问");
     expect(prompt).toContain("根据题材自动补齐");
     expect(prompt).toContain("只补全大纲未写明的必要信息");
-    expect(prompt).toContain("不得输出自检、评分、爆点拆解");
+    expect(prompt).toContain("不得展示剧本医生自诊、评分、爆点拆解");
   });
 
   it("builds safe high-retention scripts without exposing internal checks or production specs", () => {
@@ -154,8 +154,8 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("画面/动作");
     expect(prompt).toContain("台词");
     expect(prompt).toContain("音效/氛围");
-    expect(prompt).toContain("内部完成");
-    expect(prompt).toContain("不得输出自检");
+    expect(prompt).toContain("启动资深剧本医生自诊");
+    expect(prompt).toContain("不得展示剧本医生自诊");
     expect(prompt).toContain("第一句话");
     expect(prompt).toContain("小说叙事模式与短剧表达模式自动判断");
     expect(prompt).toContain("人物语言指纹");
@@ -175,7 +175,7 @@ describe("buildPrompt", () => {
     expect(prompt).not.toContain("输出人物语言指纹");
     expect(prompt).not.toContain("输出姓名互换测试结果");
     expect(prompt).not.toContain("本章自评分：95+");
-    expect(prompt).toContain("不得输出自检、评分、爆点拆解");
+    expect(prompt).toContain("不得展示剧本医生自诊、评分、爆点拆解");
   });
 
   it("configures the first step as one-click novel generation", () => {
